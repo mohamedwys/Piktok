@@ -1,0 +1,52 @@
+{
+  "common": {
+    "viewMore": "Voir plus",
+    "viewLess": "Voir moins",
+    "viewProfile": "Voir le profil",
+    "loading": "Chargement...",
+    "errorGeneric": "Une erreur est survenue."
+  },
+  "tabs": {
+    "home": "Accueil",
+    "categories": "Catégories",
+    "sell": "Vendre",
+    "messages": "Messages",
+    "profile": "Profil"
+  },
+  "feed": {
+    "forYou": "Pour toi",
+    "marketplace": "Marketplace",
+    "explore": "Explore",
+    "following": "Following",
+    "forYouSub": "For You"
+  },
+  "marketplace": {
+    "loadError": "Impossible de charger le marketplace.",
+    "empty": "Aucun produit pour l'instant.",
+    "buy": "Acheter",
+    "share": "Partager",
+    "more": "Plus",
+    "inStock": "En stock",
+    "outOfStock": "Indisponible",
+    "freeShipping": "Livraison offerte",
+    "shippingTbd": "Livraison à confirmer",
+    "sellerPro": "Vendeur professionnel",
+    "seller": "Vendeur",
+    "salesUnit_one": "vente",
+    "salesUnit_other": "ventes"
+  },
+  "profile": {
+    "title": "Profil",
+    "settings": "Paramètres",
+    "language": "Langue"
+  },
+  "categories": {
+    "title": "Catégories",
+    "emptyHint": "Bientôt disponible. Parcours des catégories en préparation."
+  },
+  "messages": {
+    "title": "Messages",
+    "empty": "Aucun message pour le moment.",
+    "emptyHint": "Tes conversations apparaîtront ici."
+  }
+}

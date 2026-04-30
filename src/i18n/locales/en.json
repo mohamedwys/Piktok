@@ -1,0 +1,52 @@
+{
+  "common": {
+    "viewMore": "Show more",
+    "viewLess": "Show less",
+    "viewProfile": "View profile",
+    "loading": "Loading...",
+    "errorGeneric": "Something went wrong."
+  },
+  "tabs": {
+    "home": "Home",
+    "categories": "Categories",
+    "sell": "Sell",
+    "messages": "Messages",
+    "profile": "Profile"
+  },
+  "feed": {
+    "forYou": "For you",
+    "marketplace": "Marketplace",
+    "explore": "Explore",
+    "following": "Following",
+    "forYouSub": "For You"
+  },
+  "marketplace": {
+    "loadError": "Couldn't load the marketplace.",
+    "empty": "No products yet.",
+    "buy": "Buy",
+    "share": "Share",
+    "more": "More",
+    "inStock": "In stock",
+    "outOfStock": "Out of stock",
+    "freeShipping": "Free shipping",
+    "shippingTbd": "Shipping TBD",
+    "sellerPro": "Pro seller",
+    "seller": "Seller",
+    "salesUnit_one": "sale",
+    "salesUnit_other": "sales"
+  },
+  "profile": {
+    "title": "Profile",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "categories": {
+    "title": "Categories",
+    "emptyHint": "Coming soon. Category browsing is in the works."
+  },
+  "messages": {
+    "title": "Messages",
+    "empty": "No messages yet.",
+    "emptyHint": "Your conversations will show up here."
+  }
+}

@@ -6,8 +6,8 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import FeedTab from '@/components/GenericComponents/FeedTab';
 import TopFeedSwitch from '@/components/GenericComponents/TopFeedSwitch';
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TABS = {
   EXPLORE: 'Explore',
@@ -22,7 +22,7 @@ const MAIN_TABS: { id: MainTabId; label: string }[] = [
   { id: 'marketplace', label: 'Marketplace' },
 ];
 
-const TOP_BAR_BOTTOM = 110;
+const TOP_BAR_HEIGHT = 36;
 
 export default function HomeScreen() {
   const { height } = useWindowDimensions(); // ← prefer hook over Dimensions.get
@@ -30,6 +30,8 @@ export default function HomeScreen() {
   const ITEM_HEIGHT = height - tabBarHeight;
 // accounts for home indicator
   const insets = useSafeAreaInsets();
+  const topBarTop = insets.top + 12;
+  const subTabsTop = topBarTop + TOP_BAR_HEIGHT + 4;
   const [mainTab, setMainTab] = useState<MainTabId>('pour-toi');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTab, setActiveTab] = useState(TABS.FOR_YOU);
@@ -46,11 +48,9 @@ setCurrentIndex(viewableItems[0]?.index || 0)
     }
   };
 
-  const marketplaceTopPad = Math.max(0, TOP_BAR_BOTTOM - insets.top);
-
   return (
      <View style={{ flex: 1 }}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { top: topBarTop }]}>
         <MaterialIcons name="live-tv" size={24} color="white" />
         <View style={styles.switchContainer}>
           <TopFeedSwitch
@@ -66,7 +66,7 @@ setCurrentIndex(viewableItems[0]?.index || 0)
         style={[styles.tabContent, mainTab === 'pour-toi' ? null : styles.hidden]}
         pointerEvents={mainTab === 'pour-toi' ? 'auto' : 'none'}
       >
-        <View style={styles.subTabsRow}>
+        <View style={[styles.subTabsRow, { top: subTabsTop }]}>
           <FeedTab title={TABS.EXPLORE} setActiveTab={setActiveTab} activeTab={activeTab} />
           <FeedTab title={TABS.FOLLOWING} setActiveTab={setActiveTab} activeTab={activeTab} />
           <FeedTab title={TABS.FOR_YOU} setActiveTab={setActiveTab} activeTab={activeTab} />
@@ -98,11 +98,7 @@ setCurrentIndex(viewableItems[0]?.index || 0)
       </View>
 
       <View
-        style={[
-          styles.tabContent,
-          { paddingTop: marketplaceTopPad },
-          mainTab === 'marketplace' ? null : styles.hidden,
-        ]}
+        style={[styles.tabContent, mainTab === 'marketplace' ? null : styles.hidden]}
         pointerEvents={mainTab === 'marketplace' ? 'auto' : 'none'}
       >
         <MarketplaceScreen />
@@ -121,7 +117,6 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     position: 'absolute',
-    top: 70,
     left: 0,
     right: 0,
     zIndex: 2,
@@ -133,7 +128,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 30,
     position: 'absolute',
-    top: 110,
     left: 0,
     right: 0,
     zIndex: 1,

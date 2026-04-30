@@ -7,6 +7,7 @@ import {
   unlikeProduct,
 } from '@/features/marketplace/services/products';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
+import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -21,6 +22,7 @@ export default function ProductActionRail({
   const [likeCount, setLikeCount] = useState<number>(product.engagement.likes);
 
   const onPressLike = (): void => {
+    void lightHaptic();
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikeCount((c) => c + (nextLiked ? 1 : -1));
@@ -37,7 +39,9 @@ export default function ProductActionRail({
     })();
   };
 
-  const onPressBuy = (): void => {};
+  const onPressBuy = (): void => {
+    void mediumHaptic();
+  };
   const onPressComment = (): void => {};
   const onPressShare = (): void => {};
 

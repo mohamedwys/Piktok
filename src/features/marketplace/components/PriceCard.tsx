@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import type { Product } from '@/features/marketplace/types/product';
+import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
 type PriceCardProps = {
   price: number;
@@ -26,6 +28,7 @@ export default function PriceCard({
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
 
   const onPressBookmark = (): void => {
+    void lightHaptic();
     // TODO(step-10): wire to bookmarkProduct service
     setIsBookmarked((v) => !v);
   };
@@ -37,32 +40,35 @@ export default function PriceCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.topRow}>
-        <Text style={styles.price}>{formatPrice(price, currency)}</Text>
-        <Pressable onPress={onPressBookmark} hitSlop={8}>
-          <Ionicons
-            name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-            size={18}
-            color={isBookmarked ? '#FFC83D' : '#fff'}
+      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
+      <View style={styles.cardInner}>
+        <View style={styles.topRow}>
+          <Text style={styles.price}>{formatPrice(price, currency)}</Text>
+          <Pressable onPress={onPressBookmark} hitSlop={8}>
+            <Ionicons
+              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={18}
+              color={isBookmarked ? '#FFC83D' : '#fff'}
+            />
+          </Pressable>
+        </View>
+        <View style={styles.row}>
+          <View
+            style={[
+              styles.dot,
+              { backgroundColor: stock.available ? '#33D17A' : '#F36161' },
+            ]}
           />
-        </Pressable>
-      </View>
-      <View style={styles.row}>
-        <View
-          style={[
-            styles.dot,
-            { backgroundColor: stock.available ? '#33D17A' : '#F36161' },
-          ]}
-        />
-        <Text style={styles.stockText}>{` ${stockLabel}`}</Text>
-      </View>
-      <View style={styles.row}>
-        <MaterialIcons
-          name="local-shipping"
-          size={13}
-          color="rgba(255,255,255,0.85)"
-        />
-        <Text style={styles.shippingText}>{` ${shippingLabel}`}</Text>
+          <Text style={styles.stockText}>{` ${stockLabel}`}</Text>
+        </View>
+        <View style={styles.row}>
+          <MaterialIcons
+            name="local-shipping"
+            size={13}
+            color="rgba(255,255,255,0.85)"
+          />
+          <Text style={styles.shippingText}>{` ${shippingLabel}`}</Text>
+        </View>
       </View>
     </View>
   );
@@ -70,12 +76,15 @@ export default function PriceCard({
 
 const styles = StyleSheet.create({
   card: {
-    padding: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    gap: 4,
+    backgroundColor: 'transparent',
     flexShrink: 1,
     minWidth: 130,
+    overflow: 'hidden',
+  },
+  cardInner: {
+    padding: 10,
+    gap: 4,
   },
   topRow: {
     flexDirection: 'row',

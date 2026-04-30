@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
@@ -59,15 +60,12 @@ export default function ProductFeedItem({
           resizeMode="cover"
         />
       )}
-      {bottomPanelExpanded ? (
-        <>
-          <View style={styles.scrimTop} pointerEvents="none" />
-          <View style={styles.scrimMid} pointerEvents="none" />
-          <View style={styles.scrimBottom} pointerEvents="none" />
-        </>
-      ) : (
-        <View style={styles.scrimCollapsed} pointerEvents="none" />
-      )}
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
+        locations={[0, 1]}
+        style={[styles.gradient, { height: bottomPanelExpanded ? '60%' : '32%' }]}
+        pointerEvents="none"
+      />
       <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
         <View style={styles.topRowLeft} pointerEvents="box-none">
           <SellerCard seller={item.seller} />
@@ -81,12 +79,12 @@ export default function ProductFeedItem({
           />
         </View>
       </View>
+      <ProductActionRail product={item} />
       <ProductBottomPanel
         product={item}
         expanded={bottomPanelExpanded}
         onToggleExpanded={() => setBottomPanelExpanded((v) => !v)}
       />
-      <ProductActionRail product={item} />
     </View>
   );
 }
@@ -96,37 +94,11 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#000',
   },
-  scrimCollapsed: {
+  gradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '30%',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  scrimBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '22%',
-    backgroundColor: 'rgba(0,0,0,0.65)',
-  },
-  scrimMid: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: '22%',
-    height: '20%',
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
-  scrimTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: '42%',
-    height: '18%',
-    backgroundColor: 'rgba(0,0,0,0.20)',
   },
   topRow: {
     position: 'absolute',

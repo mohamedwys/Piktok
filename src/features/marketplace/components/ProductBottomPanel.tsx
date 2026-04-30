@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import type { Product, ProductAttribute } from '@/features/marketplace/types/product';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
+import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
 type ProductBottomPanelProps = {
   product: Product;
@@ -38,7 +39,10 @@ export default function ProductBottomPanel({
   return (
     <View style={styles.panel} pointerEvents="box-none">
       <Pressable
-        onPress={onToggleExpanded}
+        onPress={() => {
+          void lightHaptic();
+          onToggleExpanded();
+        }}
         hitSlop={12}
         style={styles.handleArea}
       >

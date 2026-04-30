@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
+  BottomSheetFooter,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
+  type BottomSheetFooterProps,
 } from '@gorhom/bottom-sheet';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -135,6 +137,26 @@ export default function ProductDetailSheet(): React.ReactElement {
     // Real checkout flow is wired in a future step.
   };
 
+  const renderFooter = useCallback(
+    (props: BottomSheetFooterProps) => (
+      <BottomSheetFooter {...props} bottomInset={0}>
+        <View style={styles.ctaContainer}>
+          <Pressable
+            onPress={onPressBuyNow}
+            style={({ pressed }) => [
+              styles.ctaButton,
+              pressed && styles.ctaPressed,
+            ]}
+          >
+            <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
+          </Pressable>
+        </View>
+      </BottomSheetFooter>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, requireAuth],
+  );
+
   const renderContent = (): React.ReactElement => {
     if (isLoading) {
       return (
@@ -166,127 +188,111 @@ export default function ProductDetailSheet(): React.ReactElement {
     const hasAvatar = product.seller.avatarUrl.length > 0;
 
     return (
-      <>
-        <BottomSheetScrollView contentContainerStyle={styles.scrollContent}>
-          <Image
-            source={{ uri: product.media.thumbnailUrl ?? product.media.url }}
-            style={styles.hero}
-            resizeMode="cover"
-          />
+      <BottomSheetScrollView contentContainerStyle={styles.scrollContent}>
+        <Image
+          source={{ uri: product.media.thumbnailUrl ?? product.media.url }}
+          style={styles.hero}
+          resizeMode="cover"
+        />
 
-          <View style={styles.body}>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>
-                {formatPrice(product.price, product.currency)}
-              </Text>
-              <Pressable onPress={onPressBookmark} hitSlop={10}>
-                <Ionicons
-                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-                  size={22}
-                  color={isBookmarked ? BOOKMARK_COLOR : '#fff'}
+        <View style={styles.body}>
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>
+              {formatPrice(product.price, product.currency)}
+            </Text>
+            <Pressable onPress={onPressBookmark} hitSlop={10}>
+              <Ionicons
+                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={22}
+                color={isBookmarked ? BOOKMARK_COLOR : '#fff'}
+              />
+            </Pressable>
+          </View>
+
+          <Text style={styles.title}>{title}</Text>
+
+          <View style={styles.metaRow}>
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: product.stock.available
+                    ? '#33D17A'
+                    : '#F36161',
+                },
+              ]}
+            />
+            <Text style={styles.stockText}>{` ${stockLabel}`}</Text>
+            <MaterialIcons
+              name="local-shipping"
+              size={13}
+              color="rgba(255,255,255,0.85)"
+              style={styles.shippingIcon}
+            />
+            <Text style={styles.shippingText}>{` ${shippingLabel}`}</Text>
+          </View>
+
+          {description.length > 0 ? (
+            <Text style={styles.description}>{description}</Text>
+          ) : null}
+
+          {product.attributes.length > 0 ? (
+            <View style={styles.chipsRow}>
+              {product.attributes.map((attr) => (
+                <AttributeChip key={attr.id} attribute={attr} lang={lang} />
+              ))}
+            </View>
+          ) : null}
+
+          {product.dimensions && product.dimensions.length > 0 ? (
+            <View style={styles.dimensionsChip}>
+              <MaterialIcons name="straighten" size={11} color="#fff" />
+              <Text style={styles.chipText}>{` ${product.dimensions}`}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.sellerCard}>
+            <View style={styles.sellerAvatar}>
+              {hasAvatar ? (
+                <Image
+                  source={{ uri: product.seller.avatarUrl }}
+                  style={styles.sellerAvatarImg}
                 />
-              </Pressable>
+              ) : null}
             </View>
-
-            <Text style={styles.title}>{title}</Text>
-
-            <View style={styles.metaRow}>
-              <View
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: product.stock.available
-                      ? '#33D17A'
-                      : '#F36161',
-                  },
-                ]}
-              />
-              <Text style={styles.stockText}>{` ${stockLabel}`}</Text>
-              <MaterialIcons
-                name="local-shipping"
-                size={13}
-                color="rgba(255,255,255,0.85)"
-                style={styles.shippingIcon}
-              />
-              <Text style={styles.shippingText}>{` ${shippingLabel}`}</Text>
-            </View>
-
-            {description.length > 0 ? (
-              <Text style={styles.description}>{description}</Text>
-            ) : null}
-
-            {product.attributes.length > 0 ? (
-              <View style={styles.chipsRow}>
-                {product.attributes.map((attr) => (
-                  <AttributeChip key={attr.id} attribute={attr} lang={lang} />
-                ))}
-              </View>
-            ) : null}
-
-            {product.dimensions && product.dimensions.length > 0 ? (
-              <View style={styles.dimensionsChip}>
-                <MaterialIcons name="straighten" size={11} color="#fff" />
-                <Text style={styles.chipText}>{` ${product.dimensions}`}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.sellerCard}>
-              <View style={styles.sellerAvatar}>
-                {hasAvatar ? (
-                  <Image
-                    source={{ uri: product.seller.avatarUrl }}
-                    style={styles.sellerAvatarImg}
+            <View style={styles.sellerText}>
+              <View style={styles.sellerNameRow}>
+                <Text style={styles.sellerName} numberOfLines={1}>
+                  {product.seller.name}
+                </Text>
+                {product.seller.verified ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color="#3b9eff"
+                    style={styles.verifiedIcon}
                   />
                 ) : null}
               </View>
-              <View style={styles.sellerText}>
-                <View style={styles.sellerNameRow}>
-                  <Text style={styles.sellerName} numberOfLines={1}>
-                    {product.seller.name}
-                  </Text>
-                  {product.seller.verified ? (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={14}
-                      color="#3b9eff"
-                      style={styles.verifiedIcon}
-                    />
-                  ) : null}
-                </View>
-                <View style={styles.sellerMetaRow}>
-                  <Ionicons name="star" size={11} color={BOOKMARK_COLOR} />
-                  <Text style={styles.sellerMetaText} numberOfLines={1}>
-                    {` ${product.seller.rating.toFixed(1)} · ${formatCount(
-                      product.seller.salesCount,
-                    )} ${t('marketplace.salesUnit', {
-                      count: product.seller.salesCount,
-                    })}`}
-                  </Text>
-                </View>
-              </View>
-              <Pressable style={styles.profilePill} hitSlop={6}>
-                <Text style={styles.profilePillText}>
-                  {t('common.viewProfile')}
+              <View style={styles.sellerMetaRow}>
+                <Ionicons name="star" size={11} color={BOOKMARK_COLOR} />
+                <Text style={styles.sellerMetaText} numberOfLines={1}>
+                  {` ${product.seller.rating.toFixed(1)} · ${formatCount(
+                    product.seller.salesCount,
+                  )} ${t('marketplace.salesUnit', {
+                    count: product.seller.salesCount,
+                  })}`}
                 </Text>
-              </Pressable>
+              </View>
             </View>
-
-            <View style={styles.bottomSpacer} />
+            <Pressable style={styles.profilePill} hitSlop={6}>
+              <Text style={styles.profilePillText}>
+                {t('common.viewProfile')}
+              </Text>
+            </Pressable>
           </View>
-        </BottomSheetScrollView>
-
-        <View style={styles.ctaContainer}>
-          <Pressable
-            onPress={onPressBuyNow}
-            style={({ pressed }) => [
-              styles.ctaButton,
-              pressed && styles.ctaPressed,
-            ]}
-          >
-            <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
-          </Pressable>
         </View>
-      </>
+      </BottomSheetScrollView>
     );
   };
 
@@ -298,6 +304,7 @@ export default function ProductDetailSheet(): React.ReactElement {
       enablePanDownToClose
       onChange={handleSheetChange}
       backdropComponent={renderBackdrop}
+      footerComponent={renderFooter}
       backgroundStyle={styles.sheetBackground}
       handleIndicatorStyle={styles.handleIndicator}
     >
@@ -324,7 +331,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 120,
   },
   hero: {
     width: '100%',
@@ -466,14 +473,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  bottomSpacer: {
-    height: 100,
-  },
   ctaContainer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
+    paddingHorizontal: 16,
   },
   ctaButton: {
     backgroundColor: BRAND_PRIMARY,

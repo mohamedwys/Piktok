@@ -45,7 +45,10 @@
     "salesUnit_one": "vente",
     "salesUnit_other": "ventes",
     "buyNow": "Acheter maintenant",
-    "loadProductError": "Impossible de charger le produit."
+    "loadProductError": "Impossible de charger le produit.",
+    "contactSeller": "Contacter",
+    "makeOffer": "Faire une offre",
+    "messageSeller": "Envoyer un message"
   },
   "profile": {
     "title": "Profil",

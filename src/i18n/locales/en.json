@@ -45,7 +45,10 @@
     "salesUnit_one": "sale",
     "salesUnit_other": "sales",
     "buyNow": "Buy now",
-    "loadProductError": "Couldn't load the product."
+    "loadProductError": "Couldn't load the product.",
+    "contactSeller": "Contact",
+    "makeOffer": "Make an offer",
+    "messageSeller": "Send a message"
   },
   "profile": {
     "title": "Profile",

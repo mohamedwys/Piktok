@@ -25,6 +25,7 @@ export default function ProductActionRail({
   const likeCount = product.engagement.likes;
   const toggleLike = useToggleLike(product.id);
   const { requireAuth } = useRequireAuth();
+  const isPro = product.seller.isPro;
 
   const onPressLike = (): void => {
     if (!requireAuth()) return;
@@ -52,9 +53,15 @@ export default function ProductActionRail({
         style={({ pressed }) => [styles.buyButton, pressed && styles.pressed]}
       >
         <View style={styles.buyCircle}>
-          <Ionicons name="bag-handle" size={26} color="#fff" />
+          <Ionicons
+            name={isPro ? 'bag-handle' : 'chatbubble-ellipses'}
+            size={26}
+            color="#fff"
+          />
         </View>
-        <Text style={styles.buyLabel}>{t('marketplace.buy')}</Text>
+        <Text style={styles.buyLabel}>
+          {isPro ? t('marketplace.buy') : t('marketplace.contactSeller')}
+        </Text>
       </Pressable>
 
       <Pressable

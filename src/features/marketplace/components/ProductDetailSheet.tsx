@@ -134,27 +134,67 @@ export default function ProductDetailSheet(): React.ReactElement {
   const onPressBuyNow = (): void => {
     void mediumHaptic();
     if (!requireAuth()) return;
-    // Real checkout flow is wired in a future step.
+    // TODO(future): wire to payment gateway
   };
+
+  const onPressMakeOffer = (): void => {
+    void mediumHaptic();
+    if (!requireAuth()) return;
+    // TODO(future): wire to payment gateway
+  };
+
+  const onPressMessageSeller = (): void => {
+    void mediumHaptic();
+    if (!requireAuth()) return;
+    // TODO(future): wire to messaging
+  };
+
+  const isPro = product?.seller.isPro ?? true;
 
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
       <BottomSheetFooter {...props} bottomInset={0}>
         <View style={styles.ctaContainer}>
-          <Pressable
-            onPress={onPressBuyNow}
-            style={({ pressed }) => [
-              styles.ctaButton,
-              pressed && styles.ctaPressed,
-            ]}
-          >
-            <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
-          </Pressable>
+          {isPro ? (
+            <Pressable
+              onPress={onPressBuyNow}
+              style={({ pressed }) => [
+                styles.ctaButton,
+                pressed && styles.ctaPressed,
+              ]}
+            >
+              <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.ctaRow}>
+              <Pressable
+                onPress={onPressMakeOffer}
+                style={({ pressed }) => [
+                  styles.ctaButton,
+                  styles.ctaPrimary,
+                  pressed && styles.ctaPressed,
+                ]}
+              >
+                <Text style={styles.ctaText}>{t('marketplace.makeOffer')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={onPressMessageSeller}
+                style={({ pressed }) => [
+                  styles.ctaSecondary,
+                  pressed && styles.ctaPressed,
+                ]}
+              >
+                <Text style={styles.ctaSecondaryText}>
+                  {t('marketplace.messageSeller')}
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </BottomSheetFooter>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, requireAuth],
+    [t, requireAuth, isPro],
   );
 
   const renderContent = (): React.ReactElement => {
@@ -476,12 +516,34 @@ const styles = StyleSheet.create({
   ctaContainer: {
     paddingHorizontal: 16,
   },
+  ctaRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   ctaButton: {
     backgroundColor: BRAND_PRIMARY,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ctaPrimary: {
+    flex: 1.4,
+  },
+  ctaSecondary: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1,
+  },
+  ctaSecondaryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   ctaPressed: {
     opacity: 0.85,

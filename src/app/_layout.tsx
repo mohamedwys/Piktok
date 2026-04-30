@@ -2,6 +2,7 @@ import { DarkTheme, ThemeProvider } from "@react-navigation/native"
 import { Stack } from "expo-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
+import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { initI18n } from "@/i18n"
 import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
 
@@ -33,10 +34,12 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={myTheme}>
-      <QueryClientProvider client={queryClientRef.current}>
-        <Stack screenOptions={{ headerShown: false }} />
-      </QueryClientProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={myTheme}>
+        <QueryClientProvider client={queryClientRef.current}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </QueryClientProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   )
 }

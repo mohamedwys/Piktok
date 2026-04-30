@@ -43,7 +43,9 @@
     "sellerPro": "Pro seller",
     "seller": "Seller",
     "salesUnit_one": "sale",
-    "salesUnit_other": "sales"
+    "salesUnit_other": "sales",
+    "buyNow": "Buy now",
+    "loadProductError": "Couldn't load the product."
   },
   "profile": {
     "title": "Profile",

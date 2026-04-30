@@ -43,7 +43,9 @@
     "sellerPro": "Vendeur professionnel",
     "seller": "Vendeur",
     "salesUnit_one": "vente",
-    "salesUnit_other": "ventes"
+    "salesUnit_other": "ventes",
+    "buyNow": "Acheter maintenant",
+    "loadProductError": "Impossible de charger le produit."
   },
   "profile": {
     "title": "Profil",

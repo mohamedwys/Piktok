@@ -3,6 +3,7 @@ import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagemen
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -34,6 +35,7 @@ export default function ProductActionRail({
 
   const onPressBuy = (): void => {
     void mediumHaptic();
+    useProductSheetStore.getState().open(product.id);
   };
   const onPressComment = (): void => {};
   const onPressShare = (): void => {};

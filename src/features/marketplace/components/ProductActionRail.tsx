@@ -94,9 +94,9 @@ export default function ProductActionRail({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 20,
+    right: 14,
     bottom: 20,
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 25,
   },
   pressed: {

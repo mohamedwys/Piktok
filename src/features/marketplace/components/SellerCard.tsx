@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 
@@ -12,6 +13,7 @@ type SellerCardProps = {
 export default function SellerCard({
   seller,
 }: SellerCardProps): React.ReactElement {
+  const { t } = useTranslation();
   const hasAvatar = seller.avatarUrl.length > 0;
 
   return (
@@ -48,7 +50,7 @@ export default function SellerCard({
           <View style={styles.row}>
             <Ionicons name="star" size={11} color="#FFC83D" />
             <Text style={styles.metaText} numberOfLines={1}>
-              {` ${seller.rating.toFixed(1)} (${formatCount(seller.salesCount)}) · ${formatCount(seller.salesCount)} ventes`}
+              {` ${seller.rating.toFixed(1)} (${formatCount(seller.salesCount)}) · ${formatCount(seller.salesCount)} ${t('marketplace.salesUnit', { count: seller.salesCount })}`}
             </Text>
           </View>
         </View>

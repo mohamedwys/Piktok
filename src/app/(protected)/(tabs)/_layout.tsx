@@ -3,12 +3,14 @@ import { Entypo, Feather, Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import CustomTabBarBackground from '@/components/GenericComponents/CustomTabBarBackground';
 
 const BRAND_PRIMARY = '#FE2C55';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const MESSAGES_UNREAD = true; // TODO(step-11): drive from real notifications
 
   return (
@@ -44,7 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='index'
         options={{
-          title: 'Accueil',
+          title: t('tabs.home'),
           tabBarIcon: ({ color }) => (
             <Entypo name="home" size={22} color={color} />
           )
@@ -54,7 +56,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='friends'
         options={{
-          title: 'Catégories',
+          title: t('tabs.categories'),
           tabBarIcon: ({ color }) => (
             <Ionicons name="grid-outline" size={22} color={color} />
           )
@@ -76,7 +78,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='inbox'
         options={{
-          title: 'Messages',
+          title: t('tabs.messages'),
           tabBarIcon: ({ color }) => (
             <View>
               <Ionicons name="chatbubble-outline" size={22} color={color} />
@@ -89,7 +91,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='profile'
         options={{
-          title: 'Profil',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color }) => (
             <Feather name="user" size={22} color={color} />
           )

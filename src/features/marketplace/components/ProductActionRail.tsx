@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
 import {
   likeProduct,
@@ -18,6 +19,7 @@ type ProductActionRailProps = {
 export default function ProductActionRail({
   product,
 }: ProductActionRailProps): React.ReactElement {
+  const { t } = useTranslation();
   const [isLiked, setIsLiked] = useState<boolean>(false);
   const [likeCount, setLikeCount] = useState<number>(product.engagement.likes);
 
@@ -48,7 +50,7 @@ export default function ProductActionRail({
   const shareLabel =
     product.engagement.shares > 0
       ? formatCount(product.engagement.shares)
-      : 'Partager';
+      : t('marketplace.share');
 
   return (
     <View style={styles.container}>
@@ -59,7 +61,7 @@ export default function ProductActionRail({
         <View style={styles.buyCircle}>
           <Ionicons name="bag-handle" size={26} color="#fff" />
         </View>
-        <Text style={styles.buyLabel}>Acheter</Text>
+        <Text style={styles.buyLabel}>{t('marketplace.buy')}</Text>
       </Pressable>
 
       <Pressable

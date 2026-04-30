@@ -9,11 +9,13 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import { useProducts } from '@/features/marketplace/hooks/useProducts';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
 import type { Product } from '@/features/marketplace/types/product';
 
 export default function MarketplaceScreen(): React.ReactElement {
+  const { t } = useTranslation();
   const { height } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
   const itemHeight = height - tabBarHeight;
@@ -38,9 +40,7 @@ export default function MarketplaceScreen(): React.ReactElement {
   if (isError || !data) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.message}>
-          Impossible de charger le marketplace.
-        </Text>
+        <Text style={styles.message}>{t('marketplace.loadError')}</Text>
       </View>
     );
   }
@@ -48,7 +48,7 @@ export default function MarketplaceScreen(): React.ReactElement {
   if (data.items.length === 0) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.message}>Aucun produit pour l&apos;instant.</Text>
+        <Text style={styles.message}>{t('marketplace.empty')}</Text>
       </View>
     );
   }

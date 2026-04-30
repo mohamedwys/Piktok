@@ -1,5 +1,5 @@
 import { View, FlatList, ViewToken, StyleSheet, useWindowDimensions } from 'react-native'
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import PostListItem from '@/components/PostListItem';
 import posts from "@/data/posts.json"
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -8,23 +8,23 @@ import TopFeedSwitch from '@/components/GenericComponents/TopFeedSwitch';
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const TABS = {
-  EXPLORE: 'Explore',
-  FOLLOWING: 'Following',
-  FOR_YOU: 'For You'
-};
+import { useTranslation } from 'react-i18next';
 
 type MainTabId = 'pour-toi' | 'marketplace';
-
-const MAIN_TABS: { id: MainTabId; label: string }[] = [
-  { id: 'pour-toi', label: 'Pour toi' },
-  { id: 'marketplace', label: 'Marketplace' },
-];
 
 const TOP_BAR_HEIGHT = 36;
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
+  const TABS = useMemo(() => ({
+    EXPLORE: t('feed.explore'),
+    FOLLOWING: t('feed.following'),
+    FOR_YOU: t('feed.forYouSub'),
+  }), [t]);
+  const MAIN_TABS = useMemo<{ id: MainTabId; label: string }[]>(() => ([
+    { id: 'pour-toi', label: t('feed.forYou') },
+    { id: 'marketplace', label: t('feed.marketplace') },
+  ]), [t]);
   const { height } = useWindowDimensions(); // ← prefer hook over Dimensions.get
   const tabBarHeight = useBottomTabBarHeight(); // ← exact tab bar height
   const ITEM_HEIGHT = height - tabBarHeight;
@@ -34,7 +34,7 @@ export default function HomeScreen() {
   const subTabsTop = topBarTop + TOP_BAR_HEIGHT + 4;
   const [mainTab, setMainTab] = useState<MainTabId>('pour-toi');
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState(TABS.FOR_YOU);
+  const [activeTab, setActiveTab] = useState<string>(t('feed.forYouSub'));
   const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
  if (viewableItems.length > 0) {
 setCurrentIndex(viewableItems[0]?.index || 0)

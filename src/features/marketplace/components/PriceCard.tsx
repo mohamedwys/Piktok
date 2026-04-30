@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
@@ -25,6 +26,7 @@ export default function PriceCard({
   stock,
   shipping,
 }: PriceCardProps): React.ReactElement {
+  const { t } = useTranslation();
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
 
   const onPressBookmark = (): void => {
@@ -34,9 +36,9 @@ export default function PriceCard({
   };
 
   const stockLabel =
-    stock.label ?? (stock.available ? 'En stock' : 'Indisponible');
+    stock.label ?? (stock.available ? t('marketplace.inStock') : t('marketplace.outOfStock'));
   const shippingLabel =
-    shipping.label ?? (shipping.free ? 'Livraison offerte' : 'Livraison à confirmer');
+    shipping.label ?? (shipping.free ? t('marketplace.freeShipping') : t('marketplace.shippingTbd'));
 
   return (
     <View style={styles.card}>

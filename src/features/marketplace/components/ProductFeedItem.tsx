@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import type { Product } from '@/features/marketplace/types/product';
 
 type ProductFeedItemProps = {
   item: Product;
   itemHeight: number;
-  // reserved for video autoplay (Step 5)
   isActive: boolean;
 };
 
@@ -19,16 +19,45 @@ function formatPrice(value: number, currency: Product['currency']): string {
 export default function ProductFeedItem({
   item,
   itemHeight,
+  isActive,
 }: ProductFeedItemProps): React.ReactElement {
-  const imageUri = item.media.thumbnailUrl ?? item.media.url;
+  const isVideo = item.media.type === 'video';
+
+  const player = useVideoPlayer(isVideo ? item.media.url : null, (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
+
+  useEffect(() => {
+    if (!isVideo) return;
+    try {
+      if (isActive) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch {
+      // Player may not be ready on first mount; next render will retry.
+    }
+  }, [isActive, isVideo, player]);
 
   return (
     <View style={[styles.container, { height: itemHeight }]}>
-      <Image
-        source={{ uri: imageUri }}
-        style={StyleSheet.absoluteFillObject}
-        resizeMode="cover"
-      />
+      {isVideo ? (
+        <VideoView
+          player={player}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          nativeControls={false}
+          allowsPictureInPicture={false}
+        />
+      ) : (
+        <Image
+          source={{ uri: item.media.thumbnailUrl ?? item.media.url }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+      )}
       <View style={styles.bottomScrim} pointerEvents="none" />
       <View style={styles.priceChip}>
         <Text style={styles.priceText}>

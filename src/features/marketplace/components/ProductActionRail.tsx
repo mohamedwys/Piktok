@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
+import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
+import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import type { Product } from '@/features/marketplace/types/product';
-import {
-  likeProduct,
-  unlikeProduct,
-} from '@/features/marketplace/services/products';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { useRequireAuth } from '@/stores/useRequireAuth';
+import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -20,25 +19,17 @@ export default function ProductActionRail({
   product,
 }: ProductActionRailProps): React.ReactElement {
   const { t } = useTranslation();
-  const [isLiked, setIsLiked] = useState<boolean>(false);
-  const [likeCount, setLikeCount] = useState<number>(product.engagement.likes);
+  const { data: engagement } = useUserEngagement();
+  const isLiked = engagement?.likedIds.has(product.id) ?? false;
+  const likeCount = product.engagement.likes;
+  const toggleLike = useToggleLike(product.id);
+  const { requireAuth } = useRequireAuth();
 
   const onPressLike = (): void => {
+    if (!requireAuth()) return;
+    console.log('[RAIL] like tapped, isLiked=', isLiked, 'productId=', product.id);
     void lightHaptic();
-    const nextLiked = !isLiked;
-    setIsLiked(nextLiked);
-    setLikeCount((c) => c + (nextLiked ? 1 : -1));
-    void (async () => {
-      try {
-        if (nextLiked) {
-          await likeProduct(product.id);
-        } else {
-          await unlikeProduct(product.id);
-        }
-      } catch {
-        // Step 10 will add proper rollback + sync via React Query mutations.
-      }
-    })();
+    toggleLike.mutate(isLiked);
   };
 
   const onPressBuy = (): void => {

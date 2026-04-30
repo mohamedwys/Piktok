@@ -72,6 +72,7 @@ export default function ProductFeedItem({
         </View>
         <View style={styles.topRowRight} pointerEvents="box-none">
           <PriceCard
+            productId={item.id}
             price={item.price}
             currency={item.currency}
             stock={item.stock}

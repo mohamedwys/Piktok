@@ -3,6 +3,7 @@ import { Stack } from "expo-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { initI18n } from "@/i18n"
+import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
 
 const myTheme = {
   ...DarkTheme,
@@ -20,7 +21,11 @@ export default function RootLayout() {
 
   const [isI18nReady, setI18nReady] = useState(false)
   useEffect(() => {
-    initI18n().then(() => setI18nReady(true))
+    Promise.all([initI18n(), syncAuthFromSupabase()]).then(() => {
+      setI18nReady(true)
+    })
+    const unsub = subscribeToAuthChanges()
+    return () => unsub()
   }, [])
 
   if (!isI18nReady) {

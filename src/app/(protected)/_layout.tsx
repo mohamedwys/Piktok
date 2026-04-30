@@ -1,30 +1,7 @@
-import { useAuthStore } from "@/stores/useAuthStore";
-import { Redirect, Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { Stack } from "expo-router";
 
 export default function ProtectedLayout() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [hydrated, setHydrated] = useState(() =>
-    useAuthStore.persist.hasHydrated()
-  );
-
-  useEffect(() => {
-    const unsubFinish = useAuthStore.persist.onFinishHydration(() =>
-      setHydrated(true)
-    );
-    setHydrated(useAuthStore.persist.hasHydrated());
-    return () => {
-      unsubFinish();
-    };
-  }, []);
-
-  if (!hydrated) {
-    return null;
-  }
-
-  if (!isAuthenticated) {
-    return <Redirect href={"/login"} />;
-  }
-
+  // Free browsing: no auth gate at the route level.
+  // Per-action auth is enforced via useRequireAuth() in components.
   return <Stack screenOptions={{ headerShown: false }} />;
 }

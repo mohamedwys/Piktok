@@ -4,7 +4,17 @@
     "viewLess": "Voir moins",
     "viewProfile": "Voir le profil",
     "loading": "Chargement...",
-    "errorGeneric": "Une erreur est survenue."
+    "errorGeneric": "Une erreur est survenue.",
+    "cancel": "Annuler"
+  },
+  "auth": {
+    "signInRequired": {
+      "title": "Connexion requise",
+      "message": "Connecte-toi pour profiter de toutes les fonctionnalités."
+    },
+    "signIn": "Se connecter",
+    "createAccount": "Créer un compte",
+    "signOut": "Se déconnecter"
   },
   "tabs": {
     "home": "Accueil",
@@ -38,7 +48,10 @@
   "profile": {
     "title": "Profil",
     "settings": "Paramètres",
-    "language": "Langue"
+    "language": "Langue",
+    "guestHeading": "Bienvenue",
+    "guestSubtitle": "Connecte-toi pour personnaliser ton profil, sauvegarder tes favoris et vendre tes articles.",
+    "account": "Compte"
   },
   "categories": {
     "title": "Catégories",

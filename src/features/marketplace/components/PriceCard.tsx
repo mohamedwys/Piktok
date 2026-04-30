@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
 import { getLocalized } from '@/i18n/getLocalized';
+import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { useRequireAuth } from '@/stores/useRequireAuth';
 
 type PriceCardProps = {
+  productId: string;
   price: number;
   currency: Product['currency'];
   stock: Product['stock'];
@@ -22,18 +26,22 @@ function formatPrice(value: number, currency: Product['currency']): string {
 }
 
 export default function PriceCard({
+  productId,
   price,
   currency,
   stock,
   shipping,
 }: PriceCardProps): React.ReactElement {
   const { t, i18n } = useTranslation();
-  const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
+  const { data: engagement } = useUserEngagement();
+  const isBookmarked = engagement?.bookmarkedIds.has(productId) ?? false;
+  const toggleBookmark = useToggleBookmark(productId);
+  const { requireAuth } = useRequireAuth();
 
   const onPressBookmark = (): void => {
+    if (!requireAuth()) return;
     void lightHaptic();
-    // TODO(step-10): wire to bookmarkProduct service
-    setIsBookmarked((v) => !v);
+    toggleBookmark.mutate(isBookmarked);
   };
 
   const stockLabel = stock.label

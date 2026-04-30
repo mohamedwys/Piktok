@@ -4,7 +4,17 @@
     "viewLess": "Show less",
     "viewProfile": "View profile",
     "loading": "Loading...",
-    "errorGeneric": "Something went wrong."
+    "errorGeneric": "Something went wrong.",
+    "cancel": "Cancel"
+  },
+  "auth": {
+    "signInRequired": {
+      "title": "Sign in required",
+      "message": "Sign in to access all features."
+    },
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "signOut": "Sign out"
   },
   "tabs": {
     "home": "Home",
@@ -38,7 +48,10 @@
   "profile": {
     "title": "Profile",
     "settings": "Settings",
-    "language": "Language"
+    "language": "Language",
+    "guestHeading": "Welcome",
+    "guestSubtitle": "Sign in to personalize your profile, save favorites, and sell your items.",
+    "account": "Account"
   },
   "categories": {
     "title": "Categories",

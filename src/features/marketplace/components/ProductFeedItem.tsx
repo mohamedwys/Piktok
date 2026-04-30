@@ -1,7 +1,11 @@
 import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '@/features/marketplace/types/product';
+import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
+import SellerCard from '@/features/marketplace/components/SellerCard';
+import PriceCard from '@/features/marketplace/components/PriceCard';
 
 type ProductFeedItemProps = {
   item: Product;
@@ -9,19 +13,14 @@ type ProductFeedItemProps = {
   isActive: boolean;
 };
 
-function formatPrice(value: number, currency: Product['currency']): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency,
-  }).format(value);
-}
-
 export default function ProductFeedItem({
   item,
   itemHeight,
   isActive,
 }: ProductFeedItemProps): React.ReactElement {
   const isVideo = item.media.type === 'video';
+  const insets = useSafeAreaInsets();
+  const topRowTop = insets.top + 78;
 
   const player = useVideoPlayer(isVideo ? item.media.url : null, (p) => {
     p.loop = true;
@@ -59,16 +58,25 @@ export default function ProductFeedItem({
         />
       )}
       <View style={styles.bottomScrim} pointerEvents="none" />
-      <View style={styles.priceChip}>
-        <Text style={styles.priceText}>
-          {formatPrice(item.price, item.currency)}
-        </Text>
+      <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
+        <View style={styles.topRowLeft} pointerEvents="box-none">
+          <SellerCard seller={item.seller} />
+        </View>
+        <View style={styles.topRowRight} pointerEvents="box-none">
+          <PriceCard
+            price={item.price}
+            currency={item.currency}
+            stock={item.stock}
+            shipping={item.shipping}
+          />
+        </View>
       </View>
       <View style={styles.titleWrap} pointerEvents="none">
         <Text style={styles.titleText} numberOfLines={2}>
           {item.title}
         </Text>
       </View>
+      <ProductActionRail product={item} />
     </View>
   );
 }
@@ -86,19 +94,25 @@ const styles = StyleSheet.create({
     height: '30%',
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  priceChip: {
+  topRow: {
     position: 'absolute',
-    top: 130,
-    right: 14,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
   },
-  priceText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+  topRowLeft: {
+    flexShrink: 1,
+    flexGrow: 0,
+    flexBasis: 'auto',
+    maxWidth: '60%',
+  },
+  topRowRight: {
+    flexShrink: 0,
+    flexGrow: 0,
+    alignItems: 'flex-end',
   },
   titleWrap: {
     position: 'absolute',

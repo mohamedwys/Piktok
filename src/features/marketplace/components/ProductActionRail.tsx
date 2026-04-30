@@ -40,7 +40,6 @@ export default function ProductActionRail({
   const onPressBuy = (): void => {};
   const onPressComment = (): void => {};
   const onPressShare = (): void => {};
-  const onPressMore = (): void => {};
 
   const shareLabel =
     product.engagement.shares > 0
@@ -51,7 +50,7 @@ export default function ProductActionRail({
     <View style={styles.container}>
       <Pressable
         onPress={onPressBuy}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.buyButton, pressed && styles.pressed]}
       >
         <View style={styles.buyCircle}>
           <Ionicons name="bag-handle" size={26} color="#fff" />
@@ -61,48 +60,32 @@ export default function ProductActionRail({
 
       <Pressable
         onPress={onPressLike}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
-        <View style={styles.iconCircle}>
-          <Ionicons
-            name={isLiked ? 'heart' : 'heart-outline'}
-            size={24}
-            color={isLiked ? BRAND_PRIMARY : '#fff'}
-          />
-        </View>
-        <Text style={styles.subLabel}>{formatCount(likeCount)}</Text>
+        <Ionicons
+          name={isLiked ? 'heart' : 'heart-outline'}
+          size={33}
+          color={isLiked ? BRAND_PRIMARY : '#fff'}
+        />
+        <Text style={styles.label}>{formatCount(likeCount)}</Text>
       </Pressable>
 
       <Pressable
         onPress={onPressComment}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
-        <View style={styles.iconCircle}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
-        </View>
-        <Text style={styles.subLabel}>
+        <Ionicons name="chatbubble" size={30} color="#fff" />
+        <Text style={styles.label}>
           {formatCount(product.engagement.comments)}
         </Text>
       </Pressable>
 
       <Pressable
         onPress={onPressShare}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
-        <View style={styles.iconCircle}>
-          <Ionicons name="paper-plane" size={24} color="#fff" />
-        </View>
-        <Text style={styles.subLabel}>{shareLabel}</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={onPressMore}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-      >
-        <View style={styles.iconCircle}>
-          <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
-        </View>
-        <Text style={styles.subLabel}>Plus</Text>
+        <Ionicons name="paper-plane" size={30} color="#fff" />
+        <Text style={styles.label}>{shareLabel}</Text>
       </Pressable>
     </View>
   );
@@ -111,16 +94,17 @@ export default function ProductActionRail({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 14,
-    bottom: 90,
+    right: 20,
+    bottom: 20,
     alignItems: 'center',
-    gap: 14,
-  },
-  item: {
-    alignItems: 'center',
+    gap: 25,
   },
   pressed: {
     opacity: 0.6,
+  },
+  buyButton: {
+    alignItems: 'center',
+    gap: 6,
   },
   buyCircle: {
     width: 56,
@@ -137,22 +121,17 @@ const styles = StyleSheet.create({
   },
   buyLabel: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    marginTop: 4,
+    marginTop: 6,
   },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  button: {
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
   },
-  subLabel: {
+  label: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
   },
 });

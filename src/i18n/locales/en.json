@@ -14,7 +14,21 @@
     },
     "signIn": "Sign in",
     "createAccount": "Create account",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to your account",
+    "registerTitle": "Create account",
+    "registerSubtitle": "Sign up to get started",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "usernamePlaceholder": "Username",
+    "submitting": "Signing in...",
+    "submittingRegister": "Creating...",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "missingFields": "Please fill in all fields.",
+    "loginFailed": "Login failed",
+    "registerFailed": "Sign up failed"
   },
   "tabs": {
     "home": "Home",

@@ -14,7 +14,21 @@
     },
     "signIn": "Se connecter",
     "createAccount": "Créer un compte",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "loginTitle": "Bon retour",
+    "loginSubtitle": "Connecte-toi à ton compte",
+    "registerTitle": "Créer un compte",
+    "registerSubtitle": "Inscris-toi pour commencer",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Mot de passe",
+    "usernamePlaceholder": "Nom d'utilisateur",
+    "submitting": "Connexion...",
+    "submittingRegister": "Création...",
+    "noAccount": "Pas encore de compte ?",
+    "hasAccount": "Tu as déjà un compte ?",
+    "missingFields": "Merci de remplir tous les champs.",
+    "loginFailed": "Échec de la connexion",
+    "registerFailed": "Échec de l'inscription"
   },
   "tabs": {
     "home": "Accueil",

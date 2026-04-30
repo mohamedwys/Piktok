@@ -1,11 +1,12 @@
-import React, { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
 import SellerCard from '@/features/marketplace/components/SellerCard';
 import PriceCard from '@/features/marketplace/components/PriceCard';
+import ProductBottomPanel from '@/features/marketplace/components/ProductBottomPanel';
 
 type ProductFeedItemProps = {
   item: Product;
@@ -21,6 +22,7 @@ export default function ProductFeedItem({
   const isVideo = item.media.type === 'video';
   const insets = useSafeAreaInsets();
   const topRowTop = insets.top + 78;
+  const [bottomPanelExpanded, setBottomPanelExpanded] = useState(false);
 
   const player = useVideoPlayer(isVideo ? item.media.url : null, (p) => {
     p.loop = true;
@@ -57,7 +59,15 @@ export default function ProductFeedItem({
           resizeMode="cover"
         />
       )}
-      <View style={styles.bottomScrim} pointerEvents="none" />
+      {bottomPanelExpanded ? (
+        <>
+          <View style={styles.scrimTop} pointerEvents="none" />
+          <View style={styles.scrimMid} pointerEvents="none" />
+          <View style={styles.scrimBottom} pointerEvents="none" />
+        </>
+      ) : (
+        <View style={styles.scrimCollapsed} pointerEvents="none" />
+      )}
       <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
         <View style={styles.topRowLeft} pointerEvents="box-none">
           <SellerCard seller={item.seller} />
@@ -71,11 +81,11 @@ export default function ProductFeedItem({
           />
         </View>
       </View>
-      <View style={styles.titleWrap} pointerEvents="none">
-        <Text style={styles.titleText} numberOfLines={2}>
-          {item.title}
-        </Text>
-      </View>
+      <ProductBottomPanel
+        product={item}
+        expanded={bottomPanelExpanded}
+        onToggleExpanded={() => setBottomPanelExpanded((v) => !v)}
+      />
       <ProductActionRail product={item} />
     </View>
   );
@@ -86,13 +96,37 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#000',
   },
-  bottomScrim: {
+  scrimCollapsed: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     height: '30%',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  scrimBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '22%',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  scrimMid: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '22%',
+    height: '20%',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  scrimTop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '42%',
+    height: '18%',
+    backgroundColor: 'rgba(0,0,0,0.20)',
   },
   topRow: {
     position: 'absolute',
@@ -113,16 +147,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     alignItems: 'flex-end',
-  },
-  titleWrap: {
-    position: 'absolute',
-    bottom: 28,
-    left: 16,
-    right: '30%',
-  },
-  titleText: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
   },
 });

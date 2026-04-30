@@ -1,16 +1,34 @@
 import { Tabs } from 'expo-router';
-import { Entypo, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Entypo, Feather, Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
-    <Tabs>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#0a0a0a',
+          borderTopColor: 'rgba(255,255,255,0.08)',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: '#fff',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+      }}
+    >
       <Tabs.Screen
         name='index'
         options={{
-          title: 'Home',
-          headerShown: false,
+          title: 'Accueil',
           tabBarIcon: ({ color }) => (
-            <Entypo name="home" size={24} color={color} />
+            <Entypo name="home" size={22} color={color} />
           )
         }}
       />
@@ -18,9 +36,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='friends'
         options={{
-          title: 'Friends',
+          title: 'Catégories',
           tabBarIcon: ({ color }) => (
-            <Feather name="users" size={24} color={color} />
+            <Ionicons name="grid-outline" size={22} color={color} />
           )
         }}
       />
@@ -28,10 +46,11 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='newPost'
         options={{
-          title: 'New Post',
-          headerShown: false,
-          tabBarIcon: ({ color }) => (
-            <Feather name="plus-square" size={24} color={color} />
+          title: '',
+          tabBarIcon: () => (
+            <View style={styles.sellButton}>
+              <Feather name="plus" size={26} color="#fff" />
+            </View>
           )
         }}
       />
@@ -39,9 +58,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='inbox'
         options={{
-          title: 'Inbox',
+          title: 'Messages',
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="message-minus-outline" size={24} color={color} />
+            <Ionicons name="chatbubble-outline" size={22} color={color} />
           )
         }}
       />
@@ -49,12 +68,29 @@ export default function TabsLayout() {
       <Tabs.Screen
         name='profile'
         options={{
-          title: 'Profile',
+          title: 'Profil',
           tabBarIcon: ({ color }) => (
-            <Feather name="user" size={24} color={color} />
+            <Feather name="user" size={22} color={color} />
           )
         }}
       />
     </Tabs>
   )
 }
+
+const styles = StyleSheet.create({
+  sellButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FE2C55',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+});

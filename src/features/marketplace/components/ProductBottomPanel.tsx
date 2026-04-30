@@ -1,8 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { Product, ProductAttribute } from '@/features/marketplace/types/product';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
+import { getLocalized } from '@/i18n/getLocalized';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
 type ProductBottomPanelProps = {
@@ -22,11 +24,17 @@ function ChipIcon({ iconKey }: { iconKey?: string }): React.ReactElement {
   return <View style={styles.dot} />;
 }
 
-function AttributeChip({ attribute }: { attribute: ProductAttribute }): React.ReactElement {
+function AttributeChip({
+  attribute,
+  lang,
+}: {
+  attribute: ProductAttribute;
+  lang: string;
+}): React.ReactElement {
   return (
     <View style={styles.chip}>
       <ChipIcon iconKey={attribute.iconKey} />
-      <Text style={styles.chipText}>{` ${attribute.label}`}</Text>
+      <Text style={styles.chipText}>{` ${getLocalized(attribute.label, lang)}`}</Text>
     </View>
   );
 }
@@ -36,6 +44,13 @@ export default function ProductBottomPanel({
   expanded,
   onToggleExpanded,
 }: ProductBottomPanelProps): React.ReactElement {
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
+  const title = getLocalized(product.title, lang);
+  const description = getLocalized(product.description, lang);
+  const categoryPrimary = getLocalized(product.category.primary, lang);
+  const categorySecondary = getLocalized(product.category.secondary, lang);
+
   return (
     <View style={styles.panel} pointerEvents="box-none">
       <Pressable
@@ -57,27 +72,27 @@ export default function ProductBottomPanel({
         <View style={styles.breadcrumb} pointerEvents="none">
           <Ionicons name="home" size={11} color="#fff" />
           <Text style={styles.breadcrumbText}>
-            {` ${product.category.primary} > ${product.category.secondary}`}
+            {` ${categoryPrimary} > ${categorySecondary}`}
           </Text>
         </View>
       ) : null}
 
       <View pointerEvents="none">
         <Text style={[styles.title, styles.titleShadow]} numberOfLines={2}>
-          {product.title}
+          {title}
         </Text>
       </View>
 
       {expanded ? (
         <View pointerEvents="none">
-          <Text style={styles.description}>{product.description}</Text>
+          <Text style={styles.description}>{description}</Text>
         </View>
       ) : null}
 
       {product.attributes.length > 0 ? (
         <View style={styles.chipsRow} pointerEvents="none">
           {product.attributes.map((attr) => (
-            <AttributeChip key={attr.id} attribute={attr} />
+            <AttributeChip key={attr.id} attribute={attr} lang={lang} />
           ))}
         </View>
       ) : null}

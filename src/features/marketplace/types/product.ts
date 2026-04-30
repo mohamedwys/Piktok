@@ -1,3 +1,5 @@
+import type { LocalizedString } from '@/i18n/getLocalized';
+
 export type Currency = 'EUR' | 'USD' | 'GBP';
 
 export type MediaType = 'image' | 'video';
@@ -11,24 +13,24 @@ export type ProductMedia = {
 };
 
 export type ProductCategory = {
-  primary: string;
-  secondary: string;
+  primary: LocalizedString;
+  secondary: LocalizedString;
 };
 
 export type ProductAttribute = {
   id: string;
-  label: string;
+  label: LocalizedString;
   iconKey?: string;
 };
 
 export type ProductStock = {
   available: boolean;
-  label?: string;
+  label?: LocalizedString;
 };
 
 export type ProductShipping = {
   free: boolean;
-  label?: string;
+  label?: LocalizedString;
 };
 
 export type Seller = {
@@ -50,8 +52,8 @@ export type ProductEngagement = {
 
 export type Product = {
   id: string;
-  title: string;
-  description: string;
+  title: LocalizedString;
+  description: LocalizedString;
   price: number;
   currency: Currency;
   media: ProductMedia;

@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
+import { getLocalized } from '@/i18n/getLocalized';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
 type PriceCardProps = {
@@ -26,7 +27,7 @@ export default function PriceCard({
   stock,
   shipping,
 }: PriceCardProps): React.ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
 
   const onPressBookmark = (): void => {
@@ -35,10 +36,16 @@ export default function PriceCard({
     setIsBookmarked((v) => !v);
   };
 
-  const stockLabel =
-    stock.label ?? (stock.available ? t('marketplace.inStock') : t('marketplace.outOfStock'));
-  const shippingLabel =
-    shipping.label ?? (shipping.free ? t('marketplace.freeShipping') : t('marketplace.shippingTbd'));
+  const stockLabel = stock.label
+    ? getLocalized(stock.label, i18n.language)
+    : stock.available
+      ? t('marketplace.inStock')
+      : t('marketplace.outOfStock');
+  const shippingLabel = shipping.label
+    ? getLocalized(shipping.label, i18n.language)
+    : shipping.free
+      ? t('marketplace.freeShipping')
+      : t('marketplace.shippingTbd');
 
   return (
     <View style={styles.card}>

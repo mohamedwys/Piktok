@@ -1,0 +1,238 @@
+[
+  {
+    "id": "prod_001",
+    "title": "Fauteuil Scandinave",
+    "description": "Fauteuil au design scandinave épuré, fabriqué à la main en France. Structure en bois massif et tissu bouclé d'une grande douceur, idéal pour apporter une touche chaleureuse à votre salon.",
+    "price": 299.0,
+    "currency": "EUR",
+    "media": {
+      "type": "image",
+      "url": "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=1080&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=400&q=60",
+      "aspectRatio": 0.8
+    },
+    "category": {
+      "primary": "Maison & Déco",
+      "secondary": "Fauteuils"
+    },
+    "attributes": [
+      { "id": "attr_material_wood", "label": "Bois massif", "iconKey": "tree" },
+      { "id": "attr_fabric_boucle", "label": "Tissu bouclé", "iconKey": "fabric" },
+      { "id": "attr_color_beige", "label": "Beige", "iconKey": "palette" }
+    ],
+    "dimensions": "L 68 x P 72 x H 78 cm",
+    "stock": {
+      "available": true,
+      "label": "En stock"
+    },
+    "shipping": {
+      "free": true,
+      "label": "Livraison offerte"
+    },
+    "seller": {
+      "id": "seller_maison_nova",
+      "name": "Maison Nova",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
+      "verified": true,
+      "isPro": true,
+      "rating": 4.8,
+      "salesCount": 1200
+    },
+    "engagement": {
+      "likes": 2453,
+      "comments": 128,
+      "shares": 64,
+      "bookmarks": 312
+    },
+    "createdAt": "2026-04-12T09:24:00.000Z"
+  },
+  {
+    "id": "prod_002",
+    "title": "Lampe de Table Lumina",
+    "description": "Lampe de table en céramique mate, abat-jour en lin naturel. Diffuse une lumière chaude et tamisée, parfaite pour une ambiance cosy en soirée.",
+    "price": 89.5,
+    "currency": "EUR",
+    "media": {
+      "type": "image",
+      "url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1080&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=400&q=60",
+      "aspectRatio": 0.75
+    },
+    "category": {
+      "primary": "Maison & Déco",
+      "secondary": "Luminaires"
+    },
+    "attributes": [
+      { "id": "attr_material_ceramic", "label": "Céramique", "iconKey": "vase" },
+      { "id": "attr_material_linen", "label": "Lin naturel", "iconKey": "fabric" },
+      { "id": "attr_color_terracotta", "label": "Terracotta", "iconKey": "palette" }
+    ],
+    "dimensions": "Ø 22 x H 38 cm",
+    "stock": {
+      "available": true,
+      "label": "En stock"
+    },
+    "shipping": {
+      "free": false,
+      "label": "Livraison 4,90 €"
+    },
+    "seller": {
+      "id": "seller_atelier_sud",
+      "name": "Atelier du Sud",
+      "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80",
+      "verified": true,
+      "isPro": false,
+      "rating": 4.6,
+      "salesCount": 312
+    },
+    "engagement": {
+      "likes": 487,
+      "comments": 23,
+      "shares": 11,
+      "bookmarks": 64
+    },
+    "createdAt": "2026-04-18T14:02:00.000Z"
+  },
+  {
+    "id": "prod_003",
+    "title": "Table Basse Onde",
+    "description": "Table basse en chêne massif huilé aux courbes organiques. Plateau ovale traité contre les taches d'eau, piètement central sculpté à la main.",
+    "price": 549.0,
+    "currency": "EUR",
+    "media": {
+      "type": "video",
+      "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&w=400&q=60",
+      "aspectRatio": 1.78,
+      "durationMs": 15000
+    },
+    "category": {
+      "primary": "Maison & Déco",
+      "secondary": "Tables"
+    },
+    "attributes": [
+      { "id": "attr_material_oak", "label": "Chêne massif", "iconKey": "tree" },
+      { "id": "attr_finish_oiled", "label": "Finition huilée", "iconKey": "drop" },
+      { "id": "attr_shape_oval", "label": "Plateau ovale", "iconKey": "shape" }
+    ],
+    "dimensions": "L 110 x P 60 x H 38 cm",
+    "stock": {
+      "available": true,
+      "label": "Plus que 2 disponibles"
+    },
+    "shipping": {
+      "free": true,
+      "label": "Livraison offerte"
+    },
+    "seller": {
+      "id": "seller_bois_nature",
+      "name": "Bois & Nature",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+      "verified": true,
+      "isPro": true,
+      "rating": 4.9,
+      "salesCount": 845
+    },
+    "engagement": {
+      "likes": 1872,
+      "comments": 96,
+      "shares": 47,
+      "bookmarks": 220
+    },
+    "createdAt": "2026-04-22T11:45:00.000Z"
+  },
+  {
+    "id": "prod_004",
+    "title": "Manteau en Laine Camel",
+    "description": "Manteau long coupe oversize en laine vierge mélangée. Coloris camel intemporel, doublure satinée et poches plaquées. Pièce signature pour la mi-saison.",
+    "price": 219.9,
+    "currency": "EUR",
+    "media": {
+      "type": "image",
+      "url": "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=1080&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=400&q=60",
+      "aspectRatio": 0.66
+    },
+    "category": {
+      "primary": "Mode",
+      "secondary": "Manteaux"
+    },
+    "attributes": [
+      { "id": "attr_material_wool", "label": "Laine vierge", "iconKey": "fabric" },
+      { "id": "attr_fit_oversize", "label": "Coupe oversize", "iconKey": "ruler" },
+      { "id": "attr_color_camel", "label": "Camel", "iconKey": "palette" }
+    ],
+    "dimensions": "Tailles disponibles : 36, 38, 40, 42",
+    "stock": {
+      "available": true,
+      "label": "En stock"
+    },
+    "shipping": {
+      "free": false,
+      "label": "Livraison 5,90 €"
+    },
+    "seller": {
+      "id": "seller_lila_paris",
+      "name": "Lila Paris",
+      "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
+      "verified": false,
+      "isPro": false,
+      "rating": 4.4,
+      "salesCount": 87
+    },
+    "engagement": {
+      "likes": 738,
+      "comments": 42,
+      "shares": 18,
+      "bookmarks": 95
+    },
+    "createdAt": "2026-04-25T08:18:00.000Z"
+  },
+  {
+    "id": "prod_005",
+    "title": "Sac à Main Cuir Camel",
+    "description": "Sac à main artisanal en cuir pleine fleur tanné végétal. Anse renforcée, fermoir en laiton brossé, doublure coton bio. Vieillit avec élégance au fil des années.",
+    "price": 159.0,
+    "currency": "EUR",
+    "media": {
+      "type": "image",
+      "url": "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=1080&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=400&q=60",
+      "aspectRatio": 1.0
+    },
+    "category": {
+      "primary": "Accessoires",
+      "secondary": "Sacs"
+    },
+    "attributes": [
+      { "id": "attr_material_leather", "label": "Cuir pleine fleur", "iconKey": "leather" },
+      { "id": "attr_finish_brass", "label": "Laiton brossé", "iconKey": "metal" },
+      { "id": "attr_origin_handmade", "label": "Fait main", "iconKey": "hand" }
+    ],
+    "dimensions": "L 32 x P 12 x H 24 cm",
+    "stock": {
+      "available": false,
+      "label": "Rupture de stock"
+    },
+    "shipping": {
+      "free": true,
+      "label": "Livraison offerte"
+    },
+    "seller": {
+      "id": "seller_maroquinerie_loire",
+      "name": "Maroquinerie de Loire",
+      "avatarUrl": "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=200&q=80",
+      "verified": true,
+      "isPro": true,
+      "rating": 4.7,
+      "salesCount": 564
+    },
+    "engagement": {
+      "likes": 1124,
+      "comments": 58,
+      "shares": 22,
+      "bookmarks": 178
+    },
+    "createdAt": "2026-04-28T16:33:00.000Z"
+  }
+]

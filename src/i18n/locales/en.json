@@ -39,10 +39,7 @@
   },
   "feed": {
     "forYou": "For you",
-    "marketplace": "Marketplace",
-    "explore": "Explore",
-    "following": "Following",
-    "forYouSub": "For You"
+    "marketplace": "Marketplace"
   },
   "marketplace": {
     "loadError": "Couldn't load the marketplace.",

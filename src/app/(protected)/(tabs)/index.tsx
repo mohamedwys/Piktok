@@ -3,7 +3,6 @@ import React, { useMemo, useRef, useState } from 'react'
 import PostListItem from '@/components/PostListItem';
 import posts from "@/data/posts.json"
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import FeedTab from '@/components/GenericComponents/FeedTab';
 import TopFeedSwitch from '@/components/GenericComponents/TopFeedSwitch';
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
 import MarketplaceFilterSheet from '@/features/marketplace/components/MarketplaceFilterSheet';
@@ -18,15 +17,8 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-const TOP_BAR_HEIGHT = 36;
-
 export default function HomeScreen() {
   const { t } = useTranslation();
-  const TABS = useMemo(() => ({
-    EXPLORE: t('feed.explore'),
-    FOLLOWING: t('feed.following'),
-    FOR_YOU: t('feed.forYouSub'),
-  }), [t]);
   const MAIN_TABS = useMemo<{ id: MainTabId; label: string }[]>(() => ([
     { id: 'pour-toi', label: t('feed.forYou') },
     { id: 'marketplace', label: t('feed.marketplace') },
@@ -37,11 +29,9 @@ export default function HomeScreen() {
 // accounts for home indicator
   const insets = useSafeAreaInsets();
   const topBarTop = insets.top + 12;
-  const subTabsTop = topBarTop + TOP_BAR_HEIGHT + 4;
   const mainTab = useMainTabStore((s) => s.mainTab);
   const setMainTab = useMainTabStore((s) => s.setMainTab);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<string>(t('feed.forYouSub'));
   const filters = useMarketplaceFilters((s) => s.filters);
   const filterCount = activeFilterCount(filters);
 
@@ -90,12 +80,6 @@ setCurrentIndex(viewableItems[0]?.index || 0)
         style={[styles.tabContent, mainTab === 'pour-toi' ? null : styles.hidden]}
         pointerEvents={mainTab === 'pour-toi' ? 'auto' : 'none'}
       >
-        <View style={[styles.subTabsRow, { top: subTabsTop }]}>
-          <FeedTab title={TABS.EXPLORE} setActiveTab={setActiveTab} activeTab={activeTab} />
-          <FeedTab title={TABS.FOLLOWING} setActiveTab={setActiveTab} activeTab={activeTab} />
-          <FeedTab title={TABS.FOR_YOU} setActiveTab={setActiveTab} activeTab={activeTab} />
-        </View>
-
         <FlatList
          style={{ flex: 1 }}
           data={posts}
@@ -147,15 +131,6 @@ const styles = StyleSheet.create({
     zIndex: 2,
     paddingHorizontal: 15,
     alignItems: 'center',
-  },
-  subTabsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 30,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 1,
   },
   tabContent: {
     ...StyleSheet.absoluteFillObject,

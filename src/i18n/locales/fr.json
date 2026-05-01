@@ -39,10 +39,7 @@
   },
   "feed": {
     "forYou": "Pour toi",
-    "marketplace": "Marketplace",
-    "explore": "Explore",
-    "following": "Following",
-    "forYouSub": "For You"
+    "marketplace": "Marketplace"
   },
   "marketplace": {
     "loadError": "Impossible de charger le marketplace.",

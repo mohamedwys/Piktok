@@ -33,6 +33,8 @@ export type {
   ChatMessage,
   MessageKind,
 } from './services/messaging';
+export { default as MarketplaceFeedSkeleton } from './components/MarketplaceFeedSkeleton';
+export { default as SellerProductCardSkeleton } from './components/SellerProductCardSkeleton';
 export { timeAgo } from './utils/timeAgo';
 export { useMyOrders, MY_ORDERS_KEY } from './hooks/useMyOrders';
 export { useCreateCheckoutSession } from './hooks/useCreateCheckoutSession';

@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { useFilteredProducts } from '@/features/marketplace/hooks/useFilteredProducts';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
+import MarketplaceFeedSkeleton from '@/features/marketplace/components/MarketplaceFeedSkeleton';
 import type { Product } from '@/features/marketplace/types/product';
 
 export default function MarketplaceScreen(): React.ReactElement {
@@ -29,10 +29,10 @@ export default function MarketplaceScreen(): React.ReactElement {
 
   const { data, isLoading, isError } = useFilteredProducts();
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color="#fff" />
+      <View style={styles.container}>
+        <MarketplaceFeedSkeleton />
       </View>
     );
   }

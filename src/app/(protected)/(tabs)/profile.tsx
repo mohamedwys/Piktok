@@ -28,6 +28,7 @@ import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct'
 import { timeAgo } from '@/features/marketplace/utils/timeAgo';
 import { getLocalized } from '@/i18n/getLocalized';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
+import SellerProductCardSkeleton from '@/features/marketplace/components/SellerProductCardSkeleton';
 import type { Product } from '@/features/marketplace/types/product';
 import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
 
@@ -258,7 +259,16 @@ export default function ProfileScreen(): React.ReactElement {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t('myListings.title')}</Text>
             {myProductsQuery.isLoading ? (
-              <ActivityIndicator />
+              <View style={styles.skeletonGrid}>
+                <View style={styles.skeletonRow}>
+                  <SellerProductCardSkeleton />
+                  <SellerProductCardSkeleton />
+                </View>
+                <View style={styles.skeletonRow}>
+                  <SellerProductCardSkeleton />
+                  <SellerProductCardSkeleton />
+                </View>
+              </View>
             ) : (myProductsQuery.data?.length ?? 0) === 0 ? (
               <Text style={styles.emptyText}>{t('myListings.empty')}</Text>
             ) : (
@@ -454,6 +464,13 @@ const styles = StyleSheet.create({
   emptyText: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 13,
+  },
+  skeletonGrid: {
+    gap: 12,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   editSellerButton: {
     flexDirection: 'row',

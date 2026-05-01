@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,9 +23,13 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useMyProducts } from '@/features/marketplace/hooks/useMyProducts';
+import { useMyOrders } from '@/features/marketplace/hooks/useMyOrders';
 import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct';
+import { timeAgo } from '@/features/marketplace/utils/timeAgo';
+import { getLocalized } from '@/i18n/getLocalized';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
 import type { Product } from '@/features/marketplace/types/product';
+import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -33,6 +38,63 @@ const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   en: 'English',
 };
 
+const ORDER_STATUS_PILL: Record<
+  OrderStatus,
+  { bg: string; fg: string; key: string }
+> = {
+  pending: { bg: '#FFC83D', fg: '#1a1100', key: 'orders.statusPending' },
+  paid: { bg: '#33D17A', fg: '#062817', key: 'orders.statusPaid' },
+  failed: { bg: 'rgba(243,97,97,0.85)', fg: '#fff', key: 'orders.statusFailed' },
+  cancelled: { bg: 'rgba(243,97,97,0.85)', fg: '#fff', key: 'orders.statusCancelled' },
+  refunded: { bg: 'rgba(255,255,255,0.18)', fg: '#fff', key: 'orders.statusRefunded' },
+};
+
+function formatOrderAmount(value: number, currency: Order['currency']): string {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency,
+  }).format(value);
+}
+
+function OrderRow({
+  order,
+  lang,
+  t,
+}: {
+  order: Order;
+  lang: string;
+  t: (key: string) => string;
+}): React.ReactElement {
+  const pill = ORDER_STATUS_PILL[order.status];
+  const title = order.productTitle ? getLocalized(order.productTitle, lang) : '';
+  return (
+    <View style={styles.orderRow}>
+      <View style={styles.orderThumbWrap}>
+        {order.productThumbnail ? (
+          <Image
+            source={{ uri: order.productThumbnail }}
+            style={styles.orderThumb}
+          />
+        ) : null}
+      </View>
+      <View style={styles.orderMiddle}>
+        <Text style={styles.orderTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.orderAmount}>
+          {formatOrderAmount(order.amount, order.currency)}
+        </Text>
+        <Text style={styles.orderDate}>{timeAgo(order.createdAt, lang)}</Text>
+      </View>
+      <View style={[styles.orderPill, { backgroundColor: pill.bg }]}>
+        <Text style={[styles.orderPillText, { color: pill.fg }]}>
+          {t(pill.key)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ProfileScreen(): React.ReactElement {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -40,6 +102,7 @@ export default function ProfileScreen(): React.ReactElement {
   const { isAuthenticated, user } = useRequireAuth();
   const currentLang = i18n.language as SupportedLanguage;
   const myProductsQuery = useMyProducts(isAuthenticated);
+  const myOrdersQuery = useMyOrders(isAuthenticated);
   const deleteMutation = useDeleteProduct();
 
   const handleEdit = (productId: string): void => {
@@ -209,6 +272,28 @@ export default function ProfileScreen(): React.ReactElement {
                 columnWrapperStyle={{ gap: 12 }}
                 ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
               />
+            )}
+          </View>
+        ) : null}
+
+        {isAuthenticated ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{t('orders.title')}</Text>
+            {myOrdersQuery.isLoading ? (
+              <ActivityIndicator />
+            ) : (myOrdersQuery.data?.length ?? 0) === 0 ? (
+              <Text style={styles.emptyText}>{t('orders.empty')}</Text>
+            ) : (
+              <View>
+                {(myOrdersQuery.data ?? []).map((order) => (
+                  <OrderRow
+                    key={order.id}
+                    order={order}
+                    lang={currentLang}
+                    t={t}
+                  />
+                ))}
+              </View>
             )}
           </View>
         ) : null}
@@ -385,5 +470,53 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  orderRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  orderThumbWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    overflow: 'hidden',
+  },
+  orderThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  orderMiddle: {
+    flex: 1,
+  },
+  orderTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  orderAmount: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  orderDate: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  orderPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  orderPillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

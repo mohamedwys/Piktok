@@ -193,5 +193,20 @@
     "updateSuccessTitle": "Annonce mise à jour",
     "updateSuccessMessage": "Tes modifications sont enregistrées.",
     "updateFail": "Échec de la mise à jour"
+  },
+  "orders": {
+    "title": "Mes commandes",
+    "empty": "Aucune commande pour l'instant.",
+    "statusPending": "En attente",
+    "statusPaid": "Payée",
+    "statusFailed": "Échouée",
+    "statusCancelled": "Annulée",
+    "statusRefunded": "Remboursée"
+  },
+  "checkout": {
+    "starting": "Préparation du paiement...",
+    "notConfiguredTitle": "Paiement non disponible",
+    "notConfiguredMessage": "Le système de paiement n'est pas encore configuré. Reviens un peu plus tard.",
+    "errorTitle": "Erreur de paiement"
   }
 }

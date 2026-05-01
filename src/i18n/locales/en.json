@@ -193,5 +193,20 @@
     "updateSuccessTitle": "Listing updated",
     "updateSuccessMessage": "Your changes are saved.",
     "updateFail": "Update failed"
+  },
+  "orders": {
+    "title": "My orders",
+    "empty": "No orders yet.",
+    "statusPending": "Pending",
+    "statusPaid": "Paid",
+    "statusFailed": "Failed",
+    "statusCancelled": "Cancelled",
+    "statusRefunded": "Refunded"
+  },
+  "checkout": {
+    "starting": "Preparing checkout...",
+    "notConfiguredTitle": "Checkout not available",
+    "notConfiguredMessage": "Checkout is not configured yet. Please try again later.",
+    "errorTitle": "Checkout error"
   }
 }

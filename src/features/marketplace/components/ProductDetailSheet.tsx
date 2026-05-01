@@ -18,11 +18,14 @@ import BottomSheet, {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { useStartConversation } from '@/features/marketplace/hooks/useStartConversation';
+import { useCreateCheckoutSession } from '@/features/marketplace/hooks/useCreateCheckoutSession';
+import { StripeNotConfiguredError } from '@/features/marketplace/services/orders';
 import { sendMessage as sendMessageDirect } from '@/features/marketplace/services/messaging';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
@@ -109,6 +112,7 @@ export default function ProductDetailSheet(): React.ReactElement {
   const toggleBookmark = useToggleBookmark(product?.id ?? '');
   const { requireAuth } = useRequireAuth();
   const startConv = useStartConversation();
+  const checkout = useCreateCheckoutSession();
 
   useEffect(() => {
     if (productId) {
@@ -146,9 +150,26 @@ export default function ProductDetailSheet(): React.ReactElement {
   };
 
   const onPressBuyNow = (): void => {
+    if (!product) return;
     void mediumHaptic();
     if (!requireAuth()) return;
-    // TODO(future): wire to payment gateway
+    const productSnapshot = product;
+    void (async () => {
+      try {
+        const { url } = await checkout.mutateAsync(productSnapshot.id);
+        useProductSheetStore.getState().close();
+        await WebBrowser.openBrowserAsync(url);
+      } catch (err) {
+        if (err instanceof StripeNotConfiguredError) {
+          Alert.alert(
+            t('checkout.notConfiguredTitle'),
+            t('checkout.notConfiguredMessage'),
+          );
+        } else {
+          Alert.alert(t('checkout.errorTitle'), (err as Error).message);
+        }
+      }
+    })();
   };
 
   const onPressMakeOffer = (): void => {
@@ -210,6 +231,7 @@ export default function ProductDetailSheet(): React.ReactElement {
   };
 
   const isPro = product?.seller.isPro ?? true;
+  const isCheckoutPending = checkout.isPending;
 
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
@@ -218,12 +240,17 @@ export default function ProductDetailSheet(): React.ReactElement {
           {isPro ? (
             <Pressable
               onPress={onPressBuyNow}
+              disabled={isCheckoutPending}
               style={({ pressed }) => [
                 styles.ctaButton,
                 pressed && styles.ctaPressed,
               ]}
             >
-              <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
+              {isCheckoutPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.ctaText}>{t('marketplace.buyNow')}</Text>
+              )}
             </Pressable>
           ) : (
             <View style={styles.ctaRow}>
@@ -254,7 +281,7 @@ export default function ProductDetailSheet(): React.ReactElement {
       </BottomSheetFooter>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, requireAuth, isPro],
+    [t, requireAuth, isPro, isCheckoutPending],
   );
 
   const renderContent = (): React.ReactElement => {

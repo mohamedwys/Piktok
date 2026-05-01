@@ -34,3 +34,7 @@ export type {
   MessageKind,
 } from './services/messaging';
 export { timeAgo } from './utils/timeAgo';
+export { useMyOrders, MY_ORDERS_KEY } from './hooks/useMyOrders';
+export { useCreateCheckoutSession } from './hooks/useCreateCheckoutSession';
+export { StripeNotConfiguredError } from './services/orders';
+export type { Order, OrderStatus } from './services/orders';

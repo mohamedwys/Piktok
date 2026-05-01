@@ -19,4 +19,6 @@ export { useSeller } from './hooks/useSeller';
 export { useSellerProducts } from './hooks/useSellerProducts';
 export { useMyProducts, MY_PRODUCTS_KEY } from './hooks/useMyProducts';
 export { useDeleteProduct } from './hooks/useDeleteProduct';
-export type { SellerProfile } from './services/sellers';
+export { useMySeller, MY_SELLER_KEY } from './hooks/useMySeller';
+export { useUpdateMySeller } from './hooks/useUpdateMySeller';
+export type { SellerProfile, UpdateMySellerInput } from './services/sellers';

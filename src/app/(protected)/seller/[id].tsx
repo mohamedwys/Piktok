@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -90,6 +91,48 @@ export default function SellerProfileScreen(): React.ReactElement {
           {`${formatCount(seller.salesCount)} ${t('marketplace.salesUnit', { count: seller.salesCount })}`}
         </Text>
       </View>
+      {seller.bio ? <Text style={styles.bio}>{seller.bio}</Text> : null}
+      {seller.isPro && (seller.website || seller.phonePublic || seller.emailPublic) ? (
+        <View style={styles.contactCard}>
+          <Text style={styles.contactLabel}>{t('sellerProfile.contactPro')}</Text>
+          {seller.website ? (
+            <Pressable
+              onPress={() => {
+                void lightHaptic();
+                void Linking.openURL(seller.website as string);
+              }}
+              style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="globe-outline" size={16} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.contactText} numberOfLines={1}>{seller.website}</Text>
+            </Pressable>
+          ) : null}
+          {seller.phonePublic ? (
+            <Pressable
+              onPress={() => {
+                void lightHaptic();
+                void Linking.openURL(`tel:${seller.phonePublic}`);
+              }}
+              style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.contactText} numberOfLines={1}>{seller.phonePublic}</Text>
+            </Pressable>
+          ) : null}
+          {seller.emailPublic ? (
+            <Pressable
+              onPress={() => {
+                void lightHaptic();
+                void Linking.openURL(`mailto:${seller.emailPublic}`);
+              }}
+              style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="mail-outline" size={16} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.contactText} numberOfLines={1}>{seller.emailPublic}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       <Text style={styles.sectionTitle}>{t('seller.listings')}</Text>
     </View>
   );
@@ -170,4 +213,41 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   errorText: { color: '#fff', fontSize: 14 },
+  bio: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 12,
+    paddingHorizontal: 24,
+    textAlign: 'center',
+  },
+  contactCard: {
+    alignSelf: 'stretch',
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+  },
+  contactLabel: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  contactText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    flex: 1,
+  },
 });

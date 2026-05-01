@@ -112,6 +112,24 @@
     "memberSince": "Membre depuis {{date}}",
     "loadError": "Impossible de charger ce profil."
   },
+  "sellerProfile": {
+    "bio": "Bio",
+    "website": "Site web",
+    "phone": "Téléphone",
+    "email": "Email",
+    "contactPro": "Contact",
+    "edit": "Modifier mon profil",
+    "editTitle": "Mon profil vendeur",
+    "editSubtitle": "Renseigne tes infos publiques.",
+    "bioPlaceholder": "Présente-toi...",
+    "websitePlaceholder": "https://...",
+    "phonePlaceholder": "+33 ...",
+    "emailPlaceholder": "contact@...",
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "saveSuccess": "Profil mis à jour.",
+    "saveFail": "Échec de la mise à jour."
+  },
   "sell": {
     "title": "Vendre un article",
     "subtitle": "Crée une annonce en quelques secondes.",

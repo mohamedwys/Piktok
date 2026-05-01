@@ -112,6 +112,24 @@
     "memberSince": "Member since {{date}}",
     "loadError": "Couldn't load this profile."
   },
+  "sellerProfile": {
+    "bio": "Bio",
+    "website": "Website",
+    "phone": "Phone",
+    "email": "Email",
+    "contactPro": "Contact",
+    "edit": "Edit my profile",
+    "editTitle": "My seller profile",
+    "editSubtitle": "Fill in your public info.",
+    "bioPlaceholder": "Introduce yourself...",
+    "websitePlaceholder": "https://...",
+    "phonePlaceholder": "+1 ...",
+    "emailPlaceholder": "contact@...",
+    "save": "Save",
+    "saving": "Saving...",
+    "saveSuccess": "Profile updated.",
+    "saveFail": "Update failed."
+  },
   "sell": {
     "title": "Sell an item",
     "subtitle": "Create a listing in seconds.",

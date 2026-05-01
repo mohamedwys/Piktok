@@ -96,6 +96,11 @@ export default function ProfileScreen(): React.ReactElement {
     router.push('/(auth)/register');
   };
 
+  const onPressEditSeller = (): void => {
+    void lightHaptic();
+    router.push('/(protected)/edit-seller-profile');
+  };
+
   const onPressSignOut = (): void => {
     void lightHaptic();
     void (async () => {
@@ -211,6 +216,16 @@ export default function ProfileScreen(): React.ReactElement {
         {isAuthenticated ? (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t('profile.account')}</Text>
+            <Pressable
+              onPress={onPressEditSeller}
+              style={({ pressed }) => [
+                styles.editSellerButton,
+                pressed && styles.pillPressed,
+              ]}
+            >
+              <Ionicons name="storefront-outline" size={18} color="#fff" />
+              <Text style={styles.editSellerText}>{t('sellerProfile.edit')}</Text>
+            </Pressable>
             <Pressable
               onPress={onPressSignOut}
               style={({ pressed }) => [
@@ -354,5 +369,21 @@ const styles = StyleSheet.create({
   emptyText: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 13,
+  },
+  editSellerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+  },
+  editSellerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

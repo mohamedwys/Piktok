@@ -27,7 +27,6 @@ import {
   type CreateProductInput,
 } from '@/features/marketplace';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
-import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
 
@@ -201,30 +200,27 @@ export default function SellScreen(): React.ReactElement {
   if (!isAuthenticated) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
-        <ResponsiveContainer>
-          <View style={styles.guestWrap}>
-            <Text style={styles.title}>{t('sell.title')}</Text>
-            <Text style={styles.guestSubtitle}>{t('sell.guestHint')}</Text>
-            <Pressable
-              onPress={onPressSignIn}
-              style={({ pressed }) => [styles.ctaPrimary, pressed && styles.pressed]}
-            >
-              <Text style={styles.ctaPrimaryText}>{t('auth.signIn')}</Text>
-            </Pressable>
-          </View>
-        </ResponsiveContainer>
+        <View style={styles.guestWrap}>
+          <Text style={styles.title}>{t('sell.title')}</Text>
+          <Text style={styles.guestSubtitle}>{t('sell.guestHint')}</Text>
+          <Pressable
+            onPress={onPressSignIn}
+            style={({ pressed }) => [styles.ctaPrimary, pressed && styles.pressed]}
+          >
+            <Text style={styles.ctaPrimaryText}>{t('auth.signIn')}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-      <ResponsiveContainer>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={insets.top + 8}
-        >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={insets.top + 8}
+      >
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
@@ -393,10 +389,9 @@ export default function SellScreen(): React.ReactElement {
               ) : (
                 <Text style={styles.submitText}>{t('sell.submit')}</Text>
               )}
-            </Pressable>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </ResponsiveContainer>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={pickerMode !== 'none'}

@@ -12,12 +12,11 @@ import {
   useMarketplaceFilters,
   activeFilterCount,
 } from '@/stores/useMarketplaceFilters';
+import { useMainTabStore, type MainTabId } from '@/stores/useMainTabStore';
 import { mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-
-type MainTabId = 'pour-toi' | 'marketplace';
 
 const TOP_BAR_HEIGHT = 36;
 
@@ -39,7 +38,8 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const topBarTop = insets.top + 12;
   const subTabsTop = topBarTop + TOP_BAR_HEIGHT + 4;
-  const [mainTab, setMainTab] = useState<MainTabId>('pour-toi');
+  const mainTab = useMainTabStore((s) => s.mainTab);
+  const setMainTab = useMainTabStore((s) => s.setMainTab);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<string>(t('feed.forYouSub'));
   const filters = useMarketplaceFilters((s) => s.filters);

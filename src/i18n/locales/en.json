@@ -89,7 +89,11 @@
   "messages": {
     "title": "Messages",
     "empty": "No messages yet.",
-    "emptyHint": "Your conversations will show up here."
+    "emptyHint": "Your conversations will show up here.",
+    "signInPrompt": "Sign in to see your messages.",
+    "loading": "Loading...",
+    "you": "You",
+    "offerPreview": "Offer"
   },
   "search": {
     "title": "Filters",

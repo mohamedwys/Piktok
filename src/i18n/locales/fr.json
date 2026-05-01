@@ -89,7 +89,11 @@
   "messages": {
     "title": "Messages",
     "empty": "Aucun message pour le moment.",
-    "emptyHint": "Tes conversations apparaîtront ici."
+    "emptyHint": "Tes conversations apparaîtront ici.",
+    "signInPrompt": "Connecte-toi pour voir tes messages.",
+    "loading": "Chargement...",
+    "you": "Toi",
+    "offerPreview": "Offre"
   },
   "search": {
     "title": "Filtres",

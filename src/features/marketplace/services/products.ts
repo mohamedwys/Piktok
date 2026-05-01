@@ -49,6 +49,8 @@ type ProductRow = {
   stock_label: ProductStock['label'] | null;
   shipping_free: boolean;
   shipping_label: ProductShipping['label'] | null;
+  pickup_available: boolean;
+  location: string | null;
   likes_count: number;
   comments_count: number;
   shares_count: number;
@@ -80,6 +82,8 @@ function rowToProduct(row: ProductRow): Product {
       free: row.shipping_free,
       label: row.shipping_label ?? undefined,
     },
+    pickup: { available: row.pickup_available },
+    location: row.location ?? undefined,
     seller: {
       id: row.seller.id,
       name: row.seller.name,

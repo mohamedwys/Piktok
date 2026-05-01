@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { File } from 'expo-file-system';
 import { AuthRequiredError } from '@/features/marketplace/services/products';
+import type { LocalizedString } from '@/i18n/getLocalized';
 
 export type CreateProductInput = {
   title: string;
@@ -9,11 +10,13 @@ export type CreateProductInput = {
   currency: 'EUR' | 'USD' | 'GBP';
   mediaUri: string; // local file URI
   mediaType: 'image' | 'video';
-  category: { primary: string; secondary: string };
+  category: { primary: LocalizedString; secondary: LocalizedString };
   attributes: Array<{ id: string; label: string; iconKey?: string }>;
   dimensions?: string;
   stockAvailable: boolean;
   shippingFree: boolean;
+  pickupAvailable: boolean;
+  location?: string;
 };
 
 async function getCurrentUserOrThrow() {
@@ -83,8 +86,8 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
       title: dup(input.title),
       description: dup(input.description),
       category: {
-        primary: dup(input.category.primary),
-        secondary: dup(input.category.secondary),
+        primary: input.category.primary,
+        secondary: input.category.secondary,
       },
       attributes: input.attributes.map((a) => ({
         id: a.id,
@@ -99,6 +102,8 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
       thumbnail_url: mediaUrl,
       stock_available: input.stockAvailable,
       shipping_free: input.shippingFree,
+      pickup_available: input.pickupAvailable,
+      location: input.location ?? null,
     })
     .select('id')
     .single();

@@ -50,6 +50,10 @@ export type ProductEngagement = {
   bookmarks?: number;
 };
 
+export type ProductPickup = {
+  available: boolean;
+};
+
 export type Product = {
   id: string;
   title: LocalizedString;
@@ -62,6 +66,8 @@ export type Product = {
   dimensions?: string;
   stock: ProductStock;
   shipping: ProductShipping;
+  pickup?: ProductPickup;
+  location?: string;
   seller: Seller;
   engagement: ProductEngagement;
   createdAt: string;

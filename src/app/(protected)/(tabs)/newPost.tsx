@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -26,13 +28,16 @@ import {
 } from '@/features/marketplace';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
+import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
+import { getLocalized } from '@/i18n/getLocalized';
 
 const BRAND_PRIMARY = '#FE2C55';
 
 type MediaType = 'image' | 'video';
+type PickerMode = 'none' | 'category' | 'subcategory';
 
 export default function SellScreen(): React.ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -43,12 +48,20 @@ export default function SellScreen(): React.ReactElement {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priceText, setPriceText] = useState('');
-  const [categoryPrimary, setCategoryPrimary] = useState('');
-  const [categorySecondary, setCategorySecondary] = useState('');
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
   const [attributesText, setAttributesText] = useState('');
   const [dimensions, setDimensions] = useState('');
+  const [location, setLocation] = useState('');
   const [stockAvailable, setStockAvailable] = useState(true);
   const [shippingFree, setShippingFree] = useState(false);
+  const [pickupAvailable, setPickupAvailable] = useState(false);
+  const [pickerMode, setPickerMode] = useState<PickerMode>('none');
+
+  const selectedCategory = categoryId ? findCategory(categoryId) : undefined;
+  const selectedSubcategory = selectedCategory?.subcategories.find(
+    (s) => s.id === subcategoryId
+  );
 
   const player = useVideoPlayer(
     mediaType === 'video' ? mediaUri : null,
@@ -123,8 +136,8 @@ export default function SellScreen(): React.ReactElement {
       !title.trim() ||
       !description.trim() ||
       !priceText.trim() ||
-      !categoryPrimary.trim() ||
-      !categorySecondary.trim()
+      !selectedCategory ||
+      !selectedSubcategory
     ) {
       Alert.alert(t('sell.fail'), t('sell.missingFields'));
       return;
@@ -149,13 +162,15 @@ export default function SellScreen(): React.ReactElement {
       mediaUri,
       mediaType,
       category: {
-        primary: categoryPrimary.trim(),
-        secondary: categorySecondary.trim(),
+        primary: selectedCategory.label,
+        secondary: selectedSubcategory.label,
       },
       attributes,
       dimensions: dimensions.trim() || undefined,
       stockAvailable,
       shippingFree,
+      pickupAvailable,
+      location: location.trim() || undefined,
     };
 
     void mediumHaptic();
@@ -167,12 +182,14 @@ export default function SellScreen(): React.ReactElement {
         setTitle('');
         setDescription('');
         setPriceText('');
-        setCategoryPrimary('');
-        setCategorySecondary('');
+        setCategoryId(null);
+        setSubcategoryId(null);
         setAttributesText('');
         setDimensions('');
+        setLocation('');
         setStockAvailable(true);
         setShippingFree(false);
+        setPickupAvailable(false);
         router.replace('/(protected)/(tabs)');
       },
       onError: (err) => {
@@ -284,18 +301,31 @@ export default function SellScreen(): React.ReactElement {
               keyboardType="decimal-pad"
             />
 
-            <Field
-              label={t('sell.categoryPrimaryLabel')}
-              value={categoryPrimary}
-              onChangeText={setCategoryPrimary}
-              placeholder={t('sell.categoryPrimaryPlaceholder')}
+            <SelectorField
+              label={t('sell.categoryField')}
+              displayValue={
+                selectedCategory ? getLocalized(selectedCategory.label, i18n.language) : null
+              }
+              placeholder={t('sell.categoryPlaceholder')}
+              onPress={() => {
+                void lightHaptic();
+                setPickerMode('category');
+              }}
             />
 
-            <Field
-              label={t('sell.categorySecondaryLabel')}
-              value={categorySecondary}
-              onChangeText={setCategorySecondary}
-              placeholder={t('sell.categorySecondaryPlaceholder')}
+            <SelectorField
+              label={t('sell.subcategoryField')}
+              displayValue={
+                selectedSubcategory ? getLocalized(selectedSubcategory.label, i18n.language) : null
+              }
+              placeholder={
+                selectedCategory ? t('sell.subcategoryPlaceholder') : t('sell.subcategoryHint')
+              }
+              disabled={!selectedCategory}
+              onPress={() => {
+                void lightHaptic();
+                setPickerMode('subcategory');
+              }}
             />
 
             <Field
@@ -311,6 +341,13 @@ export default function SellScreen(): React.ReactElement {
               value={dimensions}
               onChangeText={setDimensions}
               placeholder={t('sell.dimensionsPlaceholder')}
+            />
+
+            <Field
+              label={t('sell.locationField')}
+              value={location}
+              onChangeText={setLocation}
+              placeholder={t('sell.locationPlaceholder')}
             />
 
             <View style={styles.switchRow}>
@@ -333,6 +370,16 @@ export default function SellScreen(): React.ReactElement {
               />
             </View>
 
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>{t('sell.pickupAvailable')}</Text>
+              <Switch
+                value={pickupAvailable}
+                onValueChange={setPickupAvailable}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                thumbColor="#fff"
+              />
+            </View>
+
             <Pressable
               onPress={onSubmit}
               disabled={isPending}
@@ -350,6 +397,110 @@ export default function SellScreen(): React.ReactElement {
           </ScrollView>
         </KeyboardAvoidingView>
       </ResponsiveContainer>
+
+      <Modal
+        visible={pickerMode !== 'none'}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPickerMode('none')}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>
+              {pickerMode === 'category'
+                ? t('sell.categoryField')
+                : t('sell.subcategoryField')}
+            </Text>
+            <FlatList
+              data={
+                pickerMode === 'category'
+                  ? CATEGORIES
+                  : selectedCategory?.subcategories ?? []
+              }
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => {
+                    void lightHaptic();
+                    if (pickerMode === 'category') {
+                      setCategoryId(item.id);
+                      setSubcategoryId(null);
+                    } else {
+                      setSubcategoryId(item.id);
+                    }
+                    setPickerMode('none');
+                  }}
+                  style={({ pressed }) => [
+                    styles.modalRow,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <Text style={styles.modalRowText}>
+                    {getLocalized(item.label, i18n.language)}
+                  </Text>
+                </Pressable>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+            />
+            <Pressable
+              onPress={() => setPickerMode('none')}
+              style={({ pressed }) => [
+                styles.modalCancel,
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+type SelectorFieldProps = {
+  label: string;
+  displayValue: string | null;
+  placeholder: string;
+  onPress: () => void;
+  disabled?: boolean;
+};
+
+function SelectorField({
+  label,
+  displayValue,
+  placeholder,
+  onPress,
+  disabled,
+}: SelectorFieldProps): React.ReactElement {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        disabled={disabled}
+        style={({ pressed }) => [
+          styles.selectorCard,
+          disabled && styles.selectorCardDisabled,
+          pressed && !disabled && styles.pressed,
+        ]}
+      >
+        <Text
+          style={[
+            styles.selectorValue,
+            !displayValue && styles.selectorPlaceholder,
+          ]}
+          numberOfLines={1}
+        >
+          {displayValue ?? placeholder}
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={16}
+          color="rgba(255,255,255,0.4)"
+        />
+      </Pressable>
     </View>
   );
 }
@@ -523,5 +674,80 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  selectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  selectorCardDisabled: {
+    opacity: 0.5,
+  },
+  selectorValue: {
+    color: '#fff',
+    fontSize: 15,
+    flex: 1,
+  },
+  selectorPlaceholder: {
+    color: 'rgba(255,255,255,0.35)',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#0a0a0a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    maxHeight: '70%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  modalRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  modalRowText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  modalCancel: {
+    marginTop: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  modalCancelText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

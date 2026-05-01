@@ -33,7 +33,7 @@ type SellerRow = {
   sales_count: number;
 };
 
-type ProductRow = {
+export type ProductRow = {
   id: string;
   seller_id: string;
   title: Product['title'];
@@ -62,7 +62,7 @@ type ProductRow = {
   seller: SellerRow;
 };
 
-function rowToProduct(row: ProductRow): Product {
+export function rowToProduct(row: ProductRow): Product {
   return {
     id: row.id,
     title: row.title,

@@ -13,3 +13,6 @@ export { useToggleLike } from './hooks/useToggleLike';
 export { useToggleBookmark } from './hooks/useToggleBookmark';
 export { useCreateProduct } from './hooks/useCreateProduct';
 export type { CreateProductInput } from './services/sell';
+export { useSeller } from './hooks/useSeller';
+export { useSellerProducts } from './hooks/useSellerProducts';
+export type { SellerProfile } from './services/sellers';

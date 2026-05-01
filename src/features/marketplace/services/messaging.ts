@@ -138,6 +138,50 @@ export async function listConversations(): Promise<ConversationItem[]> {
   });
 }
 
+export async function getConversationById(id: string): Promise<ConversationItem | null> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return null;
+  const myId = u.user.id;
+
+  const { data: row, error } = await supabase
+    .from('conversations')
+    .select(`*, product:products(title, media_url, thumbnail_url, price, currency)`)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!row) return null;
+  const c = row as ConversationRow;
+  const otherId = c.buyer_id === myId ? c.seller_user_id : c.buyer_id;
+  const { data: sellers } = await supabase
+    .from('sellers')
+    .select('user_id, name, avatar_url, verified, is_pro')
+    .eq('user_id', otherId)
+    .maybeSingle();
+  const other = sellers as SellerLookup | null;
+  return {
+    id: c.id,
+    productId: c.product_id,
+    product: c.product
+      ? {
+          title: c.product.title,
+          thumbnailUrl: c.product.thumbnail_url ?? c.product.media_url,
+          price: Number(c.product.price),
+          currency: c.product.currency,
+        }
+      : null,
+    otherParty: {
+      userId: otherId,
+      name: other?.name ?? 'User',
+      avatarUrl: other?.avatar_url ?? '',
+      verified: other?.verified ?? false,
+      isPro: other?.is_pro ?? false,
+    },
+    lastMessageAt: c.last_message_at,
+    lastMessagePreview: c.last_message_preview,
+    iAmBuyer: c.buyer_id === myId,
+  };
+}
+
 export async function listMessages(conversationId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from('messages')

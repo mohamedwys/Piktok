@@ -95,6 +95,19 @@
     "you": "Toi",
     "offerPreview": "Offre"
   },
+  "chat": {
+    "inputPlaceholder": "Message...",
+    "send": "Envoyer",
+    "offerLabel": "Offre",
+    "offerPromptTitle": "Faire une offre",
+    "offerPromptMessage": "Saisis ton offre.",
+    "offerInvalid": "Montant invalide.",
+    "cannotMessageSelf": "Tu ne peux pas te contacter toi-même.",
+    "startError": "Impossible de démarrer la conversation.",
+    "loadError": "Impossible de charger la conversation.",
+    "sellerUnavailable": "Ce vendeur n'est pas encore disponible pour la messagerie.",
+    "selfMessage": "Tu ne peux pas te contacter toi-même."
+  },
   "search": {
     "title": "Filtres",
     "queryPlaceholder": "Rechercher...",

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -21,6 +22,8 @@ import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
+import { useStartConversation } from '@/features/marketplace/hooks/useStartConversation';
+import { sendMessage as sendMessageDirect } from '@/features/marketplace/services/messaging';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useRequireAuth } from '@/stores/useRequireAuth';
@@ -40,6 +43,14 @@ function formatPrice(value: number, currency: Product['currency']): string {
     style: 'currency',
     currency,
   }).format(value);
+}
+
+function explainStartConvError(err: Error, t: (k: string) => string): string {
+  const msg = err.message ?? '';
+  if (msg.includes('no linked user account')) return t('chat.sellerUnavailable');
+  if (msg.includes('Cannot start a conversation with yourself'))
+    return t('chat.selfMessage');
+  return msg || t('chat.startError');
 }
 
 function ChipIcon({ iconKey }: { iconKey?: string }): React.ReactElement {
@@ -97,6 +108,7 @@ export default function ProductDetailSheet(): React.ReactElement {
     : false;
   const toggleBookmark = useToggleBookmark(product?.id ?? '');
   const { requireAuth } = useRequireAuth();
+  const startConv = useStartConversation();
 
   useEffect(() => {
     if (productId) {
@@ -140,15 +152,61 @@ export default function ProductDetailSheet(): React.ReactElement {
   };
 
   const onPressMakeOffer = (): void => {
-    void mediumHaptic();
+    if (!product) return;
     if (!requireAuth()) return;
-    // TODO(future): wire to payment gateway
+    const productSnapshot = product;
+    Alert.prompt(
+      t('chat.offerPromptTitle'),
+      t('chat.offerPromptMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('marketplace.makeOffer'),
+          onPress: (text?: string) => {
+            const amount = parseFloat((text ?? '').replace(',', '.'));
+            if (!Number.isFinite(amount) || amount <= 0) {
+              Alert.alert(t('chat.offerInvalid'));
+              return;
+            }
+            void (async () => {
+              try {
+                void mediumHaptic();
+                const convId = await startConv.mutateAsync(productSnapshot.id);
+                await sendMessageDirect({
+                  conversationId: convId,
+                  body: '',
+                  kind: 'offer',
+                  offerAmount: amount,
+                });
+                useProductSheetStore.getState().close();
+                router.push(`/(protected)/conversation/${convId}` as Href);
+              } catch (err) {
+                Alert.alert(t('chat.startError'), explainStartConvError(err as Error, t));
+              }
+            })();
+          },
+        },
+      ],
+      'plain-text',
+      String(productSnapshot.price),
+      'numeric',
+    );
   };
 
   const onPressMessageSeller = (): void => {
-    void mediumHaptic();
+    if (!product) return;
     if (!requireAuth()) return;
-    // TODO(future): wire to messaging
+    const productSnapshot = product;
+    void (async () => {
+      try {
+        void mediumHaptic();
+        const convId = await startConv.mutateAsync(productSnapshot.id);
+        useProductSheetStore.getState().close();
+        router.push(`/(protected)/conversation/${convId}` as Href);
+      } catch (err) {
+        Alert.alert(t('chat.startError'), explainStartConvError(err as Error, t));
+      }
+    })();
   };
 
   const isPro = product?.seller.isPro ?? true;

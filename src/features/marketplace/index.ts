@@ -23,9 +23,11 @@ export { useMySeller, MY_SELLER_KEY } from './hooks/useMySeller';
 export { useUpdateMySeller } from './hooks/useUpdateMySeller';
 export type { SellerProfile, UpdateMySellerInput } from './services/sellers';
 export { useConversations, CONVERSATIONS_KEY } from './hooks/useConversations';
+export { useConversation } from './hooks/useConversation';
 export { useMessages } from './hooks/useMessages';
 export { useSendMessage } from './hooks/useSendMessage';
 export { useStartConversation } from './hooks/useStartConversation';
+export { getConversationById } from './services/messaging';
 export type {
   ConversationItem,
   ChatMessage,

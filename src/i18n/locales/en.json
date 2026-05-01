@@ -95,6 +95,19 @@
     "you": "You",
     "offerPreview": "Offer"
   },
+  "chat": {
+    "inputPlaceholder": "Message...",
+    "send": "Send",
+    "offerLabel": "Offer",
+    "offerPromptTitle": "Make an offer",
+    "offerPromptMessage": "Enter your offer.",
+    "offerInvalid": "Invalid amount.",
+    "cannotMessageSelf": "You can't message yourself.",
+    "startError": "Could not start the conversation.",
+    "loadError": "Could not load the conversation.",
+    "sellerUnavailable": "This seller is not available for messaging yet.",
+    "selfMessage": "You can't message yourself."
+  },
   "search": {
     "title": "Filters",
     "queryPlaceholder": "Search...",

@@ -7,7 +7,8 @@ export type CreateProductInput = {
   description: string;
   price: number;
   currency: 'EUR' | 'USD' | 'GBP';
-  imageUri: string; // local file URI
+  mediaUri: string; // local file URI
+  mediaType: 'image' | 'video';
   category: { primary: string; secondary: string };
   attributes: Array<{ id: string; label: string; iconKey?: string }>;
   dimensions?: string;
@@ -21,16 +22,28 @@ async function getCurrentUserOrThrow() {
   return data.user;
 }
 
-export async function uploadProductImage(localUri: string): Promise<string> {
+function resolveContentType(ext: string, mediaType: 'image' | 'video'): string {
+  if (mediaType === 'video') {
+    if (ext === 'mov') return 'video/quicktime';
+    if (ext === 'webm') return 'video/webm';
+    if (ext === 'm4v') return 'video/x-m4v';
+    return 'video/mp4';
+  }
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+export async function uploadProductMedia(
+  localUri: string,
+  mediaType: 'image' | 'video'
+): Promise<string> {
   const user = await getCurrentUserOrThrow();
-  const ext = (localUri.split('.').pop() || 'jpg').toLowerCase();
+  const ext = (localUri.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg')).toLowerCase();
   const fileName = `${user.id}/${Date.now()}.${ext}`;
   const file = new File(localUri);
   const bytes = await file.bytes();
-  const contentType =
-    ext === 'png' ? 'image/png' :
-    ext === 'webp' ? 'image/webp' :
-    'image/jpeg';
+  const contentType = resolveContentType(ext, mediaType);
   const { data, error } = await supabase.storage
     .from('product-media')
     .upload(fileName, bytes, { contentType, upsert: false });
@@ -55,8 +68,8 @@ export async function ensureSellerForCurrentUser(): Promise<string> {
 export async function createProduct(input: CreateProductInput): Promise<string> {
   await getCurrentUserOrThrow();
 
-  // 1. Upload image
-  const imageUrl = await uploadProductImage(input.imageUri);
+  // 1. Upload media
+  const mediaUrl = await uploadProductMedia(input.mediaUri, input.mediaType);
 
   // 2. Ensure seller exists
   const sellerId = await ensureSellerForCurrentUser();
@@ -81,9 +94,9 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
       dimensions: input.dimensions ?? null,
       price: input.price,
       currency: input.currency,
-      media_type: 'image',
-      media_url: imageUrl,
-      thumbnail_url: imageUrl,
+      media_type: input.mediaType,
+      media_url: mediaUrl,
+      thumbnail_url: mediaUrl,
       stock_available: input.stockAvailable,
       shipping_free: input.shippingFree,
     })

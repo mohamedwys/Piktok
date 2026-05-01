@@ -1,271 +1,527 @@
-import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { useEffect, useRef, useState } from 'react';
-import * as Linking from 'expo-linking';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ImagePicker from 'expo-image-picker';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '../../../stores/useAuthStore';
-import * as FileSystem from 'expo-file-system';
-import {  createPost, uploadVideoToStorage } from '@/services/posts';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useAuthStore } from '@/stores/useAuthStore';
+import {
+  useCreateProduct,
+  type CreateProductInput,
+} from '@/features/marketplace';
+import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 
-// ─── Root ────────────────────────────────────────────────────────────────────
+const BRAND_PRIMARY = '#FE2C55';
 
-export default function NewPostScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
-  const [videoUri, setVideoUri] = useState<string | null>(null);
+type MediaType = 'image' | 'video';
 
-  useEffect(() => {
-    (async () => {
-      if (permission && !permission.granted && permission.canAskAgain) {
-        await requestPermission();
-      }
-      if (micPermission && !micPermission.granted && micPermission.canAskAgain) {
-        await requestMicPermission();
-      }
-    })();
-  }, [permission, micPermission]);
+export default function SellScreen(): React.ReactElement {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { mutate: createListing, isPending } = useCreateProduct();
 
-  if (!permission || !micPermission) {
-    return <View />;
-  }
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<MediaType | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priceText, setPriceText] = useState('');
+  const [categoryPrimary, setCategoryPrimary] = useState('');
+  const [categorySecondary, setCategorySecondary] = useState('');
+  const [attributesText, setAttributesText] = useState('');
+  const [dimensions, setDimensions] = useState('');
+  const [stockAvailable, setStockAvailable] = useState(true);
+  const [shippingFree, setShippingFree] = useState(false);
 
-  if (
-    (permission && !permission.granted && !permission.canAskAgain) ||
-    (micPermission && !micPermission.granted && !micPermission.canAskAgain)
-  ) {
+  const player = useVideoPlayer(
+    mediaType === 'video' ? mediaUri : null,
+    (p) => {
+      p.loop = true;
+      p.muted = true;
+      p.play();
+    }
+  );
+
+  const onPressSignIn = (): void => {
+    void lightHaptic();
+    router.push('/(auth)/login');
+  };
+
+  const launchCamera = async (): Promise<void> => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t('sell.fail'), t('sell.cameraPermissionDenied'));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsEditing: true,
+      quality: 0.85,
+      videoMaxDuration: 60,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const a = result.assets[0];
+      setMediaUri(a.uri);
+      setMediaType(a.type === 'video' ? 'video' : 'image');
+    }
+  };
+
+  const launchGallery = async (): Promise<void> => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t('sell.fail'), t('sell.galleryPermissionDenied'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsEditing: true,
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const a = result.assets[0];
+      setMediaUri(a.uri);
+      setMediaType(a.type === 'video' ? 'video' : 'image');
+    }
+  };
+
+  const promptMediaSource = (): void => {
+    void lightHaptic();
+    Alert.alert(
+      t('sell.sourcePrompt'),
+      undefined,
+      [
+        { text: t('sell.sourceCamera'), onPress: () => { void launchCamera(); } },
+        { text: t('sell.sourceGallery'), onPress: () => { void launchGallery(); } },
+        { text: t('common.cancel'), style: 'cancel' },
+      ]
+    );
+  };
+
+  const onSubmit = (): void => {
+    if (!mediaUri || !mediaType) {
+      Alert.alert(t('sell.fail'), t('sell.missingMedia'));
+      return;
+    }
+    if (
+      !title.trim() ||
+      !description.trim() ||
+      !priceText.trim() ||
+      !categoryPrimary.trim() ||
+      !categorySecondary.trim()
+    ) {
+      Alert.alert(t('sell.fail'), t('sell.missingFields'));
+      return;
+    }
+    const price = Number(priceText.replace(',', '.'));
+    if (!Number.isFinite(price) || price <= 0) {
+      Alert.alert(t('sell.fail'), t('sell.invalidPrice'));
+      return;
+    }
+
+    const attributes = attributesText
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .map((label, i) => ({ id: `attr-${i}`, label }));
+
+    const payload: CreateProductInput = {
+      title: title.trim(),
+      description: description.trim(),
+      price,
+      currency: 'EUR',
+      mediaUri,
+      mediaType,
+      category: {
+        primary: categoryPrimary.trim(),
+        secondary: categorySecondary.trim(),
+      },
+      attributes,
+      dimensions: dimensions.trim() || undefined,
+      stockAvailable,
+      shippingFree,
+    };
+
+    void mediumHaptic();
+    createListing(payload, {
+      onSuccess: () => {
+        Alert.alert(t('sell.success'));
+        setMediaUri(null);
+        setMediaType(null);
+        setTitle('');
+        setDescription('');
+        setPriceText('');
+        setCategoryPrimary('');
+        setCategorySecondary('');
+        setAttributesText('');
+        setDimensions('');
+        setStockAvailable(true);
+        setShippingFree(false);
+        router.replace('/(protected)/(tabs)');
+      },
+      onError: (err) => {
+        Alert.alert(t('sell.fail'), err.message || t('common.errorGeneric'));
+      },
+    });
+  };
+
+  if (!isAuthenticated) {
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>
-          We need your permission to use the camera and microphone
-        </Text>
-        <Button title="Grant Permission" onPress={() => Linking.openSettings()} />
+      <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
+        <ResponsiveContainer>
+          <View style={styles.guestWrap}>
+            <Text style={styles.title}>{t('sell.title')}</Text>
+            <Text style={styles.guestSubtitle}>{t('sell.guestHint')}</Text>
+            <Pressable
+              onPress={onPressSignIn}
+              style={({ pressed }) => [styles.ctaPrimary, pressed && styles.pressed]}
+            >
+              <Text style={styles.ctaPrimaryText}>{t('auth.signIn')}</Text>
+            </Pressable>
+          </View>
+        </ResponsiveContainer>
       </View>
     );
   }
 
-  if (videoUri) {
-    return <VideoPreview uri={videoUri} onDiscard={() => setVideoUri(null)} />;
-  }
-
-  return <CameraScreen onVideoRecorded={setVideoUri} />;
-}
-
-// ─── Camera ──────────────────────────────────────────────────────────────────
-
-function CameraScreen({ onVideoRecorded }: { onVideoRecorded: (uri: string) => void }) {
-  const [facing, setFacing] = useState<CameraType>('back');
-  const [isRecording, setIsRecording] = useState(false);
-  const cameraRef = useRef<CameraView>(null);
-  const isRecordingRef = useRef(false);
-
-  const startRecording = async () => {
-    if (isRecordingRef.current) return;
-    isRecordingRef.current = true;
-    setIsRecording(true);
-    try {
-      const result = await cameraRef.current?.recordAsync();
-      if (result?.uri) {
-        onVideoRecorded(result.uri);
-      }
-    } catch {
-      // Recording stopped or failed to start; UI state is reset in finally.
-    } finally {
-      isRecordingRef.current = false;
-      setIsRecording(false);
-    }
-  };
-
-  const stopRecording = () => {
-    cameraRef.current?.stopRecording();
-  };
-
-  const selectFromGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images','videos', 'livePhotos'],
-      allowsEditing: true,
-      aspect: [9, 16],
-    });
-    if (!result.canceled) {
-      onVideoRecorded(result.assets[0].uri);
-    }
-  };
-
   return (
-    <View style={{ flex: 1 }}>
-      <CameraView ref={cameraRef} mode="video" style={{ flex: 1 }} facing={facing} />
-
-      <View style={styles.topBar}>
-        <Ionicons name="close" size={40} color="white" onPress={() => router.back()} />
-      </View>
-
-      <View style={styles.bottomControls}>
-        <Ionicons name="images" size={40} color="white" onPress={selectFromGallery} />
-        <TouchableOpacity
-          style={[styles.recordButton, isRecording && styles.recordingButton]}
-          onPress={isRecording ? stopRecording : startRecording}
-        />
-        <Ionicons
-          name="camera-reverse"
-          size={40}
-          color="white"
-          onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
-        />
-      </View>
-    </View>
-  );
-}
-
-// ─── Preview ─────────────────────────────────────────────────────────────────
-
-function VideoPreview({ uri, onDiscard }: { uri: string; onDiscard: () => void }) {
-  const [description, setDescription] = useState('');
-  const user = useAuthStore((state: any) => state.user);
-  const queryClient = useQueryClient();
-
-  const player = useVideoPlayer(uri, p => {
-    p.loop = true;
-    p.play();
-  });
-
-  const { mutate: createNewPost, isPending } = useMutation({
-    mutationFn: async ({ video, description }: { video: string; description: string }) => {
-      const fileExtension = video.split('.').pop() || 'mp4';
-      const fileName = `${user?.id}/${Date.now()}.${fileExtension}`;
-      const file = new FileSystem.File(video);
-      const fileBuffer = await file.bytes();
-      if (user) {
-        const videoUrl = await uploadVideoToStorage({ fileName, fileExtension, fileBuffer });
-       // createPost({ video_url: videoUrl, description, user_id: user?.id });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      router.replace('/');
-    },
-    onError: () => {
-      Alert.alert('Error', 'Something went wrong. Try again!');
-    },
-  });
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Ionicons
-        name="close"
-        size={32}
-        color="white"
-        onPress={onDiscard}
-        style={styles.closeIcon}
-      />
-
-      <View style={styles.videoWrapper}>
-        <VideoView player={player} contentFit="cover" style={styles.video} />
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' || Platform.OS === 'android' ? 'padding' : undefined}
-        style={styles.descriptionContainer}
-        keyboardVerticalOffset={20}
-      >
-        <TextInput
-          style={styles.input}
-          placeholder="Add a description..."
-          placeholderTextColor="#aaa"
-          multiline
-          value={description}
-          onChangeText={setDescription}
-        />
-        <TouchableOpacity
-          style={styles.postButton}
-          onPress={() => createNewPost({ video: uri, description })}
-          disabled={isPending}
+    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
+      <ResponsiveContainer>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={insets.top + 8}
         >
-          {isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.postText}>Post</Text>
-          )}
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View>
+              <Text style={styles.title}>{t('sell.title')}</Text>
+              <Text style={styles.subtitle}>{t('sell.subtitle')}</Text>
+            </View>
+
+            <View>
+              <Pressable
+                onPress={promptMediaSource}
+                style={({ pressed }) => [
+                  styles.mediaArea,
+                  !mediaUri && styles.mediaAreaEmpty,
+                  pressed && styles.pressed,
+                ]}
+              >
+                {mediaUri && mediaType === 'image' ? (
+                  <Image
+                    source={{ uri: mediaUri }}
+                    style={styles.mediaPreview}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                {mediaUri && mediaType === 'video' ? (
+                  <VideoView
+                    player={player}
+                    style={styles.mediaPreview}
+                    contentFit="cover"
+                    nativeControls={false}
+                  />
+                ) : null}
+                {!mediaUri ? (
+                  <View style={styles.mediaPlaceholder}>
+                    <Ionicons
+                      name="cloud-upload-outline"
+                      size={36}
+                      color="rgba(255,255,255,0.5)"
+                    />
+                    <Text style={styles.mediaPlaceholderText}>
+                      {t('sell.mediaPicker')}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              {mediaUri ? (
+                <Text style={styles.mediaReplaceHint}>
+                  {t('sell.mediaPickerReplace')}
+                </Text>
+              ) : null}
+            </View>
+
+            <Field
+              label={t('sell.titleLabel')}
+              value={title}
+              onChangeText={setTitle}
+              placeholder={t('sell.titlePlaceholder')}
+            />
+
+            <Field
+              label={t('sell.descriptionLabel')}
+              value={description}
+              onChangeText={setDescription}
+              placeholder={t('sell.descriptionPlaceholder')}
+              multiline
+            />
+
+            <Field
+              label={t('sell.priceLabel')}
+              value={priceText}
+              onChangeText={setPriceText}
+              placeholder={t('sell.pricePlaceholder')}
+              keyboardType="decimal-pad"
+            />
+
+            <Field
+              label={t('sell.categoryPrimaryLabel')}
+              value={categoryPrimary}
+              onChangeText={setCategoryPrimary}
+              placeholder={t('sell.categoryPrimaryPlaceholder')}
+            />
+
+            <Field
+              label={t('sell.categorySecondaryLabel')}
+              value={categorySecondary}
+              onChangeText={setCategorySecondary}
+              placeholder={t('sell.categorySecondaryPlaceholder')}
+            />
+
+            <Field
+              label={t('sell.attributesLabel')}
+              value={attributesText}
+              onChangeText={setAttributesText}
+              placeholder={t('sell.attributesPlaceholder')}
+              hint={t('sell.attributesHint')}
+            />
+
+            <Field
+              label={t('sell.dimensionsLabel')}
+              value={dimensions}
+              onChangeText={setDimensions}
+              placeholder={t('sell.dimensionsPlaceholder')}
+            />
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>{t('sell.stockAvailable')}</Text>
+              <Switch
+                value={stockAvailable}
+                onValueChange={setStockAvailable}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>{t('sell.shippingFree')}</Text>
+              <Switch
+                value={shippingFree}
+                onValueChange={setShippingFree}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <Pressable
+              onPress={onSubmit}
+              disabled={isPending}
+              style={({ pressed }) => [
+                styles.submitButton,
+                (pressed || isPending) && styles.pressed,
+              ]}
+            >
+              {isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitText}>{t('sell.submit')}</Text>
+              )}
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ResponsiveContainer>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+type FieldProps = {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'decimal-pad';
+  hint?: string;
+};
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  keyboardType,
+  hint,
+}: FieldProps): React.ReactElement {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="rgba(255,255,255,0.35)"
+        multiline={multiline}
+        keyboardType={keyboardType}
+        style={[styles.input, multiline && styles.inputMultiline]}
+      />
+      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  permissionContainer: {
+  root: {
     flex: 1,
-    justifyContent: 'center',
-    padding: 20,
+    backgroundColor: '#000',
   },
-  permissionText: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 80,
+    gap: 16,
+  },
+  title: {
     color: '#fff',
-    textAlign: 'center',
-    fontSize: 20,
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  subtitle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  guestWrap: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  guestSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  ctaPrimary: {
+    backgroundColor: BRAND_PRIMARY,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  ctaPrimaryText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '700',
   },
-  recordButton: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#fff',
-    borderRadius: 40,
+  pressed: {
+    opacity: 0.7,
   },
-  recordingButton: {
-    backgroundColor: '#F44336',
+  mediaArea: {
+    height: 280,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  topBar: {
-    position: 'absolute',
-    top: 55,
-    left: 15,
-  },
-  bottomControls: {
-    position: 'absolute',
-    bottom: 20,
-    flexDirection: 'row',
+  mediaAreaEmpty: {
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+  },
+  mediaPreview: {
     width: '100%',
+    height: '100%',
   },
-  closeIcon: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 1,
+  mediaPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  video: {
-    aspectRatio: 9 / 16,
+  mediaPlaceholderText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  mediaReplaceHint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  field: {
+    gap: 6,
+  },
+  fieldLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  fieldHint: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    marginTop: 2,
   },
   input: {
-    flex: 1,
-    color: 'white',
-    backgroundColor: '#111',
-    borderRadius: 10,
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    maxHeight: 110,
-  },
-  postText: {
     color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
   },
-  postButton: {
-    backgroundColor: '#FF0050',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
+  inputMultiline: {
+    minHeight: 96,
+    textAlignVertical: 'top',
   },
-  videoWrapper: {
-    flex: 1,
-  },
-  descriptionContainer: {
-    paddingHorizontal: 5,
+  switchRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 15,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  switchLabel: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: BRAND_PRIMARY,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

@@ -62,6 +62,8 @@ export type Product = {
   currency: Currency;
   media: ProductMedia;
   category: ProductCategory;
+  categoryId?: string;
+  subcategoryId?: string;
   attributes: ProductAttribute[];
   dimensions?: string;
   stock: ProductStock;

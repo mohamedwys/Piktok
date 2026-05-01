@@ -164,6 +164,8 @@ export default function SellScreen(): React.ReactElement {
         primary: selectedCategory.label,
         secondary: selectedSubcategory.label,
       },
+      categoryId: selectedCategory.id,
+      subcategoryId: selectedSubcategory.id,
       attributes,
       dimensions: dimensions.trim() || undefined,
       stockAvailable,

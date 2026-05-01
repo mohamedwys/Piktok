@@ -11,6 +11,8 @@ export type CreateProductInput = {
   mediaUri: string; // local file URI
   mediaType: 'image' | 'video';
   category: { primary: LocalizedString; secondary: LocalizedString };
+  categoryId: string;
+  subcategoryId: string;
   attributes: Array<{ id: string; label: string; iconKey?: string }>;
   dimensions?: string;
   stockAvailable: boolean;
@@ -89,6 +91,8 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
         primary: input.category.primary,
         secondary: input.category.secondary,
       },
+      category_id: input.categoryId,
+      subcategory_id: input.subcategoryId,
       attributes: input.attributes.map((a) => ({
         id: a.id,
         label: dup(a.label),

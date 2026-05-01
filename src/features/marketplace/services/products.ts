@@ -8,6 +8,7 @@ import type {
   ProductStock,
   ProductShipping,
 } from '@/features/marketplace/types/product';
+import type { MarketplaceFilters } from '@/stores/useMarketplaceFilters';
 
 export class AuthRequiredError extends Error {
   constructor() {
@@ -38,6 +39,8 @@ type ProductRow = {
   title: Product['title'];
   description: Product['description'];
   category: ProductCategory;
+  category_id: string | null;
+  subcategory_id: string | null;
   attributes: ProductAttribute[];
   dimensions: string | null;
   price: number;
@@ -72,6 +75,8 @@ function rowToProduct(row: ProductRow): Product {
       thumbnailUrl: row.thumbnail_url ?? undefined,
     },
     category: row.category,
+    categoryId: row.category_id ?? undefined,
+    subcategoryId: row.subcategory_id ?? undefined,
     attributes: row.attributes,
     dimensions: row.dimensions ?? undefined,
     stock: {
@@ -125,6 +130,43 @@ export async function listProducts(
   if (error) throw error;
   const items = (data as unknown as ProductRow[]).map(rowToProduct);
   return { items, nextCursor: null }; // cursor pagination wired in a later step
+}
+
+export async function searchProducts(
+  filters: MarketplaceFilters,
+  limit = 20,
+): Promise<ListProductsResult> {
+  let query = supabase
+    .from('products')
+    .select('*, seller:sellers(*)')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (filters.query.trim().length > 0) {
+    const q = filters.query.trim().replace(/[%_]/g, '');
+    const pattern = `%${q}%`;
+    query = query.or(
+      [
+        `title->>fr.ilike.${pattern}`,
+        `title->>en.ilike.${pattern}`,
+        `description->>fr.ilike.${pattern}`,
+        `description->>en.ilike.${pattern}`,
+      ].join(','),
+    );
+  }
+  if (filters.categoryId) query = query.eq('category_id', filters.categoryId);
+  if (filters.subcategoryId) query = query.eq('subcategory_id', filters.subcategoryId);
+  if (filters.priceMax !== null) query = query.lte('price', filters.priceMax);
+  if (filters.pickupOnly) query = query.eq('pickup_available', true);
+  if (filters.locationQuery.trim().length > 0) {
+    const loc = filters.locationQuery.trim().replace(/[%_]/g, '');
+    query = query.ilike('location', `%${loc}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const items = (data as unknown as ProductRow[]).map(rowToProduct);
+  return { items, nextCursor: null };
 }
 
 export async function getProductById(id: string): Promise<Product | null> {

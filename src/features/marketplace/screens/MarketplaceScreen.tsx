@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
-import { useProducts } from '@/features/marketplace/hooks/useProducts';
+import { useFilteredProducts } from '@/features/marketplace/hooks/useFilteredProducts';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
 import type { Product } from '@/features/marketplace/types/product';
 
@@ -27,7 +27,7 @@ export default function MarketplaceScreen(): React.ReactElement {
     },
   );
 
-  const { data, isLoading, isError } = useProducts();
+  const { data, isLoading, isError } = useFilteredProducts();
 
   if (isLoading) {
     return (

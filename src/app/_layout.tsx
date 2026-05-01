@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { initI18n } from "@/i18n"
 import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
+import { usePushNotifications } from "@/hooks/usePushNotifications"
 
 const myTheme = {
   ...DarkTheme,
@@ -29,6 +30,8 @@ export default function RootLayout() {
     const unsub = subscribeToAuthChanges()
     return () => unsub()
   }, [])
+
+  usePushNotifications()
 
   if (!isI18nReady) {
     return null

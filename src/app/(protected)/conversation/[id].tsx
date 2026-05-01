@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useConversation } from '@/features/marketplace/hooks/useConversation';
 import { useMessages } from '@/features/marketplace/hooks/useMessages';
+import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useSendMessage } from '@/features/marketplace/hooks/useSendMessage';
 import { getLocalized } from '@/i18n/getLocalized';
 import {
@@ -38,7 +39,16 @@ export default function ConversationScreen(): React.ReactElement {
 
   const { data: conv, isLoading: loadingConv } = useConversation(id ?? null);
   const { data: messages, isLoading: loadingMsgs } = useMessages(id ?? null);
-  const sendMutation = useSendMessage(id ?? null);
+  const { data: mySeller } = useMySeller(!!myUserId);
+  const sendMutation = useSendMessage(
+    id ?? null,
+    conv
+      ? {
+          recipientUserId: conv.otherParty.userId,
+          senderName: mySeller?.name ?? 'New message',
+        }
+      : null,
+  );
 
   const [draft, setDraft] = useState('');
 

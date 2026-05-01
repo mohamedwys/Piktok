@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Avatar from '@/components/GenericComponents/Avatar';
 import { useConversation } from '@/features/marketplace/hooks/useConversation';
 import { useMessages } from '@/features/marketplace/hooks/useMessages';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
@@ -91,14 +92,11 @@ export default function ConversationScreen(): React.ReactElement {
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <View style={styles.avatar}>
-            {conv.otherParty.avatarUrl ? (
-              <Image
-                source={{ uri: conv.otherParty.avatarUrl }}
-                style={styles.avatarImg}
-              />
-            ) : null}
-          </View>
+          <Avatar
+            name={conv.otherParty.name}
+            uri={conv.otherParty.avatarUrl}
+            size={36}
+          />
           <View style={{ flexShrink: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={styles.headerName} numberOfLines={1}>
@@ -232,14 +230,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#222',
-    overflow: 'hidden',
-  },
-  avatarImg: { width: 36, height: 36, borderRadius: 18 },
   headerName: { color: '#fff', fontSize: 14, fontWeight: '700' },
   headerSubtitle: {
     color: 'rgba(255,255,255,0.55)',

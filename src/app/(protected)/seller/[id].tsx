@@ -2,7 +2,6 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Avatar from '@/components/GenericComponents/Avatar';
 import { useSeller } from '@/features/marketplace/hooks/useSeller';
 import { useSellerProducts } from '@/features/marketplace/hooks/useSellerProducts';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
@@ -64,10 +64,8 @@ export default function SellerProfileScreen(): React.ReactElement {
 
   const Header = (
     <View style={styles.header}>
-      <View style={styles.avatarWrap}>
-        {seller.avatarUrl ? (
-          <Image source={{ uri: seller.avatarUrl }} style={styles.avatarImg} />
-        ) : null}
+      <View style={styles.avatarRing}>
+        <Avatar name={seller.name} uri={seller.avatarUrl} size={96} />
       </View>
       <View style={styles.nameRow}>
         <Text style={styles.name} numberOfLines={1}>{seller.name}</Text>
@@ -181,12 +179,11 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   header: { paddingTop: 56, paddingBottom: 16, alignItems: 'center', gap: 6 },
-  avatarWrap: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: '#222', overflow: 'hidden',
-    borderWidth: 2, borderColor: BRAND_PRIMARY,
+  avatarRing: {
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: BRAND_PRIMARY,
   },
-  avatarImg: { width: 96, height: 96 },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   name: { color: '#fff', fontSize: 22, fontWeight: '800' },
   proPill: {

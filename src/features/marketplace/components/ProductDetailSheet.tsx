@@ -19,6 +19,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import Avatar from '@/components/GenericComponents/Avatar';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
@@ -300,8 +301,6 @@ export default function ProductDetailSheet(): React.ReactElement {
       : product.shipping.free
         ? t('marketplace.freeShipping')
         : t('marketplace.shippingTbd');
-    const hasAvatar = product.seller.avatarUrl.length > 0;
-
     return (
       <BottomSheetScrollView contentContainerStyle={styles.scrollContent}>
         <Image
@@ -367,14 +366,11 @@ export default function ProductDetailSheet(): React.ReactElement {
           ) : null}
 
           <View style={styles.sellerCard}>
-            <View style={styles.sellerAvatar}>
-              {hasAvatar ? (
-                <Image
-                  source={{ uri: product.seller.avatarUrl }}
-                  style={styles.sellerAvatarImg}
-                />
-              ) : null}
-            </View>
+            <Avatar
+              name={product.seller.name}
+              uri={product.seller.avatarUrl}
+              size={40}
+            />
             <View style={styles.sellerText}>
               <View style={styles.sellerNameRow}>
                 <Text style={styles.sellerName} numberOfLines={1}>
@@ -547,18 +543,6 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
     marginTop: 8,
-  },
-  sellerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#222',
-    overflow: 'hidden',
-  },
-  sellerAvatarImg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
   },
   sellerText: {
     flex: 1,

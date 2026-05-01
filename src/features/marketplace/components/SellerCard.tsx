@@ -1,9 +1,10 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
+import Avatar from '@/components/GenericComponents/Avatar';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
@@ -17,7 +18,6 @@ export default function SellerCard({
 }: SellerCardProps): React.ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
-  const hasAvatar = seller.avatarUrl.length > 0;
 
   const onPress = () => {
     void lightHaptic();
@@ -31,14 +31,7 @@ export default function SellerCard({
     >
       <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
       <View style={styles.cardInner}>
-        <View style={styles.avatar}>
-          {hasAvatar ? (
-            <Image
-              source={{ uri: seller.avatarUrl }}
-              style={styles.avatarImage}
-            />
-          ) : null}
-        </View>
+        <Avatar name={seller.name} uri={seller.avatarUrl} size={36} />
         <View style={styles.textColumn}>
           <View style={styles.row}>
             <Text style={styles.name} numberOfLines={1}>
@@ -82,18 +75,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 10,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#222',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
   },
   textColumn: {
     flexShrink: 1,

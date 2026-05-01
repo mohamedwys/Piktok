@@ -169,6 +169,45 @@ export async function searchProducts(
   return { items, nextCursor: null };
 }
 
+export async function listMyProducts(): Promise<Product[]> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return [];
+  const { data: sellerRow } = await supabase
+    .from('sellers')
+    .select('id')
+    .eq('user_id', u.user.id)
+    .maybeSingle();
+  if (!sellerRow) return [];
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, seller:sellers(*)')
+    .eq('seller_id', sellerRow.id)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as unknown as ProductRow[]).map(rowToProduct);
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  const { data: row, error: fetchErr } = await supabase
+    .from('products')
+    .select('id, media_url')
+    .eq('id', productId)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!row) return;
+
+  const url = row.media_url as string;
+  const marker = '/product-media/';
+  const idx = url.indexOf(marker);
+  if (idx >= 0) {
+    const path = url.substring(idx + marker.length);
+    await supabase.storage.from('product-media').remove([path]).catch(() => {});
+  }
+
+  const { error } = await supabase.from('products').delete().eq('id', productId);
+  if (error) throw error;
+}
+
 export async function getProductById(id: string): Promise<Product | null> {
   const { data, error } = await supabase
     .from('products')

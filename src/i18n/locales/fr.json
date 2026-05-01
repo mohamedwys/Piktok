@@ -72,6 +72,15 @@
     "guestSubtitle": "Connecte-toi pour personnaliser ton profil, sauvegarder tes favoris et vendre tes articles.",
     "account": "Compte"
   },
+  "myListings": {
+    "title": "Mes annonces",
+    "empty": "Tu n'as encore rien publié.",
+    "actions": "Action",
+    "delete": "Supprimer",
+    "deleteConfirmTitle": "Supprimer cette annonce ?",
+    "deleteConfirmMessage": "Cette action est définitive.",
+    "deleteFailed": "Suppression impossible."
+  },
   "categories": {
     "title": "Catégories",
     "emptyHint": "Bientôt disponible. Parcours des catégories en préparation."

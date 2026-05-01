@@ -1,5 +1,14 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +20,11 @@ import {
 } from '@/i18n';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
-import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { useMyProducts } from '@/features/marketplace/hooks/useMyProducts';
+import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct';
+import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
+import type { Product } from '@/features/marketplace/types/product';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -26,6 +39,37 @@ export default function ProfileScreen(): React.ReactElement {
   const router = useRouter();
   const { isAuthenticated, user } = useRequireAuth();
   const currentLang = i18n.language as SupportedLanguage;
+  const myProductsQuery = useMyProducts(isAuthenticated);
+  const deleteMutation = useDeleteProduct();
+
+  const handleDelete = (productId: string): void => {
+    Alert.alert(
+      t('myListings.deleteConfirmTitle'),
+      t('myListings.deleteConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('myListings.delete'),
+          style: 'destructive',
+          onPress: () => {
+            void mediumHaptic();
+            deleteMutation.mutate(productId, {
+              onError: (err) =>
+                Alert.alert(t('myListings.deleteFailed'), err.message),
+            });
+          },
+        },
+      ],
+    );
+  };
+
+  const renderMyProduct = ({ item }: { item: Product }): React.ReactElement => (
+    <SellerProductCard
+      product={item}
+      showOwnerActions
+      onDelete={handleDelete}
+    />
+  );
 
   const onPressLang = (lang: SupportedLanguage): void => {
     if (lang === currentLang) return;
@@ -132,6 +176,28 @@ export default function ProfileScreen(): React.ReactElement {
             </View>
           </View>
         </View>
+
+        {isAuthenticated ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{t('myListings.title')}</Text>
+            {myProductsQuery.isLoading ? (
+              <ActivityIndicator />
+            ) : (myProductsQuery.data?.length ?? 0) === 0 ? (
+              <Text style={styles.emptyText}>{t('myListings.empty')}</Text>
+            ) : (
+              <FlatList
+                data={myProductsQuery.data ?? []}
+                key={2}
+                numColumns={2}
+                keyExtractor={(item) => item.id}
+                renderItem={renderMyProduct}
+                scrollEnabled={false}
+                columnWrapperStyle={{ gap: 12 }}
+                ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+              />
+            )}
+          </View>
+        ) : null}
 
         {isAuthenticated ? (
           <View style={styles.section}>
@@ -275,5 +341,9 @@ const styles = StyleSheet.create({
     color: BRAND_PRIMARY,
     fontSize: 14,
     fontWeight: '700',
+  },
+  emptyText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
   },
 });

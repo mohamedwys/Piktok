@@ -72,6 +72,15 @@
     "guestSubtitle": "Sign in to personalize your profile, save favorites, and sell your items.",
     "account": "Account"
   },
+  "myListings": {
+    "title": "My listings",
+    "empty": "You haven't posted anything yet.",
+    "actions": "Action",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete this listing?",
+    "deleteConfirmMessage": "This action cannot be undone.",
+    "deleteFailed": "Could not delete."
+  },
   "categories": {
     "title": "Categories",
     "emptyHint": "Coming soon. Category browsing is in the works."

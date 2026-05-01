@@ -15,4 +15,6 @@ export { useCreateProduct } from './hooks/useCreateProduct';
 export type { CreateProductInput } from './services/sell';
 export { useSeller } from './hooks/useSeller';
 export { useSellerProducts } from './hooks/useSellerProducts';
+export { useMyProducts, MY_PRODUCTS_KEY } from './hooks/useMyProducts';
+export { useDeleteProduct } from './hooks/useDeleteProduct';
 export type { SellerProfile } from './services/sellers';

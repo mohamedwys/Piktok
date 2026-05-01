@@ -5,6 +5,7 @@ import posts from "@/data/posts.json"
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import FeedTab from '@/components/GenericComponents/FeedTab';
 import TopFeedSwitch from '@/components/GenericComponents/TopFeedSwitch';
+import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,7 +50,7 @@ setCurrentIndex(viewableItems[0]?.index || 0)
   };
 
   return (
-     <View style={{ flex: 1 }}>
+     <ResponsiveContainer>
       <View style={[styles.topBar, { top: topBarTop }]}>
         <MaterialIcons name="live-tv" size={24} color="white" />
         <View style={styles.switchContainer}>
@@ -104,7 +105,7 @@ setCurrentIndex(viewableItems[0]?.index || 0)
         <MarketplaceScreen />
       </View>
 
-    </View>
+    </ResponsiveContainer>
   )
 }
 

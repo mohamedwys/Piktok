@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useAuthStore } from '@/stores/useAuthStore';
+import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -45,11 +46,12 @@ export default function Register(): React.ReactElement {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
-    >
-      <ScrollView
+    <ResponsiveContainer>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}
+      >
+        <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
           { paddingTop: insets.top + 60 },
@@ -113,14 +115,14 @@ export default function Register(): React.ReactElement {
           </Link>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ResponsiveContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
   scrollContent: {
     paddingHorizontal: 24,

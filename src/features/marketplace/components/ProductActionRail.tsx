@@ -29,7 +29,6 @@ export default function ProductActionRail({
 
   const onPressLike = (): void => {
     if (!requireAuth()) return;
-    console.log('[RAIL] like tapped, isLiked=', isLiked, 'productId=', product.id);
     void lightHaptic();
     toggleLike.mutate(isLiked);
   };

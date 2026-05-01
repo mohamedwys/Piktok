@@ -41,7 +41,6 @@ export default function HomeScreen() {
 setCurrentIndex(viewableItems[0]?.index || 0)
  }
   })
-  console.log(currentIndex)
 
   const handleMainTabChange = (id: string) => {
     if (id === 'pour-toi' || id === 'marketplace') {

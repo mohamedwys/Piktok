@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import type { Product, ProductAttribute } from '@/features/marketplace/types/product';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
 import { getLocalized } from '@/i18n/getLocalized';
@@ -51,6 +58,15 @@ export default function ProductBottomPanel({
   const categoryPrimary = getLocalized(product.category.primary, lang);
   const categorySecondary = getLocalized(product.category.secondary, lang);
 
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withTiming(expanded ? 180 : 0, { duration: 250 });
+  }, [expanded, rotation]);
+
+  const chevronAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   return (
     <View style={styles.panel} pointerEvents="box-none">
       <Pressable
@@ -61,20 +77,27 @@ export default function ProductBottomPanel({
         hitSlop={12}
         style={styles.handleArea}
       >
-        <Ionicons
-          name={expanded ? 'chevron-down' : 'chevron-up'}
-          size={22}
-          color="rgba(255,255,255,0.9)"
-        />
+        <Animated.View style={chevronAnimStyle}>
+          <Ionicons
+            name="chevron-up"
+            size={22}
+            color="rgba(255,255,255,0.9)"
+          />
+        </Animated.View>
       </Pressable>
 
       {expanded ? (
-        <View style={styles.breadcrumb} pointerEvents="none">
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(150)}
+          style={styles.breadcrumb}
+          pointerEvents="none"
+        >
           <Ionicons name="home" size={11} color="#fff" />
           <Text style={styles.breadcrumbText}>
             {` ${categoryPrimary} > ${categorySecondary}`}
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
 
       <View pointerEvents="none">
@@ -84,9 +107,13 @@ export default function ProductBottomPanel({
       </View>
 
       {expanded ? (
-        <View pointerEvents="none">
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(150)}
+          pointerEvents="none"
+        >
           <Text style={styles.description}>{description}</Text>
-        </View>
+        </Animated.View>
       ) : null}
 
       {product.attributes.length > 0 ? (
@@ -98,10 +125,15 @@ export default function ProductBottomPanel({
       ) : null}
 
       {expanded && product.dimensions && product.dimensions.length > 0 ? (
-        <View style={styles.dimensionsChip} pointerEvents="none">
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(150)}
+          style={styles.dimensionsChip}
+          pointerEvents="none"
+        >
           <MaterialIcons name="straighten" size={11} color="#fff" />
           <Text style={styles.chipText}>{` ${product.dimensions}`}</Text>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );

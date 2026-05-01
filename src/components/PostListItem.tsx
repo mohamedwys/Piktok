@@ -26,8 +26,8 @@ export default function PostListItem({ postItem, isActive, itemHeight }: VideoIt
         if (isActive) {
           player.play()
         }
-      } catch (error) {
-        console.log(error);
+      } catch {
+        // Player may not be ready; next focus will retry.
       }
 
       return () => {
@@ -35,8 +35,8 @@ export default function PostListItem({ postItem, isActive, itemHeight }: VideoIt
           if (player) {
             player.pause()
           }
-        } catch (error) {
-          console.log(error);
+        } catch {
+          // Player may already be released.
         }
       }
     }, [isActive, player])
@@ -52,7 +52,7 @@ export default function PostListItem({ postItem, isActive, itemHeight }: VideoIt
       />
 
       <View style={styles.interactionBar}>
-        <TouchableOpacity style={styles.interactionButton} onPress={() => console.log('Like Pressed')}>
+        <TouchableOpacity style={styles.interactionButton}>
           <Ionicons name="heart" size={33} color="#fff" />
           <Text style={styles.interactionText}>{0}</Text>
         </TouchableOpacity>
@@ -64,12 +64,12 @@ export default function PostListItem({ postItem, isActive, itemHeight }: VideoIt
           </TouchableOpacity>
         
 
-        <TouchableOpacity style={styles.interactionButton} onPress={() => console.log('Share Pressed')}>
+        <TouchableOpacity style={styles.interactionButton}>
           <Ionicons name="arrow-redo" size={33} color="#fff" />
           <Text style={styles.interactionText}>{0}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.avatar} onPress={() => console.log('Profile Pressed')}>
+        <TouchableOpacity style={styles.avatar}>
           <Text style={styles.avatarText}>{user?.username.charAt(0).toUpperCase()}</Text>
         </TouchableOpacity>
       </View>

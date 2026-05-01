@@ -3,6 +3,12 @@ import { Image, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
 import SellerCard from '@/features/marketplace/components/SellerCard';
@@ -43,6 +49,16 @@ export default function ProductFeedItem({
     }
   }, [isActive, isVideo, player]);
 
+  const scrimProgress = useSharedValue(bottomPanelExpanded ? 1 : 0);
+  useEffect(() => {
+    scrimProgress.value = withTiming(bottomPanelExpanded ? 1 : 0, { duration: 250 });
+  }, [bottomPanelExpanded, scrimProgress]);
+
+  const scrimAnimStyle = useAnimatedStyle(() => {
+    const height = interpolate(scrimProgress.value, [0, 1], [32, 60]);
+    return { height: `${height}%` };
+  });
+
   return (
     <View style={[styles.container, { height: itemHeight }]}>
       {isVideo ? (
@@ -60,12 +76,13 @@ export default function ProductFeedItem({
           resizeMode="cover"
         />
       )}
-      <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
-        locations={[0, 1]}
-        style={[styles.gradient, { height: bottomPanelExpanded ? '60%' : '32%' }]}
-        pointerEvents="none"
-      />
+      <Animated.View style={[styles.gradient, scrimAnimStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
+          locations={[0, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </Animated.View>
       <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
         <View style={styles.topRowLeft} pointerEvents="box-none">
           <SellerCard seller={item.seller} />

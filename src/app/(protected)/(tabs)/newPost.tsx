@@ -71,8 +71,8 @@ function CameraScreen({ onVideoRecorded }: { onVideoRecorded: (uri: string) => v
       if (result?.uri) {
         onVideoRecorded(result.uri);
       }
-    } catch (e) {
-      console.log('Recording stopped');
+    } catch {
+      // Recording stopped or failed to start; UI state is reset in finally.
     } finally {
       isRecordingRef.current = false;
       setIsRecording(false);

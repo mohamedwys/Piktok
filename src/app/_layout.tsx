@@ -3,6 +3,7 @@ import { Stack } from "expo-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
+import ErrorBoundary from "@/components/ErrorBoundary"
 import { initI18n } from "@/i18n"
 import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
 
@@ -34,12 +35,14 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={myTheme}>
-        <QueryClientProvider client={queryClientRef.current}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider value={myTheme}>
+          <QueryClientProvider client={queryClientRef.current}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   )
 }

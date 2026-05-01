@@ -31,3 +31,4 @@ export type {
   ChatMessage,
   MessageKind,
 } from './services/messaging';
+export { timeAgo } from './utils/timeAgo';

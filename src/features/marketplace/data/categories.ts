@@ -10,6 +10,33 @@ export type CategoryDef = {
 
 export const CATEGORIES: CategoryDef[] = [
   {
+    id: 'auto',
+    label: { fr: 'Auto & Moto', en: 'Vehicles' },
+    iconName: 'car-outline',
+    subcategories: [
+      { id: 'auto-cars', label: { fr: 'Voitures', en: 'Cars' } },
+      { id: 'auto-motorcycles', label: { fr: 'Motos & Scooters', en: 'Motorcycles & Scooters' } },
+      { id: 'auto-utility', label: { fr: 'Utilitaires', en: 'Commercial vehicles' } },
+      { id: 'auto-rv', label: { fr: 'Caravanes & Camping-cars', en: 'RVs & Caravans' } },
+      { id: 'auto-parts', label: { fr: 'Pièces & Accessoires', en: 'Parts & Accessories' } },
+      { id: 'auto-tires', label: { fr: 'Pneus & Jantes', en: 'Tires & Wheels' } },
+    ],
+  },
+  {
+    id: 'immo',
+    label: { fr: 'Immobilier', en: 'Real Estate' },
+    iconName: 'business-outline',
+    subcategories: [
+      { id: 'immo-apartments-sale', label: { fr: 'Appartements à vendre', en: 'Apartments for sale' } },
+      { id: 'immo-houses-sale', label: { fr: 'Maisons à vendre', en: 'Houses for sale' } },
+      { id: 'immo-rentals', label: { fr: 'Locations', en: 'Rentals' } },
+      { id: 'immo-shared', label: { fr: 'Colocations', en: 'Shared housing' } },
+      { id: 'immo-land', label: { fr: 'Terrains', en: 'Land' } },
+      { id: 'immo-commercial', label: { fr: 'Locaux commerciaux', en: 'Commercial spaces' } },
+      { id: 'immo-parking', label: { fr: 'Parkings & Garages', en: 'Parking & Garages' } },
+    ],
+  },
+  {
     id: 'home',
     label: { fr: 'Maison & Déco', en: 'Home & Decor' },
     iconName: 'home-outline',

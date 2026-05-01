@@ -81,6 +81,21 @@
     "empty": "Aucun message pour le moment.",
     "emptyHint": "Tes conversations apparaîtront ici."
   },
+  "search": {
+    "title": "Filtres",
+    "queryPlaceholder": "Rechercher...",
+    "categorySection": "Catégorie",
+    "subcategorySection": "Sous-catégorie",
+    "subcategoryHint": "Choisis d'abord une catégorie.",
+    "priceMaxLabel": "Prix max",
+    "priceMaxPlaceholder": "999",
+    "pickupOnly": "Retrait sur place uniquement",
+    "locationLabel": "Localisation",
+    "locationPlaceholder": "Ex. Paris",
+    "apply": "Appliquer",
+    "reset": "Réinitialiser",
+    "all": "Tout"
+  },
   "sell": {
     "title": "Vendre un article",
     "subtitle": "Crée une annonce en quelques secondes.",

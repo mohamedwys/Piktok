@@ -1,4 +1,4 @@
-import { View, FlatList, ViewToken, StyleSheet, useWindowDimensions } from 'react-native'
+import { View, FlatList, Pressable, Text, ViewToken, StyleSheet, useWindowDimensions } from 'react-native'
 import React, { useMemo, useRef, useState } from 'react'
 import PostListItem from '@/components/PostListItem';
 import posts from "@/data/posts.json"
@@ -6,6 +6,13 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import FeedTab from '@/components/GenericComponents/FeedTab';
 import TopFeedSwitch from '@/components/GenericComponents/TopFeedSwitch';
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
+import MarketplaceFilterSheet from '@/features/marketplace/components/MarketplaceFilterSheet';
+import { useFilterSheetStore } from '@/stores/useFilterSheetStore';
+import {
+  useMarketplaceFilters,
+  activeFilterCount,
+} from '@/stores/useMarketplaceFilters';
+import { mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +42,13 @@ export default function HomeScreen() {
   const [mainTab, setMainTab] = useState<MainTabId>('pour-toi');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<string>(t('feed.forYouSub'));
+  const filters = useMarketplaceFilters((s) => s.filters);
+  const filterCount = activeFilterCount(filters);
+
+  const onPressSearch = (): void => {
+    void mediumHaptic();
+    useFilterSheetStore.getState().open();
+  };
   const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
  if (viewableItems.length > 0) {
 setCurrentIndex(viewableItems[0]?.index || 0)
@@ -58,7 +72,18 @@ setCurrentIndex(viewableItems[0]?.index || 0)
             onChange={handleMainTabChange}
           />
         </View>
-        <Ionicons name="search" size={24} color="white" />
+        <Pressable
+          onPress={onPressSearch}
+          hitSlop={10}
+          style={({ pressed }) => [styles.searchButton, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="search" size={24} color="white" />
+          {filterCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{filterCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       <View
@@ -103,6 +128,7 @@ setCurrentIndex(viewableItems[0]?.index || 0)
         <MarketplaceScreen />
       </View>
 
+      <MarketplaceFilterSheet />
     </View>
   )
 }
@@ -136,5 +162,27 @@ const styles = StyleSheet.create({
   },
   hidden: {
     display: 'none',
+  },
+  searchButton: {
+    padding: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FE2C55',
+    borderWidth: 1.5,
+    borderColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
   },
 })

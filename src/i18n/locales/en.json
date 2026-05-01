@@ -81,6 +81,21 @@
     "empty": "No messages yet.",
     "emptyHint": "Your conversations will show up here."
   },
+  "search": {
+    "title": "Filters",
+    "queryPlaceholder": "Search...",
+    "categorySection": "Category",
+    "subcategorySection": "Subcategory",
+    "subcategoryHint": "Pick a category first.",
+    "priceMaxLabel": "Max price",
+    "priceMaxPlaceholder": "999",
+    "pickupOnly": "Pickup only",
+    "locationLabel": "Location",
+    "locationPlaceholder": "e.g. Paris",
+    "apply": "Apply",
+    "reset": "Reset",
+    "all": "All"
+  },
   "sell": {
     "title": "Sell an item",
     "subtitle": "Create a listing in seconds.",

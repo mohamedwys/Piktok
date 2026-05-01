@@ -1,4 +1,8 @@
-# Stripe Setup
+# Server Setup
+
+Backend deployment for this project: Stripe Checkout (payments) and Expo Push (notifications), both running on Supabase Edge Functions. Schema and function source code are committed; deployment happens once you have the relevant accounts.
+
+# Stripe
 
 This project uses Stripe Checkout via Supabase Edge Functions. The schema and function source code are committed; deployment happens once you have a Stripe account.
 
@@ -86,3 +90,48 @@ The schema includes `sellers.stripe_account_id`, `stripe_charges_enabled`, `stri
 1. Add a "Connect with Stripe" CTA in the seller dashboard that calls a new `create-account-link` function.
 2. After onboarding completes, persist `stripe_account_id` and the capability flags on the seller row via the `account.updated` webhook event.
 3. In `create-checkout-session`, when the seller has `stripe_charges_enabled`, add `payment_intent_data.transfer_data.destination = sellerStripeAccountId` and set `application_fee_amount` for the platform cut.
+
+# Push Notifications
+
+Edge Function: `send-push-notification`. Triggered explicitly by the client after sending messages, likes, or other events. Uses the Expo Push API (no API key required, no setup beyond the device token).
+
+The `push_tokens` table stores one row per device per user. RLS lets each user manage only their own tokens; the Edge Function uses the service role to look up tokens for the recipient regardless of caller.
+
+## Deploy
+
+```
+supabase functions deploy send-push-notification
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by Supabase — no extra secrets needed.
+
+After deployment, note the function URL:
+
+```
+https://<your-project-ref>.supabase.co/functions/v1/send-push-notification
+```
+
+## Calling it
+
+The mobile app calls this URL with a Bearer token (the user's Supabase access token) and a JSON body:
+
+```json
+{
+  "user_id": "<recipient-uuid>",
+  "title": "New message",
+  "body": "You have a new message from Alex",
+  "data": { "thread_id": "..." }
+}
+```
+
+It returns `{ sent: <number-of-tokens-pushed>, expo: <expo-api-response> }`. If the recipient has no registered tokens, it returns `{ sent: 0 }` with status 200 — that is not an error.
+
+## Verify
+
+1. After client integration (step L.2), launch the app on a physical device, grant notification permission, and confirm a row appears in `push_tokens` for your user.
+2. From a second account, send a message (or any notification-triggering event) to the first.
+3. The first device should receive a push notification within a few seconds.
+
+## Future: database triggers
+
+For MVP the client calls `send-push-notification` explicitly after each event. This is simple but unreliable — pushes are lost if the sender's app is killed mid-request. Later, replace those calls with a Postgres trigger on `messages` / `likes` that calls the Edge Function via `pg_net` or a Supabase database webhook, so delivery does not depend on the sender's network.

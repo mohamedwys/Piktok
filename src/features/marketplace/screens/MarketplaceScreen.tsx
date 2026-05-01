@@ -7,7 +7,6 @@ import {
   useWindowDimensions,
   type ViewToken,
 } from 'react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { useFilteredProducts } from '@/features/marketplace/hooks/useFilteredProducts';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
@@ -17,8 +16,7 @@ import type { Product } from '@/features/marketplace/types/product';
 export default function MarketplaceScreen(): React.ReactElement {
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
-  const tabBarHeight = useBottomTabBarHeight();
-  const itemHeight = height - tabBarHeight;
+  const itemHeight = height;
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const onViewableItemsChanged = useRef(

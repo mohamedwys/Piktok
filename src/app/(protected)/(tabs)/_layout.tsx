@@ -19,17 +19,18 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarBackground: () => <CustomTabBarBackground />,
         tabBarStyle: {
+          position: 'absolute',
           backgroundColor: 'transparent',
           borderTopColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 60 + insets.bottom,
+          height: 68 + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: 6,
+          paddingTop: 10,
         },
         tabBarActiveTintColor: '#fff',
         tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 4 },
       }}
       screenListeners={{
         tabPress: () => {
@@ -48,7 +49,7 @@ export default function TabsLayout() {
         options={{
           title: t('tabs.home'),
           tabBarIcon: ({ color }) => (
-            <Entypo name="home" size={22} color={color} />
+            <Entypo name="home" size={24} color={color} />
           )
         }}
       />
@@ -58,7 +59,7 @@ export default function TabsLayout() {
         options={{
           title: t('tabs.categories'),
           tabBarIcon: ({ color }) => (
-            <Ionicons name="grid-outline" size={22} color={color} />
+            <Ionicons name="grid-outline" size={24} color={color} />
           )
         }}
       />
@@ -81,7 +82,7 @@ export default function TabsLayout() {
           title: t('tabs.messages'),
           tabBarIcon: ({ color }) => (
             <View>
-              <Ionicons name="chatbubble-outline" size={22} color={color} />
+              <Ionicons name="chatbubble-outline" size={24} color={color} />
               {MESSAGES_UNREAD ? <View style={styles.notificationDot} /> : null}
             </View>
           )
@@ -93,7 +94,7 @@ export default function TabsLayout() {
         options={{
           title: t('tabs.profile'),
           tabBarIcon: ({ color }) => (
-            <Feather name="user" size={22} color={color} />
+            <Feather name="user" size={24} color={color} />
           )
         }}
       />
@@ -103,18 +104,18 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   sellButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: BRAND_PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -28,
+    marginTop: -30,
     shadowColor: BRAND_PRIMARY,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   notificationDot: {
     position: 'absolute',

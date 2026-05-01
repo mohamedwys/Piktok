@@ -14,10 +14,12 @@ const BRAND_PRIMARY = '#FE2C55';
 
 type ProductActionRailProps = {
   product: Product;
+  tabBarHeight?: number;
 };
 
 export default function ProductActionRail({
   product,
+  tabBarHeight = 0,
 }: ProductActionRailProps): React.ReactElement {
   const { t } = useTranslation();
   const { data: engagement } = useUserEngagement();
@@ -46,7 +48,7 @@ export default function ProductActionRail({
       : t('marketplace.share');
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { bottom: tabBarHeight + 16 }]}>
       <Pressable
         onPress={onPressBuy}
         style={({ pressed }) => [styles.buyButton, pressed && styles.pressed]}
@@ -100,7 +102,6 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 14,
-    bottom: 20,
     alignItems: 'flex-end',
     gap: 25,
   },

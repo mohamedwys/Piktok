@@ -3,6 +3,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -28,6 +29,7 @@ export default function ProductFeedItem({
 }: ProductFeedItemProps): React.ReactElement {
   const isVideo = item.media.type === 'video';
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const topRowTop = insets.top + 78;
   const [bottomPanelExpanded, setBottomPanelExpanded] = useState(false);
 
@@ -97,11 +99,12 @@ export default function ProductFeedItem({
           />
         </View>
       </View>
-      <ProductActionRail product={item} />
+      <ProductActionRail product={item} tabBarHeight={tabBarHeight} />
       <ProductBottomPanel
         product={item}
         expanded={bottomPanelExpanded}
         onToggleExpanded={() => setBottomPanelExpanded((v) => !v)}
+        tabBarHeight={tabBarHeight}
       />
     </View>
   );

@@ -18,6 +18,7 @@ type ProductBottomPanelProps = {
   product: Product;
   expanded: boolean;
   onToggleExpanded: () => void;
+  tabBarHeight?: number;
 };
 
 function ChipIcon({ iconKey }: { iconKey?: string }): React.ReactElement {
@@ -50,6 +51,7 @@ export default function ProductBottomPanel({
   product,
   expanded,
   onToggleExpanded,
+  tabBarHeight = 0,
 }: ProductBottomPanelProps): React.ReactElement {
   const { i18n } = useTranslation();
   const lang = i18n.language;
@@ -68,7 +70,7 @@ export default function ProductBottomPanel({
   }));
 
   return (
-    <View style={styles.panel} pointerEvents="box-none">
+    <View style={[styles.panel, { bottom: tabBarHeight + 16 }]} pointerEvents="box-none">
       <Pressable
         onPress={() => {
           void lightHaptic();
@@ -144,7 +146,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: '30%',
-    bottom: 24,
     gap: 8,
   },
   breadcrumb: {

@@ -96,6 +96,12 @@
     "reset": "Reset",
     "all": "All"
   },
+  "seller": {
+    "listings": "Listings",
+    "empty": "No listings yet.",
+    "memberSince": "Member since {{date}}",
+    "loadError": "Couldn't load this profile."
+  },
   "sell": {
     "title": "Sell an item",
     "subtitle": "Create a listing in seconds.",

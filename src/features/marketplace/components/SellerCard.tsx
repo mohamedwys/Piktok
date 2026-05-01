@@ -1,10 +1,12 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
+import { useRouter, type Href } from 'expo-router';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
+import { lightHaptic } from '@/features/marketplace/utils/haptics';
 
 type SellerCardProps = {
   seller: Product['seller'];
@@ -14,10 +16,19 @@ export default function SellerCard({
   seller,
 }: SellerCardProps): React.ReactElement {
   const { t } = useTranslation();
+  const router = useRouter();
   const hasAvatar = seller.avatarUrl.length > 0;
 
+  const onPress = () => {
+    void lightHaptic();
+    router.push(`/(protected)/seller/${seller.id}` as Href);
+  };
+
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+    >
       <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
       <View style={styles.cardInner}>
         <View style={styles.avatar}>
@@ -55,7 +66,7 @@ export default function SellerCard({
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

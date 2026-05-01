@@ -16,6 +16,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useRouter, type Href } from 'expo-router';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
@@ -84,6 +85,7 @@ function AttributeChip({
 export default function ProductDetailSheet(): React.ReactElement {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const router = useRouter();
   const productId = useProductSheetStore((s) => s.productId);
   const close = useProductSheetStore((s) => s.close);
   const sheetRef = useRef<BottomSheet>(null);
@@ -325,7 +327,16 @@ export default function ProductDetailSheet(): React.ReactElement {
                 </Text>
               </View>
             </View>
-            <Pressable style={styles.profilePill} hitSlop={6}>
+            <Pressable
+              style={styles.profilePill}
+              hitSlop={6}
+              onPress={() => {
+                if (!product) return;
+                void lightHaptic();
+                useProductSheetStore.getState().close();
+                router.push(`/(protected)/seller/${product.seller.id}` as Href);
+              }}
+            >
               <Text style={styles.profilePillText}>
                 {t('common.viewProfile')}
               </Text>

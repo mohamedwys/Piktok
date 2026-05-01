@@ -96,6 +96,12 @@
     "reset": "Réinitialiser",
     "all": "Tout"
   },
+  "seller": {
+    "listings": "Articles publiés",
+    "empty": "Aucun article publié pour l'instant.",
+    "memberSince": "Membre depuis {{date}}",
+    "loadError": "Impossible de charger ce profil."
+  },
   "sell": {
     "title": "Vendre un article",
     "subtitle": "Crée une annonce en quelques secondes.",

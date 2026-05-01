@@ -76,6 +76,7 @@
     "title": "Mes annonces",
     "empty": "Tu n'as encore rien publié.",
     "actions": "Action",
+    "edit": "Modifier",
     "delete": "Supprimer",
     "deleteConfirmTitle": "Supprimer cette annonce ?",
     "deleteConfirmMessage": "Cette action est définitive.",
@@ -149,6 +150,13 @@
     "stockAvailable": "En stock",
     "shippingFree": "Livraison offerte",
     "submit": "Publier",
-    "submitting": "Publication..."
+    "submitting": "Publication...",
+    "editTitle": "Modifier l'annonce",
+    "editSubtitle": "Mets à jour ton annonce.",
+    "update": "Mettre à jour",
+    "updating": "Mise à jour...",
+    "updateSuccessTitle": "Annonce mise à jour",
+    "updateSuccessMessage": "Tes modifications sont enregistrées.",
+    "updateFail": "Échec de la mise à jour"
   }
 }

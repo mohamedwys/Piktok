@@ -42,6 +42,14 @@ export default function ProfileScreen(): React.ReactElement {
   const myProductsQuery = useMyProducts(isAuthenticated);
   const deleteMutation = useDeleteProduct();
 
+  const handleEdit = (productId: string): void => {
+    void lightHaptic();
+    router.push({
+      pathname: '/(protected)/(tabs)/newPost',
+      params: { editId: productId },
+    });
+  };
+
   const handleDelete = (productId: string): void => {
     Alert.alert(
       t('myListings.deleteConfirmTitle'),
@@ -68,6 +76,7 @@ export default function ProfileScreen(): React.ReactElement {
       product={item}
       showOwnerActions
       onDelete={handleDelete}
+      onEdit={handleEdit}
     />
   );
 

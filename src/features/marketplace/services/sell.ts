@@ -27,6 +27,8 @@ async function getCurrentUserOrThrow() {
   return data.user;
 }
 
+const dup = (s: string): LocalizedString => ({ fr: s, en: s });
+
 function resolveContentType(ext: string, mediaType: 'image' | 'video'): string {
   if (mediaType === 'video') {
     if (ext === 'mov') return 'video/quicktime';
@@ -80,7 +82,6 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
   const sellerId = await ensureSellerForCurrentUser();
 
   // 3. Insert product. User-entered text is duplicated into fr+en for now.
-  const dup = (s: string) => ({ fr: s, en: s });
   const { data, error } = await supabase
     .from('products')
     .insert({
@@ -113,4 +114,52 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
     .single();
   if (error) throw error;
   return data.id as string;
+}
+
+export type UpdateProductInput = Omit<CreateProductInput, 'mediaUri' | 'mediaType'> & {
+  newMediaUri?: string;
+  newMediaType?: 'image' | 'video';
+};
+
+export async function updateProduct(
+  productId: string,
+  input: UpdateProductInput,
+): Promise<void> {
+  await getCurrentUserOrThrow();
+
+  const patch: Record<string, unknown> = {
+    title: dup(input.title),
+    description: dup(input.description),
+    price: input.price,
+    currency: input.currency,
+    category: {
+      primary: input.category.primary,
+      secondary: input.category.secondary,
+    },
+    category_id: input.categoryId,
+    subcategory_id: input.subcategoryId,
+    attributes: input.attributes.map((a) => ({
+      id: a.id,
+      label: dup(a.label),
+      ...(a.iconKey ? { iconKey: a.iconKey } : {}),
+    })),
+    dimensions: input.dimensions ?? null,
+    stock_available: input.stockAvailable,
+    shipping_free: input.shippingFree,
+    pickup_available: input.pickupAvailable,
+    location: input.location ?? null,
+  };
+
+  if (input.newMediaUri && input.newMediaType) {
+    const url = await uploadProductMedia(input.newMediaUri, input.newMediaType);
+    patch.media_type = input.newMediaType;
+    patch.media_url = url;
+    patch.thumbnail_url = url;
+  }
+
+  const { error } = await supabase
+    .from('products')
+    .update(patch)
+    .eq('id', productId);
+  if (error) throw error;
 }

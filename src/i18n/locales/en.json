@@ -76,6 +76,7 @@
     "title": "My listings",
     "empty": "You haven't posted anything yet.",
     "actions": "Action",
+    "edit": "Edit",
     "delete": "Delete",
     "deleteConfirmTitle": "Delete this listing?",
     "deleteConfirmMessage": "This action cannot be undone.",
@@ -149,6 +150,13 @@
     "stockAvailable": "In stock",
     "shippingFree": "Free shipping",
     "submit": "Publish",
-    "submitting": "Publishing..."
+    "submitting": "Publishing...",
+    "editTitle": "Edit listing",
+    "editSubtitle": "Update your listing.",
+    "update": "Update",
+    "updating": "Updating...",
+    "updateSuccessTitle": "Listing updated",
+    "updateSuccessMessage": "Your changes are saved.",
+    "updateFail": "Update failed"
   }
 }

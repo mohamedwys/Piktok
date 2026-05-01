@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,14 +17,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuthStore } from '@/stores/useAuthStore';
 import {
   useCreateProduct,
+  useProduct,
+  useUpdateProduct,
   type CreateProductInput,
+  type UpdateProductInput,
 } from '@/features/marketplace';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
@@ -40,10 +43,15 @@ export default function SellScreen(): React.ReactElement {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEdit = Boolean(editId);
+  const { data: existing, isLoading: loadingProduct } = useProduct(editId ?? null);
   const { mutate: createListing, isPending } = useCreateProduct();
+  const updateMutation = useUpdateProduct();
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<MediaType | null>(null);
+  const [mediaIsOriginal, setMediaIsOriginal] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priceText, setPriceText] = useState('');
@@ -61,6 +69,29 @@ export default function SellScreen(): React.ReactElement {
   const selectedSubcategory = selectedCategory?.subcategories.find(
     (s) => s.id === subcategoryId
   );
+
+  useEffect(() => {
+    if (!existing) return;
+    setTitle(getLocalized(existing.title, i18n.language));
+    setDescription(getLocalized(existing.description, i18n.language));
+    setPriceText(String(existing.price));
+    if (existing.categoryId) setCategoryId(existing.categoryId);
+    if (existing.subcategoryId) setSubcategoryId(existing.subcategoryId);
+    setAttributesText(
+      existing.attributes
+        .map((a) => getLocalized(a.label, i18n.language))
+        .join(', '),
+    );
+    setDimensions(existing.dimensions ?? '');
+    setStockAvailable(existing.stock.available);
+    setShippingFree(existing.shipping.free);
+    setPickupAvailable(existing.pickup?.available ?? false);
+    setLocation(existing.location ?? '');
+    setMediaUri(existing.media.url);
+    setMediaType(existing.media.type);
+    setMediaIsOriginal(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing?.id]);
 
   const player = useVideoPlayer(
     mediaType === 'video' ? mediaUri : null,
@@ -92,6 +123,7 @@ export default function SellScreen(): React.ReactElement {
       const a = result.assets[0];
       setMediaUri(a.uri);
       setMediaType(a.type === 'video' ? 'video' : 'image');
+      setMediaIsOriginal(false);
     }
   };
 
@@ -110,6 +142,7 @@ export default function SellScreen(): React.ReactElement {
       const a = result.assets[0];
       setMediaUri(a.uri);
       setMediaType(a.type === 'video' ? 'video' : 'image');
+      setMediaIsOriginal(false);
     }
   };
 
@@ -153,6 +186,47 @@ export default function SellScreen(): React.ReactElement {
       .filter((s) => s.length > 0)
       .map((label, i) => ({ id: `attr-${i}`, label }));
 
+    void mediumHaptic();
+
+    if (isEdit && editId) {
+      const updatePayload: UpdateProductInput = {
+        title: title.trim(),
+        description: description.trim(),
+        price,
+        currency: 'EUR',
+        category: {
+          primary: selectedCategory.label,
+          secondary: selectedSubcategory.label,
+        },
+        categoryId: selectedCategory.id,
+        subcategoryId: selectedSubcategory.id,
+        attributes,
+        dimensions: dimensions.trim() || undefined,
+        stockAvailable,
+        shippingFree,
+        pickupAvailable,
+        location: location.trim() || undefined,
+        newMediaUri: mediaIsOriginal ? undefined : mediaUri,
+        newMediaType: mediaIsOriginal ? undefined : mediaType,
+      };
+      updateMutation.mutate(
+        { id: editId, input: updatePayload },
+        {
+          onSuccess: () => {
+            Alert.alert(
+              t('sell.updateSuccessTitle'),
+              t('sell.updateSuccessMessage'),
+            );
+            router.back();
+          },
+          onError: (err) => {
+            Alert.alert(t('sell.updateFail'), err.message || t('common.errorGeneric'));
+          },
+        },
+      );
+      return;
+    }
+
     const payload: CreateProductInput = {
       title: title.trim(),
       description: description.trim(),
@@ -174,7 +248,6 @@ export default function SellScreen(): React.ReactElement {
       location: location.trim() || undefined,
     };
 
-    void mediumHaptic();
     createListing(payload, {
       onSuccess: () => {
         Alert.alert(t('sell.success'));
@@ -216,6 +289,21 @@ export default function SellScreen(): React.ReactElement {
     );
   }
 
+  if (isEdit && loadingProduct) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + 16, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  }
+
+  const headerTitle = isEdit ? t('sell.editTitle') : t('sell.title');
+  const headerSubtitle = isEdit ? t('sell.editSubtitle') : t('sell.subtitle');
+  const submitting = isEdit ? updateMutation.isPending : isPending;
+  const submitLabel = isEdit
+    ? (updateMutation.isPending ? t('sell.updating') : t('sell.update'))
+    : (isPending ? t('sell.submitting') : t('sell.submit'));
+
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
       <KeyboardAvoidingView
@@ -228,8 +316,8 @@ export default function SellScreen(): React.ReactElement {
             contentContainerStyle={styles.scrollContent}
           >
             <View>
-              <Text style={styles.title}>{t('sell.title')}</Text>
-              <Text style={styles.subtitle}>{t('sell.subtitle')}</Text>
+              <Text style={styles.title}>{headerTitle}</Text>
+              <Text style={styles.subtitle}>{headerSubtitle}</Text>
             </View>
 
             <View>
@@ -380,16 +468,16 @@ export default function SellScreen(): React.ReactElement {
 
             <Pressable
               onPress={onSubmit}
-              disabled={isPending}
+              disabled={submitting}
               style={({ pressed }) => [
                 styles.submitButton,
-                (pressed || isPending) && styles.pressed,
+                (pressed || submitting) && styles.pressed,
               ]}
             >
-              {isPending ? (
+              {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.submitText}>{t('sell.submit')}</Text>
+                <Text style={styles.submitText}>{submitLabel}</Text>
               )}
           </Pressable>
         </ScrollView>

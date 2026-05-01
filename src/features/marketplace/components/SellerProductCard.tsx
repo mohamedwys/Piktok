@@ -11,12 +11,14 @@ type Props = {
   product: Product;
   showOwnerActions?: boolean;
   onDelete?: (productId: string) => void;
+  onEdit?: (productId: string) => void;
 };
 
 export default function SellerProductCard({
   product,
   showOwnerActions = false,
   onDelete,
+  onEdit,
 }: Props): React.ReactElement {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -27,6 +29,10 @@ export default function SellerProductCard({
   const onPressMore = () => {
     void lightHaptic();
     Alert.alert(t('myListings.actions'), undefined, [
+      {
+        text: t('myListings.edit'),
+        onPress: () => onEdit?.(product.id),
+      },
       {
         text: t('myListings.delete'),
         style: 'destructive',

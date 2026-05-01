@@ -10,8 +10,13 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pictok.client",
+      "supportsTablet": true,
+      "buildNumber": "3",
+      "requireFullScreen": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
+        "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"]
       }
     },
     "android": {

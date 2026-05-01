@@ -12,7 +12,6 @@ import {
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
-import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 
 const BRAND_PRIMARY = '#FE2C55';
 
@@ -53,7 +52,7 @@ export default function ProfileScreen(): React.ReactElement {
   };
 
   return (
-    <ResponsiveContainer style={{ paddingTop: insets.top + 16 }}>
+    <View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top + 16 }}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isAuthenticated ? (
           <>
@@ -149,7 +148,7 @@ export default function ProfileScreen(): React.ReactElement {
           </View>
         ) : null}
       </ScrollView>
-    </ResponsiveContainer>
+    </View>
   );
 }
 

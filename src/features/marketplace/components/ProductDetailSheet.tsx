@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -114,14 +114,6 @@ export default function ProductDetailSheet(): React.ReactElement {
   const startConv = useStartConversation();
   const checkout = useCreateCheckoutSession();
 
-  useEffect(() => {
-    if (productId) {
-      sheetRef.current?.snapToIndex(0);
-    } else {
-      sheetRef.current?.close();
-    }
-  }, [productId]);
-
   const handleSheetChange = useCallback(
     (index: number) => {
       if (index === -1) close();
@@ -149,33 +141,31 @@ export default function ProductDetailSheet(): React.ReactElement {
     toggleBookmark.mutate(isBookmarked);
   };
 
-  const onPressBuyNow = (): void => {
-    if (!product) return;
+  const onPressBuyNow = async (): Promise<void> => {
+    const id = useProductSheetStore.getState().productId;
+    if (!id) return;
     void mediumHaptic();
     if (!requireAuth()) return;
-    const productSnapshot = product;
-    void (async () => {
-      try {
-        const { url } = await checkout.mutateAsync(productSnapshot.id);
-        useProductSheetStore.getState().close();
-        await WebBrowser.openBrowserAsync(url);
-      } catch (err) {
-        if (err instanceof StripeNotConfiguredError) {
-          Alert.alert(
-            t('checkout.notConfiguredTitle'),
-            t('checkout.notConfiguredMessage'),
-          );
-        } else {
-          Alert.alert(t('checkout.errorTitle'), (err as Error).message);
-        }
+    try {
+      const { url } = await checkout.mutateAsync(id);
+      useProductSheetStore.getState().close();
+      await WebBrowser.openBrowserAsync(url);
+    } catch (err) {
+      if (err instanceof StripeNotConfiguredError) {
+        Alert.alert(
+          t('checkout.notConfiguredTitle'),
+          t('checkout.notConfiguredMessage'),
+        );
+      } else {
+        Alert.alert(t('checkout.errorTitle'), (err as Error).message);
       }
-    })();
+    }
   };
 
   const onPressMakeOffer = (): void => {
-    if (!product) return;
+    const id = useProductSheetStore.getState().productId;
+    if (!id) return;
     if (!requireAuth()) return;
-    const productSnapshot = product;
     Alert.prompt(
       t('chat.offerPromptTitle'),
       t('chat.offerPromptMessage'),
@@ -192,7 +182,7 @@ export default function ProductDetailSheet(): React.ReactElement {
             void (async () => {
               try {
                 void mediumHaptic();
-                const convId = await startConv.mutateAsync(productSnapshot.id);
+                const convId = await startConv.mutateAsync(id);
                 await sendMessageDirect({
                   conversationId: convId,
                   body: '',
@@ -209,25 +199,23 @@ export default function ProductDetailSheet(): React.ReactElement {
         },
       ],
       'plain-text',
-      String(productSnapshot.price),
+      product?.price !== undefined ? String(product.price) : undefined,
       'numeric',
     );
   };
 
-  const onPressMessageSeller = (): void => {
-    if (!product) return;
+  const onPressMessageSeller = async (): Promise<void> => {
+    const id = useProductSheetStore.getState().productId;
+    if (!id) return;
     if (!requireAuth()) return;
-    const productSnapshot = product;
-    void (async () => {
-      try {
-        void mediumHaptic();
-        const convId = await startConv.mutateAsync(productSnapshot.id);
-        useProductSheetStore.getState().close();
-        router.push(`/(protected)/conversation/${convId}` as Href);
-      } catch (err) {
-        Alert.alert(t('chat.startError'), explainStartConvError(err as Error, t));
-      }
-    })();
+    try {
+      void mediumHaptic();
+      const convId = await startConv.mutateAsync(id);
+      useProductSheetStore.getState().close();
+      router.push(`/(protected)/conversation/${convId}` as Href);
+    } catch (err) {
+      Alert.alert(t('chat.startError'), explainStartConvError(err as Error, t));
+    }
   };
 
   const isPro = product?.seller.isPro ?? true;
@@ -434,8 +422,9 @@ export default function ProductDetailSheet(): React.ReactElement {
 
   return (
     <BottomSheet
+      key={productId ?? 'idle'}
       ref={sheetRef}
-      index={-1}
+      index={productId ? 0 : -1}
       snapPoints={snapPoints}
       enablePanDownToClose
       onChange={handleSheetChange}

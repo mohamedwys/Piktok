@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "client",
+    "name": "Pictok",
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,11 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
-        "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"]
+        "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"],
+        "NSCameraUsageDescription": "Pictok uses your camera so you can take photos and videos of items to list on the marketplace.",
+        "NSMicrophoneUsageDescription": "Pictok uses your microphone when you record videos for your marketplace listings.",
+        "NSPhotoLibraryUsageDescription": "Pictok accesses your photo library so you can pick existing photos to attach to your marketplace listings.",
+        "NSPhotoLibraryAddUsageDescription": "Pictok saves photos and videos you capture in the app to your photo library."
       }
     },
     "android": {
@@ -43,8 +47,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow to access your camera",
-          "microphonePermission": "Allow to access your microphone",
+          "cameraPermission": "Pictok uses your camera so you can take photos and videos of items to list on the marketplace.",
+          "microphonePermission": "Pictok uses your microphone when you record videos for your marketplace listings.",
           "recordAudioAndroid": true,
           "barcodeScannerEnabled": true
         }
@@ -52,7 +56,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
+          "photosPermission": "Pictok accesses your photo library so you can pick existing photos to attach to your marketplace listings."
         }
       ],
       [

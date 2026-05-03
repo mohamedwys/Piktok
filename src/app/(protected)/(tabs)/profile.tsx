@@ -4,16 +4,14 @@ import {
   Alert,
   FlatList,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import {
   setLanguage,
   SUPPORTED_LANGUAGES,
@@ -24,14 +22,24 @@ import { useRequireAuth } from '@/stores/useRequireAuth';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useMyProducts } from '@/features/marketplace/hooks/useMyProducts';
 import { useMyOrders } from '@/features/marketplace/hooks/useMyOrders';
+import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct';
 import { timeAgo } from '@/features/marketplace/utils/timeAgo';
 import { getLocalized } from '@/i18n/getLocalized';
+import { formatCount } from '@/lib/format';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
 import SellerProductCardSkeleton from '@/features/marketplace/components/SellerProductCardSkeleton';
+import {
+  Avatar,
+  Pressable,
+  ProBadge,
+  Surface,
+  Text,
+  VerifiedCheck,
+} from '@/components/ui';
 import type { Product } from '@/features/marketplace/types/product';
 import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
-import { colors } from '@/theme';
+import { colors, radii, spacing } from '@/theme';
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   fr: 'Français',
@@ -78,13 +86,15 @@ function OrderRow({
         ) : null}
       </View>
       <View style={styles.orderMiddle}>
-        <Text style={styles.orderTitle} numberOfLines={1}>
+        <Text variant="body" weight="semibold" numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.orderAmount}>
+        <Text variant="caption" weight="bold" style={styles.orderAmount}>
           {formatOrderAmount(order.amount, order.currency)}
         </Text>
-        <Text style={styles.orderDate}>{timeAgo(order.createdAt, lang)}</Text>
+        <Text variant="caption" color="tertiary">
+          {timeAgo(order.createdAt, lang)}
+        </Text>
       </View>
       <View style={[styles.orderPill, { backgroundColor: pill.bg }]}>
         <Text style={[styles.orderPillText, { color: pill.fg }]}>
@@ -92,6 +102,85 @@ function OrderRow({
         </Text>
       </View>
     </View>
+  );
+}
+
+type StatBlockProps = {
+  count: number;
+  label: string;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+};
+
+function StatBlock({
+  count,
+  label,
+  onPress,
+  accessibilityLabel,
+}: StatBlockProps): React.ReactElement {
+  const lang = useTranslation().i18n.language;
+  const formatted = formatCount(count, lang === 'fr' ? 'fr-FR' : 'en-US');
+  const content = (
+    <View style={styles.statBlock}>
+      <Text style={styles.statNumber}>{formatted}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+  if (!onPress) return content;
+  return (
+    <Pressable
+      onPress={onPress}
+      haptic="light"
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={styles.statPressable}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+type AccountRowProps = {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+  showDivider?: boolean;
+  danger?: boolean;
+};
+
+function AccountRow({
+  icon,
+  label,
+  onPress,
+  showDivider = false,
+  danger = false,
+}: AccountRowProps): React.ReactElement {
+  return (
+    <Pressable haptic="light" onPress={onPress} pressScale={0.98}>
+      <View
+        style={[
+          styles.accountRow,
+          showDivider && styles.accountRowDivider,
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={18}
+          color={danger ? colors.feedback.danger : colors.text.secondary}
+        />
+        <Text
+          variant="body"
+          style={{
+            flex: 1,
+            color: danger ? colors.feedback.danger : colors.text.primary,
+          }}
+        >
+          {label}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -103,7 +192,16 @@ export default function ProfileScreen(): React.ReactElement {
   const currentLang = i18n.language as SupportedLanguage;
   const myProductsQuery = useMyProducts(isAuthenticated);
   const myOrdersQuery = useMyOrders(isAuthenticated);
+  const mySellerQuery = useMySeller(isAuthenticated);
   const deleteMutation = useDeleteProduct();
+
+  const seller = mySellerQuery.data;
+  const listingsCount = myProductsQuery.data?.length ?? 0;
+  const displayName =
+    seller?.name
+    || user?.username
+    || user?.email?.split('@')[0]
+    || t('profile.title');
 
   const handleEdit = (productId: string): void => {
     void lightHaptic();
@@ -164,46 +262,229 @@ export default function ProfileScreen(): React.ReactElement {
     router.push('/(protected)/edit-seller-profile');
   };
 
-  const onPressSignOut = (): void => {
+  const onPressViewPublic = (): void => {
+    if (!seller) return;
     void lightHaptic();
-    void (async () => {
-      await useAuthStore.getState().logout();
-      router.replace('/(protected)/(tabs)');
-    })();
+    router.push(`/(protected)/seller/${seller.id}` as Href);
+  };
+
+  const onPressFollowers = (): void => {
+    if (!seller) return;
+    void lightHaptic();
+    router.push(`/(protected)/seller/${seller.id}/followers` as Href);
+  };
+
+  const onPressFollowing = (): void => {
+    if (!seller) return;
+    void lightHaptic();
+    router.push(`/(protected)/seller/${seller.id}/following` as Href);
+  };
+
+  const onPressLocation = (): void => {
+    void lightHaptic();
+    router.push('/(protected)/edit-seller-profile');
+  };
+
+  const onPressSignOut = (): void => {
+    Alert.alert(
+      t('profile.signOutTitle'),
+      t('profile.signOutBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.signOutConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await useAuthStore.getState().logout();
+            } catch {
+              // The auth listener will reconcile state regardless.
+            }
+            router.replace('/(protected)/(tabs)');
+          },
+        },
+      ],
+    );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top + 16 }}>
+    <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isAuthenticated ? (
-          <>
-            <Text style={styles.title}>{t('profile.title')}</Text>
-            {user?.email ? (
-              <Text style={styles.email}>{user.email}</Text>
+          <Surface
+            variant="surfaceElevated"
+            radius="xxl"
+            padding="xl"
+            style={styles.heroCard}
+          >
+            <View style={styles.heroIdentity}>
+              <View style={styles.avatarRing}>
+                <Avatar
+                  source={
+                    seller?.avatarUrl ? { uri: seller.avatarUrl } : undefined
+                  }
+                  name={displayName}
+                  size="xl"
+                />
+              </View>
+
+              <View style={styles.nameRow}>
+                <Text
+                  variant="title"
+                  weight="bold"
+                  numberOfLines={1}
+                  style={styles.heroName}
+                >
+                  {displayName}
+                </Text>
+                {seller?.verified ? <VerifiedCheck size={16} /> : null}
+                {seller?.isPro ? <ProBadge size="sm" /> : null}
+              </View>
+
+              {user?.email ? (
+                <Text
+                  variant="caption"
+                  color="tertiary"
+                  numberOfLines={1}
+                  style={styles.heroEmail}
+                >
+                  {user.email}
+                </Text>
+              ) : null}
+
+              {seller?.locationText ? (
+                <Pressable
+                  onPress={onPressLocation}
+                  haptic="light"
+                  hitSlop={6}
+                  style={styles.locationChip}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.changeLocation')}
+                >
+                  <Ionicons name="location-outline" size={14} color={colors.brand} />
+                  <Text variant="caption" weight="semibold" style={styles.locationText}>
+                    {seller.locationText}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={onPressLocation}
+                  haptic="light"
+                  hitSlop={6}
+                  style={styles.locationChipMuted}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.addLocation')}
+                >
+                  <Ionicons name="add" size={14} color={colors.text.secondary} />
+                  <Text variant="caption" weight="semibold" color="secondary">
+                    {t('profile.addLocation')}
+                  </Text>
+                </Pressable>
+              )}
+
+              {seller?.bio ? (
+                <Text
+                  variant="body"
+                  color="secondary"
+                  style={styles.heroBio}
+                  numberOfLines={3}
+                >
+                  {seller.bio}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.statsRow}>
+              <StatBlock
+                count={listingsCount}
+                label={t('profile.listingsCountLabel')}
+              />
+              <View style={styles.statsDivider} />
+              <StatBlock
+                count={seller?.followersCount ?? 0}
+                label={t('social.followers')}
+                onPress={seller ? onPressFollowers : undefined}
+                accessibilityLabel={t('social.viewFollowersAriaLabel', {
+                  count: seller?.followersCount ?? 0,
+                })}
+              />
+              <View style={styles.statsDivider} />
+              <StatBlock
+                count={seller?.followingCount ?? 0}
+                label={t('social.following_count_label')}
+                onPress={seller ? onPressFollowing : undefined}
+                accessibilityLabel={t('social.viewFollowingAriaLabel', {
+                  count: seller?.followingCount ?? 0,
+                })}
+              />
+            </View>
+
+            {seller && (seller.rating > 0 || seller.salesCount > 0) ? (
+              <View style={styles.metaRow}>
+                {seller.rating > 0 ? (
+                  <View style={styles.metaItem}>
+                    <Ionicons name="star" size={14} color="#FFC83D" />
+                    <Text variant="caption" weight="semibold" color="secondary">
+                      {seller.rating.toFixed(1)}
+                    </Text>
+                  </View>
+                ) : null}
+                {seller.salesCount > 0 ? (
+                  <View style={styles.metaItem}>
+                    <Ionicons name="bag-handle-outline" size={14} color={colors.text.secondary} />
+                    <Text variant="caption" weight="semibold" color="secondary">
+                      {`${formatCount(seller.salesCount, currentLang === 'fr' ? 'fr-FR' : 'en-US')} ${t('marketplace.salesUnit', { count: seller.salesCount })}`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
-          </>
+
+            <View style={styles.heroActions}>
+              <Pressable
+                onPress={onPressEditSeller}
+                haptic="light"
+                style={styles.editBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.editProfile')}
+              >
+                <Ionicons name="create-outline" size={16} color={colors.brandText} />
+                <Text variant="body" weight="semibold" style={styles.editBtnText}>
+                  {t('profile.editProfile')}
+                </Text>
+              </Pressable>
+              {seller ? (
+                <Pressable
+                  onPress={onPressViewPublic}
+                  haptic="light"
+                  style={styles.viewPublicBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.viewPublic')}
+                >
+                  <Ionicons name="eye-outline" size={16} color={colors.text.primary} />
+                  <Text variant="body" weight="semibold">
+                    {t('profile.viewPublic')}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Surface>
         ) : (
           <View style={styles.guestHeader}>
-            <Text style={styles.title}>{t('profile.guestHeading')}</Text>
-            <Text style={styles.guestSubtitle}>
+            <Text variant="display" weight="bold">
+              {t('profile.guestHeading')}
+            </Text>
+            <Text variant="body" color="secondary" style={styles.guestSubtitle}>
               {t('profile.guestSubtitle')}
             </Text>
             <View style={styles.ctaStack}>
-              <Pressable
-                onPress={onPressSignIn}
-                style={({ pressed }) => [
-                  styles.ctaPrimary,
-                  pressed && styles.pillPressed,
-                ]}
-              >
+              <Pressable onPress={onPressSignIn} haptic="medium" style={styles.ctaPrimary}>
                 <Text style={styles.ctaPrimaryText}>{t('auth.signIn')}</Text>
               </Pressable>
               <Pressable
                 onPress={onPressCreateAccount}
-                style={({ pressed }) => [
-                  styles.ctaSecondary,
-                  pressed && styles.pillPressed,
-                ]}
+                haptic="light"
+                style={styles.ctaSecondary}
               >
                 <Text style={styles.ctaSecondaryText}>
                   {t('auth.createAccount')}
@@ -213,50 +494,18 @@ export default function ProfileScreen(): React.ReactElement {
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('profile.settings')}</Text>
-
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>{t('profile.language')}</Text>
-            <View style={styles.pillRow}>
-              {SUPPORTED_LANGUAGES.map((lang) => {
-                const isActive = lang === currentLang;
-                return (
-                  <Pressable
-                    key={lang}
-                    onPress={() => onPressLang(lang)}
-                    style={({ pressed }) => [
-                      styles.pill,
-                      isActive ? styles.pillActive : styles.pillInactive,
-                      pressed && styles.pillPressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        isActive ? styles.pillTextActive : styles.pillTextInactive,
-                      ]}
-                    >
-                      {LANGUAGE_LABELS[lang]}
-                    </Text>
-                    {isActive ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={16}
-                        color="#fff"
-                        style={styles.pillIcon}
-                      />
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
         {isAuthenticated ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('myListings.title')}</Text>
+            <View style={styles.sectionHeader}>
+              <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+                {t('myListings.title')}
+              </Text>
+              {listingsCount > 0 ? (
+                <Text variant="caption" color="tertiary">
+                  {formatCount(listingsCount, currentLang === 'fr' ? 'fr-FR' : 'en-US')}
+                </Text>
+              ) : null}
+            </View>
             {myProductsQuery.isLoading ? (
               <View style={styles.skeletonGrid}>
                 <View style={styles.skeletonRow}>
@@ -268,8 +517,10 @@ export default function ProfileScreen(): React.ReactElement {
                   <SellerProductCardSkeleton />
                 </View>
               </View>
-            ) : (myProductsQuery.data?.length ?? 0) === 0 ? (
-              <Text style={styles.emptyText}>{t('myListings.empty')}</Text>
+            ) : listingsCount === 0 ? (
+              <Text variant="caption" color="tertiary">
+                {t('myListings.empty')}
+              </Text>
             ) : (
               <FlatList
                 data={myProductsQuery.data ?? []}
@@ -287,48 +538,114 @@ export default function ProfileScreen(): React.ReactElement {
 
         {isAuthenticated ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('orders.title')}</Text>
+            <View style={styles.sectionHeader}>
+              <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+                {t('orders.title')}
+              </Text>
+              {(myOrdersQuery.data?.length ?? 0) > 0 ? (
+                <Text variant="caption" color="tertiary">
+                  {formatCount(myOrdersQuery.data?.length ?? 0, currentLang === 'fr' ? 'fr-FR' : 'en-US')}
+                </Text>
+              ) : null}
+            </View>
             {myOrdersQuery.isLoading ? (
-              <ActivityIndicator />
+              <ActivityIndicator color={colors.text.secondary} />
             ) : (myOrdersQuery.data?.length ?? 0) === 0 ? (
-              <Text style={styles.emptyText}>{t('orders.empty')}</Text>
+              <Text variant="caption" color="tertiary">
+                {t('orders.empty')}
+              </Text>
             ) : (
-              <View>
-                {(myOrdersQuery.data ?? []).map((order) => (
-                  <OrderRow
+              <Surface variant="surfaceElevated" radius="lg" border>
+                {(myOrdersQuery.data ?? []).map((order, idx, arr) => (
+                  <View
                     key={order.id}
-                    order={order}
-                    lang={currentLang}
-                    t={t}
-                  />
+                    style={
+                      idx < arr.length - 1
+                        ? styles.orderRowWithDivider
+                        : undefined
+                    }
+                  >
+                    <OrderRow order={order} lang={currentLang} t={t} />
+                  </View>
                 ))}
-              </View>
+              </Surface>
             )}
           </View>
         ) : null}
 
+        <View style={styles.section}>
+          <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+            {t('profile.settings')}
+          </Text>
+          <Surface variant="surfaceElevated" radius="lg" padding="md" border>
+            <View style={styles.settingsRow}>
+              <Text variant="body" weight="semibold">
+                {t('profile.language')}
+              </Text>
+              <View style={styles.pillRow}>
+                {SUPPORTED_LANGUAGES.map((lang) => {
+                  const isActive = lang === currentLang;
+                  return (
+                    <Pressable
+                      key={lang}
+                      onPress={() => onPressLang(lang)}
+                      haptic="light"
+                      style={[
+                        styles.pill,
+                        isActive ? styles.pillActive : styles.pillInactive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          isActive ? styles.pillTextActive : styles.pillTextInactive,
+                        ]}
+                      >
+                        {LANGUAGE_LABELS[lang]}
+                      </Text>
+                      {isActive ? (
+                        <Ionicons
+                          name="checkmark"
+                          size={14}
+                          color={colors.brandText}
+                          style={styles.pillIcon}
+                        />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </Surface>
+        </View>
+
         {isAuthenticated ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('profile.account')}</Text>
-            <Pressable
-              onPress={onPressEditSeller}
-              style={({ pressed }) => [
-                styles.editSellerButton,
-                pressed && styles.pillPressed,
-              ]}
-            >
-              <Ionicons name="storefront-outline" size={18} color="#fff" />
-              <Text style={styles.editSellerText}>{t('sellerProfile.edit')}</Text>
-            </Pressable>
-            <Pressable
-              onPress={onPressSignOut}
-              style={({ pressed }) => [
-                styles.signOutButton,
-                pressed && styles.pillPressed,
-              ]}
-            >
-              <Text style={styles.signOutText}>{t('auth.signOut')}</Text>
-            </Pressable>
+            <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+              {t('profile.account')}
+            </Text>
+            <Surface variant="surfaceElevated" radius="lg" border>
+              <AccountRow
+                icon="create-outline"
+                label={t('profile.editProfile')}
+                onPress={onPressEditSeller}
+                showDivider
+              />
+              {seller ? (
+                <AccountRow
+                  icon="eye-outline"
+                  label={t('profile.viewPublic')}
+                  onPress={onPressViewPublic}
+                  showDivider
+                />
+              ) : null}
+              <AccountRow
+                icon="log-out-outline"
+                label={t('auth.signOut')}
+                onPress={onPressSignOut}
+                danger
+              />
+            </Surface>
           </View>
         ) : null}
       </ScrollView>
@@ -337,133 +654,266 @@ export default function ProfileScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    gap: 28,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.huge,
+    gap: spacing.xxl,
   },
-  title: {
-    color: '#fff',
-    fontSize: 28,
+
+  // Hero card
+  heroCard: {
+    gap: spacing.lg,
+  },
+  heroIdentity: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  avatarRing: {
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.brand,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  heroName: {
+    fontSize: 22,
+    color: colors.text.primary,
+    flexShrink: 1,
+  },
+  heroEmail: {
+    marginTop: -2,
+  },
+  locationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(255,90,92,0.12)',
+    borderColor: 'rgba(255,90,92,0.32)',
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    marginTop: spacing.xs,
+  },
+  locationText: {
+    color: colors.brand,
+  },
+  locationChipMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceOverlay,
+    borderColor: colors.border,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    marginTop: spacing.xs,
+  },
+  heroBio: {
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 20,
+  },
+
+  // Stats grid
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  statPressable: {
+    flex: 1,
+  },
+  statBlock: {
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: spacing.xs,
+  },
+  statNumber: {
+    color: colors.text.primary,
+    fontSize: 20,
     fontWeight: '800',
+    lineHeight: 24,
   },
-  email: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-    marginTop: 6,
+  statLabel: {
+    color: colors.text.tertiary,
+    fontSize: 11,
+    textTransform: 'lowercase',
+    letterSpacing: 0.4,
   },
+  statsDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 32,
+    backgroundColor: colors.border,
+  },
+
+  // Meta row (rating + sales)
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+
+  // Hero action buttons
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  editBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.brand,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+  },
+  editBtnText: {
+    color: colors.brandText,
+  },
+  viewPublicBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'transparent',
+    borderColor: colors.borderStrong,
+    borderWidth: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+  },
+
+  // Guest
   guestHeader: {
-    gap: 12,
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
   },
   guestSubtitle: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
     lineHeight: 20,
-    paddingHorizontal: 8,
   },
   ctaStack: {
-    gap: 10,
-    marginTop: 6,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   ctaPrimary: {
     backgroundColor: colors.brand,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaPrimaryText: {
-    color: '#fff',
+    color: colors.brandText,
     fontSize: 15,
     fontWeight: '700',
   },
   ctaSecondary: {
     backgroundColor: 'transparent',
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderStrong,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaSecondaryText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
     fontWeight: '600',
   },
+
+  // Sections
   section: {
-    gap: 12,
+    gap: spacing.md,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionLabel: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
-    fontWeight: '700',
+    color: colors.text.tertiary,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  row: {
-    gap: 10,
-  },
-  rowLabel: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+
+  // Settings row
+  settingsRow: {
+    gap: spacing.sm,
   },
   pillRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.xs,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
   },
   pillActive: {
     backgroundColor: colors.brand,
   },
   pillInactive: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.surfaceOverlay,
+    borderColor: colors.border,
     borderWidth: 1,
   },
-  pillPressed: {
-    opacity: 0.7,
-  },
   pillText: {
-    fontSize: 14,
+    fontSize: 13,
   },
   pillTextActive: {
-    color: '#fff',
+    color: colors.brandText,
     fontWeight: '700',
   },
   pillTextInactive: {
-    color: 'rgba(255,255,255,0.75)',
+    color: colors.text.secondary,
     fontWeight: '500',
   },
   pillIcon: {
-    marginLeft: 6,
+    marginLeft: spacing.xs,
   },
-  signOutButton: {
-    backgroundColor: 'transparent',
-    borderColor: colors.brand,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 12,
+
+  // Account rows
+  accountRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  signOutText: {
-    color: colors.brand,
-    fontSize: 14,
-    fontWeight: '700',
+  accountRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  emptyText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-  },
+
+  // Listings skeleton
   skeletonGrid: {
     gap: 12,
   },
@@ -471,35 +921,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  editSellerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-  },
-  editSellerText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
+  // Orders
   orderRow: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  orderRowWithDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: colors.border,
   },
   orderThumbWrap: {
     width: 48,
     height: 48,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surfaceElevated,
     overflow: 'hidden',
   },
   orderThumb: {
@@ -510,25 +949,13 @@ const styles = StyleSheet.create({
   orderMiddle: {
     flex: 1,
   },
-  orderTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   orderAmount: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  orderDate: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+    color: colors.text.primary,
     marginTop: 2,
   },
   orderPill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
   orderPillText: {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -79,22 +79,51 @@ export default function EditSellerProfileScreen(): React.ReactElement {
   const [errors, setErrors] = useState<FormErrors>({});
   const [uploading, setUploading] = useState(false);
 
+  // Initialize the form exactly once per mount. Two cases:
+  //   (a) seller row exists -> hydrate form from it.
+  //   (b) seller row does NOT exist yet (fresh account; the row is only
+  //       created on first save via get_or_create_seller_for_current_user)
+  //       -> prefill `name` from the auth user so the `name` validation
+  //       gate doesn't silently disable the Save button before the first
+  //       save can ever fire.
+  // The init-once guard prevents wiping in-progress edits when `existing`
+  // transitions from null -> row (e.g., after a successful avatar upload
+  // creates the seller row mid-edit).
+  const formInitializedRef = useRef(false);
   useEffect(() => {
-    if (!existing) return;
-    const initial: FormState = {
-      name: existing.name ?? '',
-      bio: existing.bio ?? '',
-      website: existing.website ?? '',
-      phonePublic: existing.phonePublic ?? '',
-      emailPublic: existing.emailPublic ?? '',
-      latitude: existing.latitude,
-      longitude: existing.longitude,
-      locationText: existing.locationText ?? '',
-    };
+    if (formInitializedRef.current) return;
+    if (existing) {
+      const fallbackName =
+        useAuthStore.getState().user?.username
+        || useAuthStore.getState().user?.email?.split('@')[0]
+        || '';
+      const initial: FormState = {
+        name: existing.name && existing.name.length > 0
+          ? existing.name
+          : fallbackName,
+        bio: existing.bio ?? '',
+        website: existing.website ?? '',
+        phonePublic: existing.phonePublic ?? '',
+        emailPublic: existing.emailPublic ?? '',
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        locationText: existing.locationText ?? '',
+      };
+      setForm(initial);
+      setInitialForm(initial);
+      formInitializedRef.current = true;
+      return;
+    }
+    if (isLoading) return;
+    const user = useAuthStore.getState().user;
+    const fallbackName =
+      user?.username || user?.email?.split('@')[0] || '';
+    if (!fallbackName) return;
+    const initial: FormState = { ...EMPTY_FORM, name: fallbackName };
     setForm(initial);
     setInitialForm(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existing?.id]);
+    formInitializedRef.current = true;
+  }, [existing, isLoading]);
 
   const dirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(initialForm),
@@ -327,14 +356,32 @@ export default function EditSellerProfileScreen(): React.ReactElement {
   }, [router, t]);
 
   const performSave = useCallback(async () => {
-    const finalErrors = validate(form);
+    // Derive a safe fallback name from the auth user. If `form.name` is
+    // somehow empty when Save is tapped (auth-store didn't restore a
+    // username, edge cases with empty seller rows, etc.), use the fallback
+    // so the save proceeds — the get_or_create_seller_for_current_user RPC
+    // will create / update the row with that name. The user can later
+    // change the name in the same form. This pairs with dropping
+    // `hasErrors` from the disable gate so the button is never silently
+    // disabled with no recourse.
+    const user = useAuthStore.getState().user;
+    const fallbackName =
+      user?.username || user?.email?.split('@')[0] || 'User';
+    const safeForm: FormState = {
+      ...form,
+      name: form.name.trim().length > 0 ? form.name : fallbackName,
+    };
+
+    const finalErrors = validate(safeForm);
     if (Object.keys(finalErrors).length > 0) {
       setErrors(finalErrors);
       return false;
     }
 
     const patch: UpdateMySellerInput = {};
-    if (form.name.trim() !== initialForm.name) patch.name = form.name.trim();
+    if (safeForm.name.trim() !== initialForm.name) {
+      patch.name = safeForm.name.trim();
+    }
     if (form.bio !== initialForm.bio) patch.bio = form.bio.trim();
     if (form.website !== initialForm.website) {
       patch.website = form.website.trim();
@@ -357,13 +404,13 @@ export default function EditSellerProfileScreen(): React.ReactElement {
 
     if (Object.keys(patch).length === 0) {
       // Nothing actually changed in trimmed values.
-      setInitialForm(form);
+      setInitialForm(safeForm);
       return true;
     }
 
     try {
       await updateMutation.mutateAsync(patch);
-      setInitialForm(form);
+      setInitialForm(safeForm);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -425,7 +472,13 @@ export default function EditSellerProfileScreen(): React.ReactElement {
   }, [navigation, dirty, form, t]);
 
   const submitting = updateMutation.isPending;
-  const saveDisabled = submitting || !dirty || hasErrors;
+  // Save is enabled whenever the form is dirty and not currently saving.
+  // Validation errors are surfaced INLINE on tap (via `setErrors` inside
+  // `performSave`) instead of silently disabling the button — a greyed-out
+  // button with no error message is the worst UX. `hasErrors` is kept above
+  // for any future use (e.g., a hint UI) but no longer gates the action.
+  void hasErrors;
+  const saveDisabled = submitting || !dirty;
 
   if (isLoading) {
     return (

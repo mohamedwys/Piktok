@@ -3608,3 +3608,725 @@ A "Following" feed is now an option but **explicitly remains out of Phase C scop
 - **Realtime** is optional. C.2's migration did not add `follows` to the `supabase_realtime` publication; if C.6 needs live feed updates, an additive migration would `alter publication supabase_realtime add table public.follows;` and the feed query would resubscribe per-row. React Query invalidation in `onSettled` is sufficient for v1.
 
 The social graph is now fully navigable: Follow button on every other-user profile, counters tappable to followers/following lists, every row tappable to its seller profile, every row's inline `Suivre` button toggleable. Phase C's product surface is functionally complete.
+
+---
+
+## Op.2 Changelog (2026-05-03) — Apply Procedure + FK Audit + Cast Cleanup
+
+Op.2 closes out Op.1's plumbing with three independent outcomes:
+
+1. The four pending migrations (B.1.5, B.3, B.4, C.2) get a documented, copy-pasteable apply procedure the user can run in one focused session.
+2. Every FK in `supabase/migrations/` is catalogued with its `ON DELETE` action, bucketed by safety for future delete flows. This is meant to be a permanent reference — re-read it before adding any "delete X" feature.
+3. The `as never` cast that B.4 left at the `delete_my_account` RPC call site is removed. `npm run gen:types` has already been run against an environment that includes B.4 + C.2; the regenerated `Database['public']['Functions']['delete_my_account']` and `Database['public']['Tables']['follows']` are both present in [src/types/supabase.ts](src/types/supabase.ts), so the typed call resolves cleanly without any cast.
+
+### Reconnaissance findings
+
+| Check | Result |
+| --- | --- |
+| `package.json` scripts (Op.1 wiring) | All five present: `db:push`, `db:status`, `db:diff`, `gen:types`, `gen:types:local` ([package.json:12-16](package.json#L12)). No-op for this step. |
+| `Database['public']['Tables']['follows']` in `src/types/supabase.ts` | **Present** — line 106. C.2 has been applied + types regenerated. |
+| `Database['public']['Functions']['delete_my_account']` in `src/types/supabase.ts` | **Present** — line 675 (`{ Args: never; Returns: undefined }`). B.4 has been applied + types regenerated. |
+| `as never` cast site | [src/features/auth/services/auth.ts:61](src/features/auth/services/auth.ts#L61) — verbatim `await supabase.rpc('delete_my_account' as never)`. |
+| Migration files on disk | 18 in `supabase/migrations/` (`20260501` … `20260518`). |
+
+Both type markers being present means the user has already run `db:push` + `gen:types` between Op.1 and Op.2. The "apply procedure" section below is therefore documentation-for-next-time, and the cast removal proceeds.
+
+### How to apply the four pending migrations
+
+The four migrations from this conversation are: B.1.5 ([20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql)), B.3 ([20260516_create_avatars_bucket.sql](supabase/migrations/20260516_create_avatars_bucket.sql)), B.4 ([20260517_delete_my_account_rpc.sql](supabase/migrations/20260517_delete_my_account_rpc.sql)), C.2 ([20260518_follows_schema_and_counters.sql](supabase/migrations/20260518_follows_schema_and_counters.sql)). All four are idempotent, transactional, and reversible; running them as a batch is safe.
+
+#### Pre-flight
+
+```bash
+npm run db:status     # shows which migrations are marked unapplied on remote
+```
+
+`db:status` calls `supabase migration list --linked` and prints a two-column table of local vs. remote migration timestamps. Anything in the local column without a matching remote row is what `db:push` will apply.
+
+#### Apply
+
+```bash
+npm run db:push       # applies all unapplied migrations transactionally,
+                      # in timestamp order
+```
+
+The Supabase CLI applies each migration inside its own transaction, in ascending timestamp order. If any migration fails, that file is rolled back; earlier migrations remain applied. All four files in this batch wrap their bodies in explicit `begin; … commit;` blocks (B.4 and C.2 — see `delete_my_account` RPC and `handle_follow_change` trigger) or are simple enough that the implicit transaction suffices (B.1.5 grants, B.3 bucket insert).
+
+#### Regenerate types
+
+```bash
+npm run gen:types
+git add src/types/supabase.ts
+git commit -m "chore(types): regenerate after Op.2"
+```
+
+C.2 adds a new public-schema table (`follows`) and two columns on `sellers` (`followers_count`, `following_count`). B.4 adds a new public-schema function (`delete_my_account`). Both are additive type changes — no existing key shape changes. Code that already typechecked continues to typecheck.
+
+#### Sanity check
+
+```bash
+npx tsc --noEmit      # should still exit 0
+```
+
+If `tsc` regresses, the most likely cause is a previously-hidden `Row['column']` access that the regenerated, stricter types now surface as a narrowing opportunity. Report back with the exact error — the fix is usually a one-line nullable-handling tweak, not a redesign.
+
+### Per-migration expected behavior post-apply
+
+| ID | File | What lights up |
+| --- | --- | --- |
+| B.1.5 | [20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql) | `sellers` UPDATE column allowlist enforced at the grant layer. Attempts to write `verified` / `is_pro` / `rating` / `sales_count` / `stripe_*` from the JS client throw `permission denied for column …`. Only the user-controlled allowlist (`name`, `avatar_url`, `bio`, `website`, `phone_public`, `email_public`, `latitude`, `longitude`, `location_text`, `location_updated_at`) remains writable. |
+| B.3 | [20260516_create_avatars_bucket.sql](supabase/migrations/20260516_create_avatars_bucket.sql) | `avatars` Storage bucket created with per-user folder RLS (`{auth.uid()}/…` path scope). End-to-end avatar uploads from EditProfile work; cross-user write attempts are rejected at the Storage policy layer. |
+| B.4 | [20260517_delete_my_account_rpc.sql](supabase/migrations/20260517_delete_my_account_rpc.sql) | `public.delete_my_account()` RPC live. Account deletion flow in EditProfile calls it via `supabase.rpc('delete_my_account')` (now without the `as never` cast — see below). The RPC pre-deletes orders pointing at the user's seller rows to free the `orders.seller_id` / `orders.product_id` RESTRICT, then deletes from `auth.users`, which cascades through every other dependent table. |
+| C.2 | [20260518_follows_schema_and_counters.sql](supabase/migrations/20260518_follows_schema_and_counters.sql) | `public.follows` table + `sellers.followers_count` / `sellers.following_count` counter columns + `handle_follow_change()` trigger live. Follow / unfollow + counter display work end-to-end. RLS scopes INSERT/DELETE to "the seller row owned by `auth.uid()`"; SELECT is open to any authenticated user (follower lists must be discoverable). |
+
+### FK CASCADE Inventory (2026-05-03)
+
+Every foreign-key constraint defined across the 18 migrations in `supabase/migrations/`. This table is meant to be a permanent reference — re-read it before adding any feature that deletes a parent row.
+
+`ON UPDATE` is unspecified for every FK in the project (Postgres default = `NO ACTION`). The column is omitted below for brevity; assume `NO ACTION` unless future migrations change that.
+
+| # | Source | Target | ON DELETE | Defined in |
+| --- | --- | --- | --- | --- |
+| 1 | `public.products.seller_id` | `public.sellers(id)` | CASCADE | [20260501_initial_marketplace_schema.sql:37](supabase/migrations/20260501_initial_marketplace_schema.sql#L37) |
+| 2 | `public.likes.user_id` | `auth.users(id)` | CASCADE | [20260501_initial_marketplace_schema.sql:65](supabase/migrations/20260501_initial_marketplace_schema.sql#L65) |
+| 3 | `public.likes.product_id` | `public.products(id)` | CASCADE | [20260501_initial_marketplace_schema.sql:66](supabase/migrations/20260501_initial_marketplace_schema.sql#L66) |
+| 4 | `public.bookmarks.user_id` | `auth.users(id)` | CASCADE | [20260501_initial_marketplace_schema.sql:76](supabase/migrations/20260501_initial_marketplace_schema.sql#L76) |
+| 5 | `public.bookmarks.product_id` | `public.products(id)` | CASCADE | [20260501_initial_marketplace_schema.sql:77](supabase/migrations/20260501_initial_marketplace_schema.sql#L77) |
+| 6 | `public.sellers.user_id` | `auth.users(id)` | CASCADE | [20260503_sell_setup.sql:3](supabase/migrations/20260503_sell_setup.sql#L3) |
+| 7 | `public.conversations.product_id` | `public.products(id)` | CASCADE | [20260509_messaging.sql:4](supabase/migrations/20260509_messaging.sql#L4) |
+| 8 | `public.conversations.buyer_id` | `auth.users(id)` | CASCADE | [20260509_messaging.sql:5](supabase/migrations/20260509_messaging.sql#L5) |
+| 9 | `public.conversations.seller_user_id` | `auth.users(id)` | CASCADE | [20260509_messaging.sql:6](supabase/migrations/20260509_messaging.sql#L6) |
+| 10 | `public.messages.conversation_id` | `public.conversations(id)` | CASCADE | [20260509_messaging.sql:19](supabase/migrations/20260509_messaging.sql#L19) |
+| 11 | `public.messages.sender_id` | `auth.users(id)` | CASCADE | [20260509_messaging.sql:20](supabase/migrations/20260509_messaging.sql#L20) |
+| 12 | `public.orders.buyer_id` | `auth.users(id)` | CASCADE | [20260510_orders.sql:3](supabase/migrations/20260510_orders.sql#L3) |
+| 13 | `public.orders.product_id` | `public.products(id)` | **RESTRICT** | [20260510_orders.sql:4](supabase/migrations/20260510_orders.sql#L4) |
+| 14 | `public.orders.seller_id` | `public.sellers(id)` | **RESTRICT** | [20260510_orders.sql:5](supabase/migrations/20260510_orders.sql#L5) |
+| 15 | `public.push_tokens.user_id` | `auth.users(id)` | CASCADE | [20260512_push_tokens.sql:3](supabase/migrations/20260512_push_tokens.sql#L3) |
+| 16 | `public.follows.follower_id` | `public.sellers(id)` | CASCADE | [20260518_follows_schema_and_counters.sql:122-123](supabase/migrations/20260518_follows_schema_and_counters.sql#L122) |
+| 17 | `public.follows.following_id` | `public.sellers(id)` | CASCADE | [20260518_follows_schema_and_counters.sql:124-125](supabase/migrations/20260518_follows_schema_and_counters.sql#L124) |
+
+**Total: 17 FKs across 18 migrations.** No `SET NULL` / `SET DEFAULT` FKs exist in the project.
+
+#### Bucket A — Safe for user deletion (CASCADE)
+
+15 of 17 FKs cascade cleanly from `auth.users` / `sellers` / `products` / `conversations` to dependents. The full delete chain triggered by `delete from auth.users where id = v_user_id`:
+
+```
+auth.users
+  └── sellers              (#6, CASCADE on user_id)
+       ├── products        (#1, CASCADE on seller_id)
+       │    ├── likes      (#3, CASCADE on product_id)
+       │    ├── bookmarks  (#5, CASCADE on product_id)
+       │    └── conversations (#7, CASCADE on product_id)
+       │         └── messages (#10, CASCADE on conversation_id)
+       ├── follows         (#16/#17, CASCADE on follower_id / following_id)
+       └── orders          (#14, RESTRICT — see Bucket B)
+  ├── likes                (#2, CASCADE on user_id)
+  ├── bookmarks            (#4, CASCADE on user_id)
+  ├── conversations        (#8/#9, CASCADE on buyer_id / seller_user_id)
+  ├── messages             (#11, CASCADE on sender_id)
+  ├── push_tokens          (#15, CASCADE on user_id)
+  └── orders               (#12, CASCADE on buyer_id)
+```
+
+#### Bucket B — Will block deletion (RESTRICT)
+
+Two FKs use `ON DELETE RESTRICT`. Both are on `orders`:
+
+| FK | Blocks deletion of | Pre-DELETE handled by |
+| --- | --- | --- |
+| #13 `orders.product_id → products(id)` | The `product` row this order references | Implicit — `delete_my_account` RPC pre-deletes orders by `seller_id`, which transitively covers every product this seller has sold (every order's product belongs to that order's seller). |
+| #14 `orders.seller_id → sellers(id)` | The `seller` row this order references | Explicit — `delete_my_account` RPC at [20260517_delete_my_account_rpc.sql:87-90](supabase/migrations/20260517_delete_my_account_rpc.sql#L87) does `delete from public.orders where seller_id in (select id from public.sellers where user_id = v_user_id)` before the cascade. |
+
+Both RESTRICTs are deliberate: the `orders` table is sales-history audit data, and the design choice in B.4 was "deleting your account also wipes your sales history" rather than "anonymize the seller row and keep paid-order audit data". The latter is flagged as a future privacy-friendly variant in B.4's header comment ([20260517_delete_my_account_rpc.sql:30-33](supabase/migrations/20260517_delete_my_account_rpc.sql#L30)).
+
+The RESTRICTs DO NOT block `delete_my_account` today because of the explicit pre-DELETE. They WOULD block any future code path that tries to delete a `sellers` row or a `products` row directly (without going through B.4's RPC). See "Future delete flows" below.
+
+#### Bucket C — SET NULL / SET DEFAULT
+
+None. No FK in the project orphans or resets on parent deletion.
+
+#### Future delete flows that would trip Bucket B
+
+| Hypothetical flow | Tripped FK(s) | Required mitigation |
+| --- | --- | --- |
+| Account deletion (B.4) — **shipped** | #13, #14 | Already handled via explicit pre-DELETE in `delete_my_account` ([20260517_delete_my_account_rpc.sql:87-90](supabase/migrations/20260517_delete_my_account_rpc.sql#L87)). |
+| "Delete my listing" — a seller removes a single product | #13 (`orders.product_id`) | A `delete from public.products where id = ?` would fail with FK violation if any order references that product. Either pre-DELETE matching orders (destructive, wipes order history for that listing) OR change the FK to `ON DELETE SET NULL` and make `orders.product_id` nullable (preserves audit history with a "product removed" semantic) OR add a soft-delete column on `products` and never hard-delete. **Decision deferred until the use case lands.** |
+| "Soft-delete / suspend a seller" — admin operation | #14 (`orders.seller_id`) | Same shape as the listing-deletion problem at the seller level. A seller suspension feature should almost certainly be soft (a `suspended_at` column) rather than hard, precisely so it composes with the existing RESTRICT. **Decision deferred until the use case lands.** |
+| Anonymize-on-delete privacy variant of B.4 | None — works around RESTRICT by NOT deleting the seller row | Replace the seller row's PII fields with sentinels (`name = 'Deleted user'`, `user_id = null`, etc.) instead of deleting it. The orders rows survive untouched, RESTRICT is never tested. Per B.4's header comment, this is the recommended next iteration. |
+
+**This audit is documentation, not an action item.** Per Op.2's constraints, Bucket B FKs are NOT preemptively migrated to CASCADE. Future steps decide based on actual use cases and the audit-trail trade-off.
+
+### Cast removal — done
+
+The B.4 changelog left a temporary `as never` cast in [src/features/auth/services/auth.ts:61](src/features/auth/services/auth.ts#L61) because the typed `delete_my_account` literal didn't exist in `Database['public']['Functions']` until types were regenerated post-apply. Both prerequisites were met by the time Op.2 ran (see reconnaissance above: line 675 of `supabase.ts` carries the function entry), so the cast is removed.
+
+**Before** ([src/features/auth/services/auth.ts:60-68](src/features/auth/services/auth.ts#L60), pre-Op.2):
+
+```ts
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_my_account' as never);
+  if (error) throw error;
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // The user is already gone server-side; swallow.
+  }
+}
+```
+
+**After** ([src/features/auth/services/auth.ts:53-61](src/features/auth/services/auth.ts#L53), post-Op.2):
+
+```ts
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // The user is already gone server-side; swallow.
+  }
+}
+```
+
+The 12-line JSDoc paragraph that explained the cast as a "temporary shim" was also removed since it no longer applies. The function-level JSDoc keeps its first paragraph (sign-out semantics) intact. `supabase.rpc('delete_my_account')` now resolves through `Database['public']['Functions']['delete_my_account']` with no escape hatch.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` exit code | 0 |
+| `npx expo export --platform ios` bundle | clean, single hbc artifact `entry-da1c7d6f6ffae350362593e174f468ab.hbc` (6.2 MB) |
+| Migration count | 18 (`ls supabase/migrations \| wc -l`), all covered by the FK inventory |
+| Source files modified | 1 ([src/features/auth/services/auth.ts](src/features/auth/services/auth.ts)) |
+| Migration files modified | 0 |
+| Type files modified | 0 (types were regenerated by the user out-of-band before this step) |
+
+### Files modified
+
+- [src/features/auth/services/auth.ts](src/features/auth/services/auth.ts) — removed the `as never` cast and the JSDoc paragraph that documented it.
+- [PROJECT_AUDIT.md](PROJECT_AUDIT.md) — this Op.2 changelog (apply procedure + FK inventory + cast removal record).
+
+### Reversion
+
+```bash
+git revert <op-2-commit-sha>
+```
+
+Restores the `as never` cast and the JSDoc paragraph, and removes the Op.2 section from `PROJECT_AUDIT.md`. No migrations or types are touched by the revert (they were already in their post-apply state when Op.2 ran). One revert restores the entire scenario cleanly.
+
+---
+
+## Step D.1.5 Changelog (2026-05-03) — Products Update Grant Hardening
+
+Closes the self-elevation gap on `public.products` surfaced in [COMMENTS_AUDIT.md §2](COMMENTS_AUDIT.md). Mirrors B.1.5 ([20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql)) mechanically: REVOKE table-wide UPDATE on `public.products` from `authenticated`, GRANT UPDATE on the user-controlled column allowlist only. Migration-only — no source code changes, no type regeneration.
+
+### Why
+
+The `"products update own"` RLS policy ([20260507_owner_update.sql:1-10](supabase/migrations/20260507_owner_update.sql#L1)) authorizes any authenticated user to UPDATE their own product row across every column. With the broad table-level UPDATE grant in place, that means a seller can issue, for any of their own listings:
+
+```ts
+supabase
+  .from('products')
+  .update({ comments_count: 999_999, likes_count: 999_999, shares_count: 999_999 })
+  .eq('id', myProductId);
+```
+
+…and PostgREST will accept it because the row-level policy is satisfied (they own the row) and there is no column-level grant blocking the column write. They can also forge `created_at`, reassign `seller_id` (in principle, though the RLS check would fail on the new value), and self-mutate `bookmarks_count`. This is the same self-elevation shape `sellers` had before B.1.5.
+
+D.2 (next migration — comments schema + counter trigger) lands a SECURITY DEFINER `handle_comment_change()` that writes `products.comments_count`. SECURITY DEFINER bypasses these grants by running as the migration owner — same pattern as C.2's `handle_follow_change()` on `sellers.followers_count` / `sellers.following_count`. Without D.1.5 in place first, D.2's trigger is doing correct work alongside a forged-counter side channel from clients. D.1.5 lands first to make the trigger load-bearing.
+
+### Reconnaissance — every column on `public.products`
+
+Source: [src/types/supabase.ts:266-369](src/types/supabase.ts#L266) (`Database['public']['Tables']['products']`). 29 columns total. Categorization below; alphabetical within each bucket.
+
+**(a) Allowlist — kept writable for `authenticated` (user-controlled, surfaced through the sell flow):**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `attributes` | jsonb | Localized attribute chips. Written by `createProduct` / `updateProduct`. |
+| `category` | jsonb | Localized `{ primary, secondary }` payload. Written by `createProduct` / `updateProduct`. |
+| `category_id` | text \| null | Categories tree id. Written by `createProduct` / `updateProduct`. |
+| `currency` | text | `EUR \| USD \| GBP`. Written by `createProduct` / `updateProduct`. |
+| `description` | jsonb | Localized description. Written by `createProduct` / `updateProduct`. |
+| `dimensions` | text \| null | Free-form dimension string. Written by `createProduct` / `updateProduct`. |
+| `latitude` | double precision \| null | G.1 column, written by `createProduct` when geocoding succeeds. Future edit flow may write. |
+| `location` | text \| null | Free-form location string. Written by `createProduct` / `updateProduct`. |
+| `location_updated_at` | timestamptz \| null | G.1 column, written by `createProduct` alongside lat/lng. |
+| `longitude` | double precision \| null | G.1 column, written by `createProduct` alongside latitude. |
+| `media_type` | text | `image \| video`. Written by `createProduct` and conditionally by `updateProduct` when media is replaced. |
+| `media_url` | text | Storage URL. Written by `createProduct` and conditionally by `updateProduct`. |
+| `pickup_available` | boolean | Written by `createProduct` / `updateProduct`. |
+| `price` | numeric | Written by `createProduct` / `updateProduct`. |
+| `shipping_free` | boolean | Written by `createProduct` / `updateProduct`. |
+| `shipping_label` | jsonb \| null | Localized shipping label. Seller-controlled (not yet exposed in UI but reserved for future edit flow). |
+| `stock_available` | boolean | Written by `createProduct` / `updateProduct`. |
+| `stock_label` | jsonb \| null | Localized stock label. Seller-controlled (not yet exposed in UI but reserved). |
+| `subcategory_id` | text \| null | Written by `createProduct` / `updateProduct`. |
+| `thumbnail_url` | text \| null | Written by `createProduct` and conditionally by `updateProduct`. |
+| `title` | jsonb | Localized title. Written by `createProduct` / `updateProduct`. |
+
+**(b) System-managed — disallowed, only writable by `service_role` going forward:**
+
+| Column | Reason |
+| --- | --- |
+| `bookmarks_count` | Counter, maintained by `on_bookmark_change()` ([20260502_engagement_triggers.sql:44-68](supabase/migrations/20260502_engagement_triggers.sql#L44)). |
+| `comments_count` | Counter, will be maintained by D.2's `handle_comment_change()` (SECURITY DEFINER, bypasses this grant). |
+| `created_at` | Insertion timestamp, immutable. |
+| `id` | Primary key, immutable. |
+| `likes_count` | Counter, maintained by `on_like_change()` ([20260502_engagement_triggers.sql:17-41](supabase/migrations/20260502_engagement_triggers.sql#L17)). |
+| `seller_id` | Listing ownership, immutable post-creation. |
+| `shares_count` | Counter (no current writer; reserved for a future shares table). |
+
+**(c) Generated / not writable regardless of grant:**
+
+| Column | Reason |
+| --- | --- |
+| `location_point` | `geography(Point, 4326) generated always as ... stored` ([20260513_geo_columns.sql:69-77](supabase/migrations/20260513_geo_columns.sql#L69)). Generated columns reject any direct write at the storage layer. |
+
+### Reconnaissance — every JS call site that mutates `public.products`
+
+Searched with `rg "from\(['\"]products['\"]\)" src/`. Across the entire `src/` tree there is exactly **one** UPDATE call site, two INSERT/DELETE call sites, and the rest are SELECTs.
+
+| File / Line | Operation | Columns touched | Allowlist verification |
+| --- | --- | --- | --- |
+| [src/features/marketplace/services/sell.ts:135-140](src/features/marketplace/services/sell.ts#L135) | INSERT (`createProduct`) | `seller_id, title, description, category, category_id, subcategory_id, attributes, dimensions, price, currency, media_type, media_url, thumbnail_url, stock_available, shipping_free, pickup_available, location` and conditionally `latitude, longitude, location_updated_at` | Not affected — INSERT grant is separate from UPDATE grant. The `"products insert own"` RLS policy ([20260503_sell_setup.sql:39-45](supabase/migrations/20260503_sell_setup.sql#L39)) gates this and remains unchanged. |
+| [src/features/marketplace/services/sell.ts:185-189](src/features/marketplace/services/sell.ts#L185) | UPDATE (`updateProduct`) | `title, description, price, currency, category, category_id, subcategory_id, attributes, dimensions, stock_available, shipping_free, pickup_available, location` and conditionally `media_type, media_url, thumbnail_url` | **All within the allowlist** — verified column-by-column against the `patch` literal at [sell.ts:155-183](src/features/marketplace/services/sell.ts#L155). No counter columns, no `seller_id`, no `created_at`. |
+| [src/features/marketplace/services/products.ts:329](src/features/marketplace/services/products.ts#L329) | DELETE (`deleteProduct`) | n/a | Not affected — DELETE grant is separate from UPDATE grant. The `"products delete own"` RLS policy ([20260506_owner_delete.sql:2-8](supabase/migrations/20260506_owner_delete.sql#L2)) gates this and remains unchanged. |
+
+`rg upsert src/` confirms there is **no** `from('products').upsert(...)` call site anywhere.
+
+The remaining `from('products')` references are SELECT-only (search/list/by-id):
+[src/features/marketplace/services/products.ts:127](src/features/marketplace/services/products.ts#L127) (`listProducts`),
+[products.ts:141](src/features/marketplace/services/products.ts#L141) (`searchProducts`),
+[products.ts:283](src/features/marketplace/services/products.ts#L283) (`listTrendingProducts`),
+[products.ts:304](src/features/marketplace/services/products.ts#L304) (`listMyProducts`),
+[products.ts:314](src/features/marketplace/services/products.ts#L314) (`deleteProduct` — preceding select for cleanup),
+[products.ts:335](src/features/marketplace/services/products.ts#L335) (`getProductById`),
+[sellers.ts:85](src/features/marketplace/services/sellers.ts#L85) (`listProductsBySeller`).
+
+### Migration
+
+**Path:** [supabase/migrations/20260519_tighten_products_update_grants.sql](supabase/migrations/20260519_tighten_products_update_grants.sql).
+
+**Body** (post-comments):
+
+```sql
+begin;
+
+revoke update on public.products from authenticated;
+
+grant update (
+  attributes,
+  category,
+  category_id,
+  currency,
+  description,
+  dimensions,
+  latitude,
+  location,
+  location_updated_at,
+  longitude,
+  media_type,
+  media_url,
+  pickup_available,
+  price,
+  shipping_free,
+  shipping_label,
+  stock_available,
+  stock_label,
+  subcategory_id,
+  thumbnail_url,
+  title
+) on public.products to authenticated;
+
+commit;
+```
+
+**Inline rollback** (cited from the migration header at [20260519_tighten_products_update_grants.sql:60-65](supabase/migrations/20260519_tighten_products_update_grants.sql#L60)):
+
+```sql
+begin;
+  revoke update on public.products from authenticated;
+  grant  update on public.products to   authenticated;
+commit;
+```
+
+The rollback restores the prior broad UPDATE grant. It does NOT touch the RLS policy (which was never modified by D.1.5) or any other table.
+
+### Production apply
+
+This migration is **not** applied to production by D.1.5. The user runs:
+
+```bash
+npm run db:push
+```
+
+…when convenient. D.2 should land before any further marketplace edit work — once D.1.5 is applied, any UPDATE that includes a disallowed column throws Postgres `permission denied for column X` at query time.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (no source changes — the migration is SQL-only). |
+| `expo export --platform ios` | Not run. No source files were modified by D.1.5; the bundler outcome is unchanged from the post-D.1 state. |
+| Migration syntax | Balanced `begin;` / `commit;`. No `grant ... to public` and no `grant ... to anon`. Allowlist matches the reconnaissance categorization above. |
+| RLS policy untouched | Yes — `"products update own"` ([20260507_owner_update.sql:1-10](supabase/migrations/20260507_owner_update.sql#L1)) is left as-is. Row authorization is unchanged. |
+| service_role unaffected | Yes — `service_role` bypasses column grants by design, so server-side counter writes (existing likes / bookmarks triggers, future comments / shares triggers, Stripe webhook paths if any, admin scripts) keep working. |
+
+### Type regeneration — NOT required
+
+Column-level grants do not surface in the Supabase TypeScript codegen output. `Database['public']['Tables']['products']['Update']` continues to declare every column as optional regardless of grant; the runtime enforcement happens at the Postgres layer. **Skip `npm run gen:types` for D.1.5.** D.2 will require regen because it adds the `comments` table.
+
+### D.2 handoff
+
+D.2 (`comments` schema + RLS + trigger) ships next and reads this changelog without re-discovering the products grants posture:
+
+- D.2's `handle_comment_change()` is `SECURITY DEFINER set search_path = public, pg_catalog`. It runs as the migration owner and bypasses the new `products` UPDATE column grant — so writing `update public.products set comments_count = comments_count + 1` from inside the trigger continues to work after D.1.5 lands.
+- D.2 includes the analogous `alter publication supabase_realtime add table public.comments` for D.5's realtime subscription.
+- D.2 does **not** need to re-tighten products grants. D.1.5 owns that surface.
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [supabase/migrations/20260519_tighten_products_update_grants.sql](supabase/migrations/20260519_tighten_products_update_grants.sql) | New file — REVOKE table-wide UPDATE, GRANT UPDATE on the user-controlled allowlist. |
+| [PROJECT_AUDIT.md](PROJECT_AUDIT.md) | This D.1.5 changelog. |
+
+### Reversion
+
+```bash
+git revert <d-1-5-commit-sha>
+```
+
+The revert removes the migration file and this changelog. **The rollback SQL above must additionally be applied to any database where the migration was already applied** — `git revert` alone does not undo the database state change, only the file presence in the source tree.
+
+---
+
+## Step D.2 Changelog (2026-05-03) — Comments Schema + Counter Trigger + RLS
+
+Ships the database foundation for product comments per S1 in [COMMENTS_AUDIT.md §10](COMMENTS_AUDIT.md). Adds a flat `public.comments` table (no `parent_id`, no `deleted_at`), a composite index on `(product_id, created_at desc)` plus an author-side index, a `SECURITY DEFINER` counter trigger that maintains `products.comments_count` (mirrors C.2's `handle_follow_change()`), a `BEFORE UPDATE OF body` `updated_at` touch trigger, four RLS policies (public-authenticated SELECT; author-scoped INSERT/UPDATE/DELETE), table-level `SELECT/INSERT/DELETE` grants + column-level `UPDATE (body, updated_at)` grant, and `supabase_realtime` publication membership for `public.comments` (so D.5 only wires the JS subscription). Schema-only — no source code changes. Type regen IS required after apply (in contrast to D.1.5).
+
+### Reconnaissance
+
+**C.2 follows trigger pattern** ([20260518_follows_schema_and_counters.sql:158-184](supabase/migrations/20260518_follows_schema_and_counters.sql#L158)) — copied verbatim modulo target column / table name:
+
+- `language plpgsql security definer set search_path = public, pg_catalog` header.
+- `if (TG_OP = 'INSERT') ... elsif (TG_OP = 'DELETE') ... return NEW/OLD ...` shape.
+- `greatest(x - 1, 0)` clamp on the DELETE branch to defeat negative counter drift if a race or service-role bulk delete bypasses the trigger.
+- Trigger creation idiom: `drop trigger if exists … on public.comments; create trigger … after insert or delete on public.comments for each row execute function …`.
+
+**RLS idiom** — also from C.2 (`follows`):
+
+- `to authenticated` on every policy (no anon).
+- SELECT `using (true)` — public-authenticated visibility, matches the audit's recommendation that comments are part of the public conversation on a listing.
+- INSERT WITH CHECK / UPDATE USING+WITH CHECK / DELETE USING all gate on the `sellers.user_id = auth.uid()` subquery, translating auth identity → seller identity at policy evaluation time.
+- `drop policy if exists … create policy …` for full idempotency (matches C.2's convention).
+
+**`products.comments_count` confirmation.** Column declared NOT NULL DEFAULT 0 at [20260501_initial_marketplace_schema.sql:53](supabase/migrations/20260501_initial_marketplace_schema.sql#L53). Generated TS surface: `Row.comments_count: number` ([src/types/supabase.ts:272](src/types/supabase.ts#L272)). After D.1.5, this column is no longer in the user-writable allowlist for `public.products` ([20260519_tighten_products_update_grants.sql](supabase/migrations/20260519_tighten_products_update_grants.sql)) — only `service_role` and `SECURITY DEFINER` triggers can write it. D.2's trigger is the latter.
+
+**`sellers` bridge confirmation.** `sellers.id` is `uuid primary key default uuid_generate_v4()` ([20260501:22](supabase/migrations/20260501_initial_marketplace_schema.sql#L22)) and `sellers.user_id` is `uuid references auth.users(id) on delete cascade unique` ([20260503:1-3](supabase/migrations/20260503_sell_setup.sql#L1)). The auth-to-seller bridge `sellers.user_id = auth.uid()` is the same shape used by `follows` and now by `comments`.
+
+**UUID generator.** `uuid_generate_v4()` (uuid-ossp) is the project convention — already enabled at [20260501:16](supabase/migrations/20260501_initial_marketplace_schema.sql#L16) and used by `sellers`, `products`, `conversations`, `messages`, `orders`, `push_tokens`. The migration uses the same generator rather than introducing pgcrypto's `gen_random_uuid()`.
+
+**Realtime publication.** Established by Supabase initialization (managed). Two existing tables are members: `public.messages` and `public.conversations` ([20260509_messaging.sql:133-134](supabase/migrations/20260509_messaging.sql#L133)). Pattern: `alter publication supabase_realtime add table public.<name>;`. **D.2 wraps the call in a `do $$ ... end $$` block guarded by `pg_publication_tables` because `ALTER PUBLICATION ... ADD TABLE` does not support `IF NOT EXISTS` on Postgres ≤ 14**, which would break re-runs without the guard.
+
+### Migration
+
+**Path:** [supabase/migrations/20260520_comments_schema.sql](supabase/migrations/20260520_comments_schema.sql).
+
+**Schema additions (summary):**
+
+| # | Object | Notes |
+| --- | --- | --- |
+| 1 | `public.comments` (table) | Columns: `id`, `product_id`, `author_id`, `body`, `created_at`, `updated_at`. Both FKs `ON DELETE CASCADE`. Body length CHECK `between 1 and 1000` (constraint name `comments_body_length`). |
+| 2 | `comments_product_id_created_at_idx` (composite, DESC on `created_at`) | Hot read path: paginated comments per product. |
+| 2 | `comments_author_id_idx` (BTREE) | "All comments by this user" + cascade cleanup. |
+| 3 | `public.handle_comment_change()` (function) | `language plpgsql security definer set search_path = public, pg_catalog`. INSERT/DELETE counter math with `greatest(x-1, 0)` clamp. |
+| 3 | `comments_change_trigger` (AFTER INSERT OR DELETE) | Wires (3). |
+| 4 | `public.touch_comment_updated_at()` (function) | SECURITY INVOKER (default). Sets `NEW.updated_at = now()`. |
+| 4 | `comments_touch_updated_at_trigger` (BEFORE UPDATE OF body) | `WHEN OLD.body IS DISTINCT FROM NEW.body` — fires only when body actually changes. |
+| 5 | RLS — 4 policies | `comments authenticated read` (SELECT, `using (true)`); `comments self insert` (INSERT WITH CHECK on author seller); `comments self update` (UPDATE USING+WITH CHECK); `comments self delete` (DELETE USING). |
+| 6 | Grants | `grant select, insert, delete on public.comments to authenticated;` and `grant update (body, updated_at) on public.comments to authenticated;`. |
+| 7 | Realtime | `do $$ … end $$` guard adds `public.comments` to `supabase_realtime` if not already a member. |
+
+**SECURITY DEFINER rationale.** D.1.5 ([20260519_tighten_products_update_grants.sql](supabase/migrations/20260519_tighten_products_update_grants.sql)) deliberately excluded `comments_count` from the user-writable allowlist on `public.products`. The trigger function `handle_comment_change()` must therefore run with elevated privileges to UPDATE `products.comments_count` — `SECURITY DEFINER` runs the function as the migration owner (typically `postgres`), bypassing the user's column-level grant restrictions. `SET search_path = public, pg_catalog` defeats the classic SECURITY DEFINER hijack vector (a malicious user creating a `public.products` shadow object in their own schema). Same pattern, same justification, as C.2's `handle_follow_change()` — which writes `sellers.followers_count` / `sellers.following_count` after B.1.5 narrowed the `sellers` UPDATE grant.
+
+**`touch_comment_updated_at()` is deliberately NOT `SECURITY DEFINER`.** The user holds column-level UPDATE grant on `body` AND `updated_at` (the column-level grant in step 6), so the trigger writing `NEW.updated_at` does not require elevated privileges. SECURITY INVOKER is the right choice.
+
+### Four-scenario policy walk-through
+
+| Scenario | Mechanism | Outcome |
+| --- | --- | --- |
+| **(a)** User A inserts comment with `author_id = a` (a's own seller_id), body = `'hello'` | INSERT policy WITH CHECK subquery resolves `a.user_id = uA` → matches `auth.uid()`. | Policy passes. Row inserted. `comments_change_trigger` fires AFTER INSERT and runs `update products set comments_count = comments_count + 1 where id = NEW.product_id` via SECURITY DEFINER. |
+| **(b)** User A tries to insert comment with `author_id = b` (someone else's seller_id) | INSERT policy WITH CHECK subquery resolves `b.user_id ≠ uA`. | Policy denies. PostgREST returns 403. Row never written. Trigger never fires. |
+| **(c)** User A updates body of own comment | UPDATE policy USING + WITH CHECK both resolve `a.user_id = uA`. UPDATE column grant covers `body`. | Policy passes. `comments_touch_updated_at_trigger` fires BEFORE UPDATE OF body (only because `OLD.body IS DISTINCT FROM NEW.body`) and sets `NEW.updated_at = now()`. The counter trigger does NOT fire (it is AFTER INSERT OR DELETE only). |
+| **(d)** User A tries to update `created_at` on own comment | UPDATE column grant does NOT include `created_at`. | Postgres returns `permission denied for column created_at` at parse/plan time. RLS never evaluates because the grant check fires first. |
+
+Additional implicit cases:
+- User A tries to update `product_id` (move comment to a different listing): same as (d) — `product_id` is not in the column-level UPDATE grant. Permission denied.
+- User A tries to update `author_id` (impersonate): same as (d). Permission denied.
+- User A deletes own comment: DELETE policy USING resolves `a.user_id = uA`; passes. `comments_change_trigger` fires AFTER DELETE and runs `update products set comments_count = greatest(comments_count - 1, 0) where id = OLD.product_id`.
+
+### Production apply
+
+Not applied to production by D.2. The user runs:
+
+```bash
+npm run db:status      # see pending: D.1.5 + D.2 (both queued)
+npm run db:push        # applies both
+npm run gen:types      # regenerates src/types/supabase.ts
+git add src/types/supabase.ts
+git commit -m "chore(types): regenerate after D.2"
+```
+
+Both D.1.5 and D.2 ship in a single push because that's the natural order: D.1.5's grant tightening makes D.2's SECURITY DEFINER trigger load-bearing, and D.2 cannot leave production with a writable `comments_count` from clients.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (no source files modified). |
+| `expo export --platform ios` | Not run. No source files were modified by D.2; the bundler outcome is unchanged from the post-D.1.5 state. |
+| Migration syntax | Balanced `begin;` / `commit;`. Inline rollback at top. Idempotency guards on every DDL: `create table if not exists`, `create index if not exists`, `create or replace function`, `drop trigger if exists` + `create trigger`, `drop policy if exists` + `create policy`, `do $$ … end $$` guard around the publication add. |
+| Grants posture | `grant select, insert, delete` and `grant update (body, updated_at)` to `authenticated` only. No `grant ... to anon`, no `grant ... to public`. |
+| `handle_comment_change` definition | `security definer` + `set search_path = public, pg_catalog`. Both required and present. |
+| `touch_comment_updated_at` definition | SECURITY INVOKER (default) — caller already has column UPDATE grant on the columns it writes. |
+| Column-level UPDATE grant | Restricted to `(body, updated_at)`. `id, product_id, author_id, created_at` are NOT writable on UPDATE. |
+| Publication add | Wrapped in `do $$ ... end $$` with `pg_publication_tables` existence guard, idempotent across re-runs and Postgres versions ≤ 14. |
+| RLS state | `enable row level security` on `public.comments`. Four policies installed: `comments authenticated read`, `comments self insert`, `comments self update`, `comments self delete`. |
+
+### Type regeneration — REQUIRED
+
+Unlike D.1.5 (where column-level grants do not surface in codegen and `gen:types` is a no-op), **D.2 adds a new public-schema table** (`public.comments`). After `npm run gen:types`, `Database['public']['Tables']['comments']` will appear in `src/types/supabase.ts` with the standard `Row` / `Insert` / `Update` shape:
+
+```ts
+comments: {
+  Row: {
+    id: string;
+    product_id: string;
+    author_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string | null;
+  };
+  Insert: { /* … with optional defaults */ };
+  Update: { /* … all optional */ };
+  Relationships: [
+    { /* product_id → products.id */ },
+    { /* author_id → sellers.id */ },
+  ];
+};
+```
+
+D.3 depends on this regeneration — its hooks reference `Database['public']['Tables']['comments']['Row']` for the row type and `Insert` for the create shape.
+
+### Reversion
+
+```bash
+git revert <d-2-commit-sha>
+```
+
+The revert removes the migration file and this changelog. **The rollback SQL at the top of the migration file must additionally be applied to any database where the migration was already applied** — drop the publication membership, the two triggers, the two functions, the four policies, the column + table grants, the two indexes, and finally the table itself. `git revert` alone does not undo the database state change.
+
+If both D.1.5 and D.2 need reverting in lockstep (e.g., a regression in the sell flow caused by the column-level grant interaction), revert them in reverse apply order: revert D.2 first (drops `comments` and its trigger writing `products.comments_count`), then revert D.1.5 (restores broad UPDATE grant on `products`). This avoids leaving the trigger in place while pointing at a `products` table the trigger can no longer write to via grants alone (it could not — the trigger is SECURITY DEFINER and bypasses grants — but the conceptual ordering is cleaner).
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [supabase/migrations/20260520_comments_schema.sql](supabase/migrations/20260520_comments_schema.sql) | New file — comments table, indexes, triggers, RLS, grants, realtime publication membership. |
+| [PROJECT_AUDIT.md](PROJECT_AUDIT.md) | This D.2 changelog. |
+
+### D.3 handoff
+
+D.3 (`useComments` query hook + `useCreateComment` / `useEditComment` / `useDeleteComment` mutation hooks + service module) ships next against the regenerated types and reads this changelog without re-discovering the comments schema:
+
+**Service signatures (D.3 will land at `src/features/marketplace/services/comments.ts`):**
+
+```ts
+import type { Database } from '@/types/supabase';
+
+export type CommentRow    = Database['public']['Tables']['comments']['Row'];
+export type CommentInsert = Database['public']['Tables']['comments']['Insert'];
+
+export type Comment = {
+  id: string;
+  productId: string;
+  authorId: string;       // sellers.id
+  body: string;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+export async function listComments(productId: string, opts?: { limit?: number; before?: string }): Promise<Comment[]>;
+export async function createComment(productId: string, body: string): Promise<Comment>;
+export async function editComment(commentId: string, body: string): Promise<Comment>;
+export async function deleteComment(commentId: string): Promise<void>;
+```
+
+**Optimistic-prepend pattern (per [COMMENTS_AUDIT.md §7](COMMENTS_AUDIT.md)).** D.3's `useCreateComment` is **not** a toggle — it is a prepend mutation with id-swap on success:
+
+- `onMutate`: snapshot the comment list, prepend an optimistic temp row with `id = 'temp-' + crypto.randomUUID()` and `pending: true`. Return `{ prev, tempId }`.
+- `onSuccess(serverRow, _vars, ctx)`: replace the temp row with the server row by `tempId` match.
+- `onError`: filter out the temp row by `tempId`.
+- `onSettled`: invalidate `['marketplace', 'products', 'list']` so feed-card `comments_count` badges refresh.
+
+**Realtime subscription pattern (D.5, pre-unblocked by step 7 of D.2).** Mirror [src/features/marketplace/services/messaging.ts:233-272](src/features/marketplace/services/messaging.ts#L233) and [src/features/marketplace/hooks/useMessages.ts:20-31](src/features/marketplace/hooks/useMessages.ts#L20):
+
+```ts
+export function subscribeToComments(productId: string, onChange: (payload: RealtimePayload) => void) {
+  const channel = supabase
+    .channel(`comments:${productId}`)
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'comments', filter: `product_id=eq.${productId}` },
+        onChange)
+    .subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}
+```
+
+The `useComments(productId)` hook subscribes on mount and merges INSERTs into the React Query cache with id-dedup (matching `useMessages.ts:23-26`'s pattern) so the optimistic temp row is replaced — not duplicated — when the realtime echo arrives.
+
+**Required types (already regenerated post-apply).** `Database['public']['Tables']['comments']['Row']` and `Insert`. No additional table types are touched by D.3.
+
+D.5 (realtime hook wiring) is also pre-unblocked: the publication membership is already in place via the DO-guarded `alter publication` at the bottom of D.2.
+
+---
+
+## Step D.3 Changelog (2026-05-03) — Comment Hooks + Service Layer
+
+Ships the React Query hooks layer for comments per [COMMENTS_AUDIT.md §7](COMMENTS_AUDIT.md): cursor-based `useComments(productId)` infinite query, `usePostComment(productId)` with optimistic prepend + id-swap on success, `useDeleteComment(productId)` with optimistic remove + rollback, `useEditComment(productId)` with optimistic body patch + rollback. Plus the service-layer module they wrap. Pure JS — no UI, no schema, no realtime subscription wiring (D.4 / D.5 own those).
+
+### Reconnaissance
+
+**Type regen verification.** Confirmed `Database['public']['Tables']['comments']` is present at [src/types/supabase.ts:68-109](src/types/supabase.ts#L68) after the user ran `npm run db:push && npm run gen:types`. The Row shape matches D.2's table declaration: `id, product_id, author_id, body, created_at, updated_at` with `updated_at: string | null`. Both FKs (sellers via `author_id`, products via `product_id`) are reflected in the Relationships array.
+
+**`useMessages` reference pattern** — read both files in full and mirrored the relevant idioms:
+
+- [src/features/marketplace/services/messaging.ts:185-211](src/features/marketplace/services/messaging.ts#L185) — list-then-insert shape, with `select(SELECT_STRING).single()` after the `.insert(...)` to return the canonical server row.
+- [src/features/marketplace/hooks/useMessages.ts:20-31](src/features/marketplace/hooks/useMessages.ts#L20) — query-cache merge with id-dedup so the realtime echo of an optimistic insert is idempotent. D.5's subscription will use the same approach on the comments cache.
+- Query-key shape: messaging uses `['messaging', 'messages', conversationId]`. D.3 mirrors with `['marketplace', 'comments', productId]` — exposed as the helper `COMMENTS_QUERY_KEY(productId)` so D.4 / D.5 don't hardcode the tuple.
+
+**`useMySeller` location.** [src/features/marketplace/hooks/useMySeller.ts:6](src/features/marketplace/hooks/useMySeller.ts#L6). Returns `UseQueryResult<SellerProfile | null, Error>` keyed on the exported `MY_SELLER_KEY = ['marketplace', 'my-seller']`. The hook takes an `enabled: boolean` argument; passing `true` from `usePostComment` is correct because the optimistic temp row needs the current user's joined fields (name / avatar / verified / is_pro). When the cache is cold, `usePostComment` falls back to `qc.getQueryData(MY_SELLER_KEY)` and finally to an empty-string placeholder — the server row from `onSuccess` overwrites these fields anyway.
+
+**`useRequireAuth` location.** [src/stores/useRequireAuth.ts:18](src/stores/useRequireAuth.ts#L18). Per the audit's instruction (and matching the toggle-hook convention in `useToggleLike` / `useToggleBookmark`), auth gating happens at the **call site**, not inside the mutation hook. D.3's hooks do not import `useRequireAuth`. D.4's CommentsSheet will call `requireAuth()` from `useRequireAuth` before invoking `postComment.mutate(...)`, mirroring the Like / Bookmark / Make-Offer call sites in `ProductActionRail.tsx` / `ProductDetailSheet.tsx`.
+
+**Seller-id resolution for comment INSERTs.** `comments.author_id` references `public.sellers(id)` (D.2 schema), and the RLS policy gates on `auth.uid() ↔ sellers.user_id`. The service module copies the `getMySellerIdOrCreate()` pattern from [src/features/marketplace/services/follows.ts:34-48](src/features/marketplace/services/follows.ts#L34) — same `get_or_create_seller_for_current_user` RPC, same fallback username derivation. The seller row is lazily created if the user has not yet entered the sell flow, so a comment can be posted by a buyer-only account without bouncing through the sell setup.
+
+**Embedded-select cast.** `postComment` and `editComment` use `.select('id, …, author:sellers!author_id(id, name, avatar_url, verified, is_pro)').single()` to fetch the canonical row + joined author in one round trip. PostgREST returns the embedded `author` as an object, but the supabase-js return type cannot infer that shape from the select string. The same documented escape hatch used by [services/follows.ts:95](src/features/marketplace/services/follows.ts#L95) (`as unknown as Row[]`) and [services/products.ts:132](src/features/marketplace/services/products.ts#L132) (`as unknown as ProductRow[]`) applies: `data as unknown as CommentWithAuthor[]` (or `as unknown as CommentWithAuthor` for `.single()`). This is the only escape hatch in the new code.
+
+**Temp-id generator choice.** `nanoid` is a transitive dep but not a direct one; `crypto.randomUUID()` is unavailable in Hermes without `expo-crypto` or `react-native-get-random-values`. Per the task's no-new-deps constraint, D.3 ships a pure-JS helper at [src/features/marketplace/hooks/usePostComment.ts:20-23](src/features/marketplace/hooks/usePostComment.ts#L20):
+
+```ts
+function makeTempId(): string {
+  return `temp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+```
+
+The id only needs to be unique within the in-memory query cache between optimistic prepend and `onSuccess` id-swap. The `temp-` prefix is the recognizable signal D.5's realtime subscription will use to dedupe self-echoes (real server ids are RFC4122 UUIDs).
+
+### Files created
+
+| File | Lines | Role |
+| --- | --- | --- |
+| [src/features/marketplace/services/comments.ts](src/features/marketplace/services/comments.ts) | ~130 | Service-layer: `listComments`, `postComment`, `deleteComment`, `editComment`. Exports `CommentRow`, `CommentAuthor`, `CommentWithAuthor`, `CommentPage`. |
+| [src/features/marketplace/hooks/useComments.ts](src/features/marketplace/hooks/useComments.ts) | ~35 | `useInfiniteQuery` with cursor-based pagination. Exports `COMMENTS_QUERY_KEY` for dependent hooks. |
+| [src/features/marketplace/hooks/usePostComment.ts](src/features/marketplace/hooks/usePostComment.ts) | ~135 | Optimistic prepend + id-swap. Reads `useMySeller(true)` for the temp row's joined author fields. |
+| [src/features/marketplace/hooks/useDeleteComment.ts](src/features/marketplace/hooks/useDeleteComment.ts) | ~65 | Optimistic remove + rollback. Counter invalidation in `onSuccess`. |
+| [src/features/marketplace/hooks/useEditComment.ts](src/features/marketplace/hooks/useEditComment.ts) | ~85 | Optimistic body patch + provisional `updated_at`; server row replaces in `onSuccess`. No counter invalidation. |
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [src/features/marketplace/index.ts](src/features/marketplace/index.ts) | Re-exported the four hooks (with their `*Vars` types) and the four service functions plus the four type aliases. Maintains the existing barrel convention so call sites can `import { useComments, usePostComment, … } from '@/features/marketplace'`. |
+| [PROJECT_AUDIT.md](PROJECT_AUDIT.md) | This D.3 changelog. |
+
+### Cursor-pagination spec
+
+- Page size: **20** rows per page (constant `DEFAULT_PAGE_SIZE` in the service, `PAGE_SIZE` in the hook). Matches the audit's recommendation in §7 / §12 ("default `limit = 50` was an alternative; 20 keeps initial-load latency low and matches the messaging convention").
+- Cursor: the `created_at` ISO string of the **oldest** row in the previous page. The next-page query is `lt('created_at', cursor)`.
+- Ordering: `order('created_at', { ascending: false })` so the head of page 0 is the newest comment. The composite index from D.2 (`comments_product_id_created_at_idx` on `(product_id, created_at desc)`) covers this read pattern exactly — no plan-time sort.
+- `nextCursor`: `null` when fewer than `limit` rows came back (terminal page); else the timestamp of the last item. `getNextPageParam` maps `null → undefined` so React Query stops paging.
+
+### Optimistic-prepend with id-swap pattern
+
+`usePostComment` is **not** a toggle (per [COMMENTS_AUDIT.md §7](COMMENTS_AUDIT.md)). The lifecycle:
+
+1. **`onMutate({ body })`** — cancel in-flight queries on the comments key, snapshot the cache as `previous`, generate `tempId = 'temp-…'`, build a `CommentWithAuthor` from `useMySeller` + the typed body, prepend it to page 0 of the `InfiniteData<CommentPage>`. If the cache is empty, seed a single-page structure so the sheet renders immediately.
+2. **`mutationFn`** — call `postComment({ productId, body })`, which inserts and returns the canonical `CommentWithAuthor` (real UUID, server timestamp, fresh author join).
+3. **`onSuccess(serverRow, _, ctx)`** — walk every page, replace the row whose `id === ctx.tempId` with `serverRow`. The temp row vanishes; the server row takes its position. Then invalidate `['product', 'byId', productId]` and `['marketplace', 'products', 'list']` so the action-rail counter and feed-card badges refresh against the trigger-incremented `comments_count`.
+4. **`onError(_, _, ctx)`** — restore `ctx.previous` to drop the temp row.
+
+`useDeleteComment` and `useEditComment` follow the same skeleton with different transformation steps (filter-out by id; map-and-patch). `useDeleteComment` also invalidates the product / list keys. `useEditComment` does NOT (edit doesn't change counters).
+
+### Realtime-echo dedupe readiness
+
+D.5's realtime subscription will receive a `postgres_changes` INSERT event for every comment, including the user's own posts. The handler must dedupe to avoid double-rendering. D.3's design supports this in two ways:
+
+1. **`temp-` id prefix** lets the subscription detect a still-pending optimistic row by string check. Server ids are RFC4122 UUIDs (`uuid_generate_v4()` from D.2's table default); no real id will start with `temp-`.
+2. **`onSuccess` id-swap** ensures that by the time the realtime echo arrives (typically after the INSERT response), the cache row already has the server id. The subscription handler can then `prev.find(c => c.id === payload.new.id)` and skip if found — same dedup pattern as [useMessages.ts:23-26](src/features/marketplace/hooks/useMessages.ts#L23).
+
+If the realtime event arrives **before** the INSERT response (rare but possible on mobile), the subscription handler will see only the temp row in the cache. It can either (a) check whether any `temp-…` row has matching `body` + `author_id` and replace it eagerly, or (b) prepend and let `onSuccess` handle the de-dup post-arrival. D.5 picks the strategy.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (no errors). |
+| `expo export --platform ios` | Not run. The hooks are not imported by any UI yet — no app behavior change is observable from a fresh bundle. |
+| New deps | Zero. `nanoid`, `expo-crypto`, `react-native-get-random-values` all skipped — pure-JS `makeTempId` helper instead. |
+| Strict TS | `any` usage: zero. Single documented escape hatch is `as unknown as CommentWithAuthor[]` / `as unknown as CommentWithAuthor` on PostgREST embedded-select results — same convention as `services/follows.ts` / `services/products.ts`. |
+| Stale-type collision | `src/types/types.ts:23-35`'s legacy `Comment` / `NewCommentInput` are untouched. The new code uses `CommentRow` / `CommentWithAuthor` / `CommentPage` and does not import from `@/types/types`. Phase F still owns the cleanup. |
+| Auth gating | Not in the hooks (per audit / Phase C convention). D.4's CommentsSheet must call `requireAuth()` from `useRequireAuth` before invoking `postComment.mutate`, `editComment.mutate`, `deleteComment.mutate`. |
+| Haptics | Not in the hooks. D.4 wires haptics through Pressable. |
+| Realtime subscription | Not in this step. D.5 owns the JS subscription that consumes the comments query cache. |
+
+### D.4 handoff
+
+D.4 (CommentsSheet UI) ships next and reads this changelog without re-discovering the data layer:
+
+**Sheet store** — mirror [src/stores/useProductSheetStore.ts](src/stores/useProductSheetStore.ts) at [src/stores/useCommentsSheetStore.ts](src/stores/useCommentsSheetStore.ts):
+
+```ts
+import { create } from 'zustand';
+
+type CommentsSheetStore = {
+  productId: string | null;
+  open: (productId: string) => void;
+  close: () => void;
+};
+
+export const useCommentsSheetStore = create<CommentsSheetStore>((set) => ({
+  productId: null,
+  open: (productId) => set({ productId }),
+  close: () => set({ productId: null }),
+}));
+```
+
+**Sheet component** — mirror [src/features/marketplace/components/ProductDetailSheet.tsx](src/features/marketplace/components/ProductDetailSheet.tsx)'s skeleton (base `BottomSheet` from `@gorhom/bottom-sheet` v5, single 90% snap point per [COMMENTS_AUDIT.md §11](COMMENTS_AUDIT.md), `BottomSheetFooter` for the sticky compose input, `BottomSheetFlatList` or `BottomSheetScrollView` for the list). Mount it at app level alongside `ProductDetailSheet`.
+
+**Primitives**:
+- `CommentItem` — avatar + name + verified pill + body + relative timestamp + (own-comment-only) edit/delete affordance. Receives `CommentWithAuthor`. Uses `timeAgo` from `@/features/marketplace/utils/timeAgo`. Tap-and-hold or kebab-menu for edit/delete (D.4 picks).
+- `CommentInput` — auth-gated `Pressable`/`TextInput` with avatar prefix and a send button that calls `postComment.mutate({ body })`. `useMySeller(true)` for the avatar; `useRequireAuth()` for the gate.
+
+**Hook usage**:
+```ts
+const productId = useCommentsSheetStore((s) => s.productId);
+const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+  useComments(productId ?? '');
+const post   = usePostComment(productId ?? '');
+const edit   = useEditComment(productId ?? '');
+const remove = useDeleteComment(productId ?? '');
+```
+
+**Action-rail wire-up** — replace `onPressComment = () => {}` at [ProductActionRail.tsx:41](src/features/marketplace/components/ProductActionRail.tsx#L41) with `useCommentsSheetStore.getState().open(product.id)`. Per [COMMENTS_AUDIT.md §11](COMMENTS_AUDIT.md), this lands against the legacy action rail (Step 5's redesign has not shipped); when Step 5 lands the same store call works in the new rail.
+
+### Reversion
+
+```bash
+git revert <d-3-commit-sha>
+```
+
+Removes the five new source files, the barrel-export additions, and this changelog. No database state to undo. No type changes to undo (D.2's regen stays — independent of D.3).

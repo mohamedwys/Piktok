@@ -51,3 +51,17 @@ export { useMyOrders, MY_ORDERS_KEY } from './hooks/useMyOrders';
 export { useCreateCheckoutSession } from './hooks/useCreateCheckoutSession';
 export { StripeNotConfiguredError } from './services/orders';
 export type { Order, OrderStatus } from './services/orders';
+export { useComments, COMMENTS_QUERY_KEY } from './hooks/useComments';
+export { usePostComment, type PostCommentVars } from './hooks/usePostComment';
+export { useDeleteComment, type DeleteCommentVars } from './hooks/useDeleteComment';
+export { useEditComment, type EditCommentVars } from './hooks/useEditComment';
+export {
+  listComments,
+  postComment,
+  deleteComment,
+  editComment,
+  type CommentRow,
+  type CommentAuthor,
+  type CommentWithAuthor,
+  type CommentPage,
+} from './services/comments';

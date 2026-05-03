@@ -49,16 +49,9 @@ export async function changePassword(
  * locally. The sign-out step is best-effort because the user has already
  * been deleted server-side; a failed sign-out at this point is a
  * client-side cleanup blip, not a data integrity issue.
- *
- * The `as never` cast on the function name is a temporary shim: the RPC
- * exists in B.4's migration but the generated `Database['public']['Functions']`
- * type in [src/types/supabase.ts](src/types/supabase.ts) won't include it
- * until `npm run gen:types` is run after the migration is applied.
- * Re-generation removes the need for this cast (the call will still type
- * cleanly against the regenerated `'delete_my_account'` literal).
  */
 export async function deleteMyAccount(): Promise<void> {
-  const { error } = await supabase.rpc('delete_my_account' as never);
+  const { error } = await supabase.rpc('delete_my_account');
   if (error) throw error;
   try {
     await supabase.auth.signOut();

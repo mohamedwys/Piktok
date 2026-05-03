@@ -4,6 +4,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useRouter, type Href } from 'expo-router';
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -12,15 +13,36 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
-import SellerCard from '@/features/marketplace/components/SellerCard';
-import PriceCard from '@/features/marketplace/components/PriceCard';
 import ProductBottomPanel from '@/features/marketplace/components/ProductBottomPanel';
+import SellerPill, { type SellerPillSeller } from '@/components/feed/SellerPill';
+import PriceCard from '@/components/feed/PriceCard';
+import { MARKETPLACE_HEADER_ROW_HEIGHT } from '@/components/feed/MarketplaceHeader';
+import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
+import { useRequireAuth } from '@/stores/useRequireAuth';
+import { spacing, zIndex as zIndexTokens } from '@/theme';
 
 type ProductFeedItemProps = {
   item: Product;
   itemHeight: number;
   isActive: boolean;
 };
+
+function toSellerPillSeller(seller: Product['seller']): SellerPillSeller {
+  return {
+    id: seller.id,
+    name: seller.name,
+    avatarUrl: seller.avatarUrl,
+    verified: seller.verified,
+    isPro: seller.isPro,
+    rating: seller.rating,
+    // The Supabase `Seller` shape does not yet track review count
+    // separately; reuse `salesCount` as a proxy until a dedicated
+    // column lands. Mapping happens here so SellerPill stays canonical.
+    ratingCount: seller.salesCount,
+    salesCount: seller.salesCount,
+  };
+}
 
 export default function ProductFeedItem({
   item,
@@ -30,7 +52,9 @@ export default function ProductFeedItem({
   const isVideo = item.media.type === 'video';
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const topRowTop = insets.top + 78;
+  const router = useRouter();
+  const topRowTop =
+    insets.top + MARKETPLACE_HEADER_ROW_HEIGHT + spacing.md;
   const [bottomPanelExpanded, setBottomPanelExpanded] = useState(false);
 
   const player = useVideoPlayer(isVideo ? item.media.url : null, (p) => {
@@ -61,6 +85,20 @@ export default function ProductFeedItem({
     return { height: `${height}%` };
   });
 
+  const { data: engagement } = useUserEngagement();
+  const isSaved = engagement?.bookmarkedIds.has(item.id) ?? false;
+  const toggleBookmark = useToggleBookmark(item.id);
+  const { requireAuth } = useRequireAuth();
+
+  const onToggleSave = (): void => {
+    if (!requireAuth()) return;
+    toggleBookmark.mutate(isSaved);
+  };
+
+  const onPressSeller = (): void => {
+    router.push(`/(protected)/seller/${item.seller.id}` as Href);
+  };
+
   return (
     <View style={[styles.container, { height: itemHeight }]}>
       {isVideo ? (
@@ -87,15 +125,20 @@ export default function ProductFeedItem({
       </Animated.View>
       <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
         <View style={styles.topRowLeft} pointerEvents="box-none">
-          <SellerCard seller={item.seller} />
+          <SellerPill
+            seller={toSellerPillSeller(item.seller)}
+            onPress={onPressSeller}
+          />
         </View>
+        <View style={{ width: spacing.md }} />
         <View style={styles.topRowRight} pointerEvents="box-none">
           <PriceCard
-            productId={item.id}
-            price={item.price}
+            amount={item.price}
             currency={item.currency}
-            stock={item.stock}
-            shipping={item.shipping}
+            inStock={item.stock.available}
+            freeShipping={item.shipping.free}
+            isSaved={isSaved}
+            onToggleSave={onToggleSave}
           />
         </View>
       </View>
@@ -123,18 +166,17 @@ const styles = StyleSheet.create({
   },
   topRow: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: spacing.lg,
+    right: spacing.lg,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 10,
+    zIndex: zIndexTokens.overlay,
   },
   topRowLeft: {
     flexShrink: 1,
-    flexGrow: 0,
-    flexBasis: 'auto',
-    maxWidth: '60%',
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
   },
   topRowRight: {
     flexShrink: 0,

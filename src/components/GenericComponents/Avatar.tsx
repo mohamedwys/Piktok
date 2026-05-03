@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme';
 
-const PALETTE = ['#FE2C55', '#7C5CFC', '#3b9eff', '#33D17A', '#FFC83D', '#FF8A3D', '#E64980'];
+const PALETTE = [colors.brand, '#7C5CFC', '#3b9eff', '#33D17A', '#FFC83D', '#FF8A3D', '#E64980'];
 
 function colorFromName(name: string): string {
   let hash = 0;

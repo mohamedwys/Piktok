@@ -37,8 +37,8 @@ import type {
   Product,
   ProductAttribute,
 } from '@/features/marketplace/types/product';
+import { colors } from '@/theme';
 
-const BRAND_PRIMARY = '#FE2C55';
 const SHEET_BG = '#0a0a0a';
 const BOOKMARK_COLOR = '#FFC83D';
 
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   ctaButton: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

@@ -32,8 +32,13 @@ import {
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
+import {
+  useUserLocation,
+  useHasLocation,
+} from '@/features/location/stores/useUserLocation';
+import { useLocationSheetStore } from '@/stores/useLocationSheetStore';
+import { geocodeForSubmit } from '@/lib/geocoding/utils';
 
 type MediaType = 'image' | 'video';
 type PickerMode = 'none' | 'category' | 'subcategory';
@@ -64,6 +69,19 @@ export default function SellScreen(): React.ReactElement {
   const [shippingFree, setShippingFree] = useState(false);
   const [pickupAvailable, setPickupAvailable] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
+
+  const hasUserLocation = useHasLocation();
+  const userDisplayName = useUserLocation((s) => s.displayName);
+  const openLocationSheet = useLocationSheetStore((s) => s.open);
+
+  const onPressPrefillLocation = (): void => {
+    void lightHaptic();
+    if (hasUserLocation && userDisplayName) {
+      setLocation(userDisplayName);
+      return;
+    }
+    openLocationSheet();
+  };
 
   const selectedCategory = categoryId ? findCategory(categoryId) : undefined;
   const selectedSubcategory = selectedCategory?.subcategories.find(
@@ -159,7 +177,7 @@ export default function SellScreen(): React.ReactElement {
     );
   };
 
-  const onSubmit = (): void => {
+  const onSubmit = async (): Promise<void> => {
     if (!mediaUri || !mediaType) {
       Alert.alert(t('sell.fail'), t('sell.missingMedia'));
       return;
@@ -187,6 +205,15 @@ export default function SellScreen(): React.ReactElement {
       .map((label, i) => ({ id: `attr-${i}`, label }));
 
     void mediumHaptic();
+
+    // Best-effort submit-time geocoding for the create path. Silent on
+    // failure — the listing is saved regardless. (Edit path doesn't yet
+    // re-geocode; see G.8 changelog follow-ups.)
+    const trimmedLocation = location.trim();
+    const coords =
+      !isEdit && trimmedLocation.length > 0
+        ? await geocodeForSubmit(trimmedLocation)
+        : null;
 
     if (isEdit && editId) {
       const updatePayload: UpdateProductInput = {
@@ -245,7 +272,8 @@ export default function SellScreen(): React.ReactElement {
       stockAvailable,
       shippingFree,
       pickupAvailable,
-      location: location.trim() || undefined,
+      location: trimmedLocation || undefined,
+      ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : null),
     };
 
     createListing(payload, {
@@ -429,19 +457,50 @@ export default function SellScreen(): React.ReactElement {
               placeholder={t('sell.dimensionsPlaceholder')}
             />
 
-            <Field
-              label={t('sell.locationField')}
-              value={location}
-              onChangeText={setLocation}
-              placeholder={t('sell.locationPlaceholder')}
-            />
+            <View style={styles.field}>
+              <View style={styles.locationLabelRow}>
+                <Text style={styles.fieldLabel}>{t('sell.locationField')}</Text>
+                <Pressable
+                  onPress={onPressPrefillLocation}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.prefillButton,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    hasUserLocation
+                      ? t('sell.useMyLocation')
+                      : t('sell.setMyLocation')
+                  }
+                >
+                  <Ionicons
+                    name={hasUserLocation ? 'location' : 'location-outline'}
+                    size={12}
+                    color={colors.brand}
+                  />
+                  <Text style={styles.prefillText}>
+                    {hasUserLocation
+                      ? t('sell.useMyLocation')
+                      : t('sell.setMyLocation')}
+                  </Text>
+                </Pressable>
+              </View>
+              <TextInput
+                value={location}
+                onChangeText={setLocation}
+                placeholder={t('sell.locationPlaceholder')}
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.input}
+              />
+            </View>
 
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>{t('sell.stockAvailable')}</Text>
               <Switch
                 value={stockAvailable}
                 onValueChange={setStockAvailable}
-                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
                 thumbColor="#fff"
               />
             </View>
@@ -451,7 +510,7 @@ export default function SellScreen(): React.ReactElement {
               <Switch
                 value={shippingFree}
                 onValueChange={setShippingFree}
-                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
                 thumbColor="#fff"
               />
             </View>
@@ -461,13 +520,15 @@ export default function SellScreen(): React.ReactElement {
               <Switch
                 value={pickupAvailable}
                 onValueChange={setPickupAvailable}
-                trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
                 thumbColor="#fff"
               />
             </View>
 
             <Pressable
-              onPress={onSubmit}
+              onPress={() => {
+                void onSubmit();
+              }}
               disabled={submitting}
               style={({ pressed }) => [
                 styles.submitButton,
@@ -658,7 +719,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   ctaPrimary: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',
@@ -716,6 +777,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
+  locationLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prefillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 90, 92, 0.16)',
+  },
+  prefillText: {
+    color: colors.brand,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   fieldHint: {
     color: 'rgba(255,255,255,0.45)',
     fontSize: 11,
@@ -748,7 +829,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',

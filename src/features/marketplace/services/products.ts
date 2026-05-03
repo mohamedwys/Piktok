@@ -9,6 +9,7 @@ import type {
   ProductShipping,
 } from '@/features/marketplace/types/product';
 import type { MarketplaceFilters } from '@/stores/useMarketplaceFilters';
+import type { Database } from '@/types/supabase';
 
 export class AuthRequiredError extends Error {
   constructor() {
@@ -164,6 +165,127 @@ export async function searchProducts(
   }
 
   const { data, error } = await query;
+  if (error) throw error;
+  const items = (data as unknown as ProductRow[]).map(rowToProduct);
+  return { items, nextCursor: null };
+}
+
+export type SearchNearbyLocation = {
+  latitude: number | null;
+  longitude: number | null;
+  radiusKm: number | null;
+};
+
+export type SearchNearbySort =
+  | 'distance'
+  | 'newest'
+  | 'price_asc'
+  | 'price_desc'
+  | 'most_liked';
+
+export type SearchNearbyParams = {
+  filters: MarketplaceFilters;
+  location: SearchNearbyLocation;
+  sort?: SearchNearbySort;
+  limit?: number;
+  offset?: number;
+};
+
+export type NearbyProduct = Product & { distanceKm: number | null };
+
+export type ListNearbyResult = {
+  items: NearbyProduct[];
+  nextCursor: string | null;
+};
+
+type RpcProductRow =
+  Database['public']['Functions']['products_within_radius']['Returns'][number];
+
+export async function searchNearbyProducts(
+  params: SearchNearbyParams,
+): Promise<ListNearbyResult> {
+  const { filters, location } = params;
+  const limit = params.limit ?? 50;
+  const offset = params.offset ?? 0;
+  const hasCoords =
+    location.latitude !== null && location.longitude !== null;
+  const sort: SearchNearbySort =
+    params.sort ?? (hasCoords ? 'distance' : 'newest');
+  const trimmedQuery = filters.query.trim();
+
+  const { data, error } = await supabase.rpc('products_within_radius', {
+    p_latitude: hasCoords ? location.latitude : null,
+    p_longitude: hasCoords ? location.longitude : null,
+    p_radius_km: hasCoords ? location.radiusKm : null,
+    p_category_id: filters.categoryId,
+    p_subcategory_id: filters.subcategoryId,
+    p_min_price: null,
+    p_max_price: filters.priceMax,
+    p_search_query: trimmedQuery.length > 0 ? trimmedQuery : null,
+    p_pickup_only: filters.pickupOnly ? true : null,
+    p_sort: sort,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw error;
+
+  const rows = (data as unknown as RpcProductRow[]) ?? [];
+  if (rows.length === 0) {
+    return { items: [], nextCursor: null };
+  }
+
+  const sellerIds = Array.from(
+    new Set(rows.map((r) => r.seller_id).filter((id): id is string => !!id)),
+  );
+
+  const { data: sellersData, error: sellersErr } = await supabase
+    .from('sellers')
+    .select('*')
+    .in('id', sellerIds);
+  if (sellersErr) throw sellersErr;
+
+  const sellerById = new Map<string, SellerRow>();
+  for (const s of (sellersData as unknown as SellerRow[]) ?? []) {
+    sellerById.set(s.id, s);
+  }
+
+  const items: NearbyProduct[] = [];
+  for (const row of rows) {
+    const seller = sellerById.get(row.seller_id);
+    if (!seller) continue;
+    const merged: ProductRow = { ...(row as unknown as ProductRow), seller };
+    items.push({
+      ...rowToProduct(merged),
+      distanceKm:
+        typeof row.distance_km === 'number' && Number.isFinite(row.distance_km)
+          ? row.distance_km
+          : null,
+    });
+  }
+
+  return { items, nextCursor: null };
+}
+
+export type ListTrendingParams = {
+  sinceDays?: number;
+  limit?: number;
+};
+
+export async function listTrendingProducts(
+  params?: ListTrendingParams,
+): Promise<ListProductsResult> {
+  const sinceDays = params?.sinceDays ?? 7;
+  const limit = params?.limit ?? 12;
+  const since = new Date(
+    Date.now() - sinceDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, seller:sellers(*)')
+    .gte('created_at', since)
+    .order('likes_count', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
   if (error) throw error;
   const items = (data as unknown as ProductRow[]).map(rowToProduct);
   return { items, nextCursor: null };

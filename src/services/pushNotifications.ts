@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
+import { colors } from '@/theme';
 
 export type PushPlatform = 'ios' | 'android';
 
@@ -26,7 +27,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     await Notifications.setNotificationChannelAsync('default', {
       name: 'default',
       importance: Notifications.AndroidImportance.DEFAULT,
-      lightColor: '#FE2C55',
+      lightColor: colors.brand,
     });
   }
 

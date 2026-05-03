@@ -18,8 +18,7 @@ import { useRouter } from 'expo-router';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useUpdateMySeller } from '@/features/marketplace/hooks/useUpdateMySeller';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
 
 export default function EditSellerProfileScreen(): React.ReactElement {
   const { t } = useTranslation();
@@ -224,7 +223,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   submitButton: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',

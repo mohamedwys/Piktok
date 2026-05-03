@@ -25,8 +25,8 @@ import {
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { colors } from '@/theme';
 
-const BRAND_PRIMARY = '#FE2C55';
 const SHEET_BG = '#0a0a0a';
 
 function priceToText(value: number | null): string {
@@ -249,7 +249,7 @@ export default function MarketplaceFilterSheet(): React.ReactElement {
           <Switch
             value={draft.pickupOnly}
             onValueChange={(v) => setDraft((d) => ({ ...d, pickupOnly: v }))}
-            trackColor={{ false: 'rgba(255,255,255,0.15)', true: BRAND_PRIMARY }}
+            trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
             thumbColor="#fff"
           />
         </View>
@@ -368,8 +368,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipActive: {
-    backgroundColor: BRAND_PRIMARY,
-    borderColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   chipInactive: {
     backgroundColor: 'transparent',
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   },
   footerApply: {
     flex: 1.4,
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
   },
   footerApplyText: {
     color: '#fff',

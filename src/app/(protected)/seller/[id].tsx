@@ -19,8 +19,7 @@ import SellerProductCard from '@/features/marketplace/components/SellerProductCa
 import { useDeviceLayout } from '@/hooks/useDeviceLayout';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
 
 export default function SellerProfileScreen(): React.ReactElement {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -182,7 +181,7 @@ const styles = StyleSheet.create({
   avatarRing: {
     borderRadius: 48,
     borderWidth: 2,
-    borderColor: BRAND_PRIMARY,
+    borderColor: colors.brand,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   name: { color: '#fff', fontSize: 22, fontWeight: '800' },

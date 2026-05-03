@@ -11,7 +11,7 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.pictok.client",
       "supportsTablet": true,
-      "buildNumber": "4",
+      "buildNumber": "5",
       "requireFullScreen": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -69,14 +69,19 @@
           }
         }
       ],
-      "expo-video",
       "expo-font",
       "expo-web-browser",
       "expo-localization",
       [
         "expo-notifications",
         {
-          "color": "#FE2C55"
+          "color": "#FF5A5C"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cette application utilise votre position pour afficher les annonces près de vous."
         }
       ]
     ],

@@ -5,7 +5,8 @@
     "viewProfile": "View profile",
     "loading": "Loading...",
     "errorGeneric": "Something went wrong.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "search": "Search"
   },
   "auth": {
     "signInRequired": {
@@ -59,7 +60,10 @@
     "loadProductError": "Couldn't load the product.",
     "contactSeller": "Contact",
     "makeOffer": "Make an offer",
-    "messageSeller": "Send a message"
+    "messageSeller": "Send a message",
+    "addBookmark": "Add to favorites",
+    "removeBookmark": "Remove from favorites",
+    "proBadge": "PRO"
   },
   "profile": {
     "title": "Profile",
@@ -81,6 +85,11 @@
   },
   "categories": {
     "title": "Categories",
+    "subtitle": "Explore by theme",
+    "trending": "Trending",
+    "newest": "New",
+    "allCategories": "All categories",
+    "noProducts": "No products",
     "emptyHint": "Coming soon. Category browsing is in the works."
   },
   "messages": {
@@ -124,7 +133,8 @@
     "listings": "Listings",
     "empty": "No listings yet.",
     "memberSince": "Member since {{date}}",
-    "loadError": "Couldn't load this profile."
+    "loadError": "Couldn't load this profile.",
+    "viewShop": "View {{name}}'s shop"
   },
   "sellerProfile": {
     "bio": "Bio",
@@ -189,7 +199,11 @@
     "updating": "Updating...",
     "updateSuccessTitle": "Listing updated",
     "updateSuccessMessage": "Your changes are saved.",
-    "updateFail": "Update failed"
+    "updateFail": "Update failed",
+    "useMyLocation": "Use my location",
+    "setMyLocation": "Set my location",
+    "locationGeocodeFailedTitle": "Listing created",
+    "locationGeocodeFailedBody": "Location not found — your listing won't appear in radius searches."
   },
   "orders": {
     "title": "My orders",
@@ -205,5 +219,24 @@
     "notConfiguredTitle": "Checkout not available",
     "notConfiguredMessage": "Checkout is not configured yet. Please try again later.",
     "errorTitle": "Checkout error"
+  },
+  "location": {
+    "setMyLocation": "Set my location",
+    "title": "My location",
+    "searchCity": "Search a city",
+    "noResults": "No results",
+    "radius": "Search radius",
+    "noLimit": "No limit",
+    "useMyLocation": "Use my current location",
+    "enableGeolocation": "Enable geolocation",
+    "allowInSettings": "Allow in Settings",
+    "geolocationUnavailable": "Geolocation unavailable",
+    "or": "or",
+    "nearYou": "Near you",
+    "withinRadius": "Within {{km}} km",
+    "everywhere": "Everywhere",
+    "noProductsInRadius": "No products in your area — try a larger radius",
+    "activatePromptTitle": "Enable geolocation",
+    "activatePromptBody": "See products near you"
   }
 }

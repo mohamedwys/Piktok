@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '@/theme';
 
 type Props = { children: React.ReactNode };
 type State = { error: Error | null };
@@ -43,7 +44,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 32, fontWeight: '800', marginBottom: 8 },
   message: { color: 'rgba(255,255,255,0.85)', fontSize: 16, marginBottom: 16, textAlign: 'center' },
   detail: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 24, textAlign: 'center' },
-  retry: { backgroundColor: '#FE2C55', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
+  retry: { backgroundColor: colors.brand, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
   retryPressed: { opacity: 0.85 },
   retryText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

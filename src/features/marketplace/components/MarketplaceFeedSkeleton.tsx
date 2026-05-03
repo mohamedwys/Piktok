@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '@/theme';
 
 export default function MarketplaceFeedSkeleton(): React.ReactElement {
   const { height } = useWindowDimensions();
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   railBuy: { width: 56, height: 56, borderRadius: 28 },
-  railCircle: { backgroundColor: '#FE2C55', opacity: 0.4 },
+  railCircle: { backgroundColor: colors.brand, opacity: 0.4 },
   railIcon: {
     width: 36,
     height: 36,

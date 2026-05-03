@@ -8,7 +8,7 @@ import {
   type ViewToken,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useFilteredProducts } from '@/features/marketplace/hooks/useFilteredProducts';
+import { useNearbyProducts } from '@/features/marketplace/hooks/useNearbyProducts';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
 import MarketplaceFeedSkeleton from '@/features/marketplace/components/MarketplaceFeedSkeleton';
 import type { Product } from '@/features/marketplace/types/product';
@@ -25,7 +25,7 @@ export default function MarketplaceScreen(): React.ReactElement {
     },
   );
 
-  const { data, isLoading, isError } = useFilteredProducts();
+  const { data, isLoading, isError } = useNearbyProducts();
 
   if (isLoading && !data) {
     return (

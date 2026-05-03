@@ -31,8 +31,7 @@ import SellerProductCard from '@/features/marketplace/components/SellerProductCa
 import SellerProductCardSkeleton from '@/features/marketplace/components/SellerProductCardSkeleton';
 import type { Product } from '@/features/marketplace/types/product';
 import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   fr: 'Français',
@@ -367,7 +366,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   ctaPrimary: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',
@@ -423,7 +422,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillActive: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
   },
   pillInactive: {
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -449,7 +448,7 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     backgroundColor: 'transparent',
-    borderColor: BRAND_PRIMARY,
+    borderColor: colors.brand,
     borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 12,
@@ -457,7 +456,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   signOutText: {
-    color: BRAND_PRIMARY,
+    color: colors.brand,
     fontSize: 14,
     fontWeight: '700',
   },

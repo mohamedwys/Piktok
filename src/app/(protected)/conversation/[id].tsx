@@ -26,8 +26,8 @@ import {
   mediumHaptic,
 } from '@/features/marketplace/utils/haptics';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { colors } from '@/theme';
 
-const BRAND_PRIMARY = '#FE2C55';
 const BUBBLE_OTHER = 'rgba(255,255,255,0.08)';
 
 export default function ConversationScreen(): React.ReactElement {
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 14,
   },
-  bubbleMine: { backgroundColor: BRAND_PRIMARY },
+  bubbleMine: { backgroundColor: colors.brand },
   bubbleOther: { backgroundColor: BUBBLE_OTHER },
   bubbleOffer: { borderWidth: 1, borderColor: 'rgba(255,200,61,0.6)' },
   offerLabel: {
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },

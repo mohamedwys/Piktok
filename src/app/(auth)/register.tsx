@@ -16,8 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useAuthStore } from '@/stores/useAuthStore';
 import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
 
 export default function Register(): React.ReactElement {
   const { t } = useTranslation();
@@ -152,7 +151,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   submitButton: {
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

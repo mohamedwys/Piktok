@@ -9,8 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-const BRAND_PRIMARY = '#FE2C55';
+import { colors } from '@/theme';
 
 type ProductActionRailProps = {
   product: Product;
@@ -72,7 +71,7 @@ export default function ProductActionRail({
         <Ionicons
           name={isLiked ? 'heart' : 'heart-outline'}
           size={33}
-          color={isLiked ? BRAND_PRIMARY : '#fff'}
+          color={isLiked ? colors.brand : '#fff'}
         />
         <Text style={styles.label}>{formatCount(likeCount)}</Text>
       </Pressable>
@@ -116,7 +115,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: BRAND_PRIMARY,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',

@@ -5,7 +5,8 @@
     "viewProfile": "Voir le profil",
     "loading": "Chargement...",
     "errorGeneric": "Une erreur est survenue.",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "search": "Rechercher"
   },
   "auth": {
     "signInRequired": {
@@ -59,7 +60,10 @@
     "loadProductError": "Impossible de charger le produit.",
     "contactSeller": "Contacter",
     "makeOffer": "Faire une offre",
-    "messageSeller": "Envoyer un message"
+    "messageSeller": "Envoyer un message",
+    "addBookmark": "Ajouter aux favoris",
+    "removeBookmark": "Retirer des favoris",
+    "proBadge": "PRO"
   },
   "profile": {
     "title": "Profil",
@@ -81,6 +85,11 @@
   },
   "categories": {
     "title": "Catégories",
+    "subtitle": "Explorez par thème",
+    "trending": "Tendances",
+    "newest": "Nouveautés",
+    "allCategories": "Toutes les catégories",
+    "noProducts": "Aucun produit",
     "emptyHint": "Bientôt disponible. Parcours des catégories en préparation."
   },
   "messages": {
@@ -124,7 +133,8 @@
     "listings": "Articles publiés",
     "empty": "Aucun article publié pour l'instant.",
     "memberSince": "Membre depuis {{date}}",
-    "loadError": "Impossible de charger ce profil."
+    "loadError": "Impossible de charger ce profil.",
+    "viewShop": "Voir la boutique {{name}}"
   },
   "sellerProfile": {
     "bio": "Bio",
@@ -189,7 +199,11 @@
     "updating": "Mise à jour...",
     "updateSuccessTitle": "Annonce mise à jour",
     "updateSuccessMessage": "Tes modifications sont enregistrées.",
-    "updateFail": "Échec de la mise à jour"
+    "updateFail": "Échec de la mise à jour",
+    "useMyLocation": "Utiliser ma position",
+    "setMyLocation": "Définir ma position",
+    "locationGeocodeFailedTitle": "Annonce créée",
+    "locationGeocodeFailedBody": "Emplacement non trouvé — votre annonce n'apparaîtra pas dans les recherches par rayon."
   },
   "orders": {
     "title": "Mes commandes",
@@ -205,5 +219,24 @@
     "notConfiguredTitle": "Paiement non disponible",
     "notConfiguredMessage": "Le système de paiement n'est pas encore configuré. Reviens un peu plus tard.",
     "errorTitle": "Erreur de paiement"
+  },
+  "location": {
+    "setMyLocation": "Définir ma position",
+    "title": "Ma position",
+    "searchCity": "Rechercher une ville",
+    "noResults": "Aucun résultat",
+    "radius": "Rayon de recherche",
+    "noLimit": "Sans limite",
+    "useMyLocation": "Utiliser ma position actuelle",
+    "enableGeolocation": "Activer la géolocalisation",
+    "allowInSettings": "Autoriser dans les Réglages",
+    "geolocationUnavailable": "Géolocalisation indisponible",
+    "or": "ou",
+    "nearYou": "Près de toi",
+    "withinRadius": "Dans un rayon de {{km}} km",
+    "everywhere": "Partout",
+    "noProductsInRadius": "Aucun produit dans votre zone, élargissez le rayon",
+    "activatePromptTitle": "Activez la géolocalisation",
+    "activatePromptBody": "Voir les produits près de chez vous"
   }
 }

@@ -38,7 +38,16 @@ yarn-error.*
 
 app-example
 
+# Stray Windows-path directory created by a tool that mishandled path separators.
+# Untracked; safe to delete manually from the working tree (see Step 2 changelog).
+C:UsersMwLDesktophubb/
+
 # generated native folders
 /ios
 /android
 .claude/
+
+# supabase
+.supabase/
+supabase/.temp/
+supabase/.branches/

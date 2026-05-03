@@ -19,6 +19,15 @@ export type CreateProductInput = {
   shippingFree: boolean;
   pickupAvailable: boolean;
   location?: string;
+  /**
+   * Optional geographic coordinates for the listing. When provided,
+   * `latitude` + `longitude` + `location_updated_at` are written to
+   * the new row and the generated `location_point` populates
+   * automatically. Best-effort — callers (G.8) geocode on submit and
+   * pass these only when geocoding succeeds.
+   */
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 async function getCurrentUserOrThrow() {
@@ -82,34 +91,50 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
   const sellerId = await ensureSellerForCurrentUser();
 
   // 3. Insert product. User-entered text is duplicated into fr+en for now.
+  //    Geo columns (latitude/longitude/location_updated_at) are included
+  //    only when both coordinates are provided — the generated
+  //    `location_point` populates automatically via the G.1 migration.
+  const hasCoords =
+    typeof input.latitude === 'number' &&
+    typeof input.longitude === 'number' &&
+    Number.isFinite(input.latitude) &&
+    Number.isFinite(input.longitude);
+
+  const insertPayload: Record<string, unknown> = {
+    seller_id: sellerId,
+    title: dup(input.title),
+    description: dup(input.description),
+    category: {
+      primary: input.category.primary,
+      secondary: input.category.secondary,
+    },
+    category_id: input.categoryId,
+    subcategory_id: input.subcategoryId,
+    attributes: input.attributes.map((a) => ({
+      id: a.id,
+      label: dup(a.label),
+      ...(a.iconKey ? { iconKey: a.iconKey } : {}),
+    })),
+    dimensions: input.dimensions ?? null,
+    price: input.price,
+    currency: input.currency,
+    media_type: input.mediaType,
+    media_url: mediaUrl,
+    thumbnail_url: mediaUrl,
+    stock_available: input.stockAvailable,
+    shipping_free: input.shippingFree,
+    pickup_available: input.pickupAvailable,
+    location: input.location ?? null,
+  };
+  if (hasCoords) {
+    insertPayload.latitude = input.latitude;
+    insertPayload.longitude = input.longitude;
+    insertPayload.location_updated_at = new Date().toISOString();
+  }
+
   const { data, error } = await supabase
     .from('products')
-    .insert({
-      seller_id: sellerId,
-      title: dup(input.title),
-      description: dup(input.description),
-      category: {
-        primary: input.category.primary,
-        secondary: input.category.secondary,
-      },
-      category_id: input.categoryId,
-      subcategory_id: input.subcategoryId,
-      attributes: input.attributes.map((a) => ({
-        id: a.id,
-        label: dup(a.label),
-        ...(a.iconKey ? { iconKey: a.iconKey } : {}),
-      })),
-      dimensions: input.dimensions ?? null,
-      price: input.price,
-      currency: input.currency,
-      media_type: input.mediaType,
-      media_url: mediaUrl,
-      thumbnail_url: mediaUrl,
-      stock_available: input.stockAvailable,
-      shipping_free: input.shippingFree,
-      pickup_available: input.pickupAvailable,
-      location: input.location ?? null,
-    })
+    .insert(insertPayload)
     .select('id')
     .single();
   if (error) throw error;

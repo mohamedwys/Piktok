@@ -9,16 +9,22 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '@/components/GenericComponents/Avatar';
 import { useSeller } from '@/features/marketplace/hooks/useSeller';
 import { useSellerProducts } from '@/features/marketplace/hooks/useSellerProducts';
+import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
 import { useDeviceLayout } from '@/hooks/useDeviceLayout';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
+import { formatCount as formatCountIntl } from '@/lib/format';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { Chip } from '@/components/ui';
+import FollowButton from '@/components/profile/FollowButton';
+import MessageButton from '@/components/profile/MessageButton';
 import { colors } from '@/theme';
 
 export default function SellerProfileScreen(): React.ReactElement {
@@ -32,6 +38,14 @@ export default function SellerProfileScreen(): React.ReactElement {
 
   const { data: seller, isLoading: loadingSeller, isError: errorSeller } = useSeller(id ?? null);
   const { data: products, isLoading: loadingProducts } = useSellerProducts(id ?? null);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: mySeller } = useMySeller(isAuthenticated);
+  const isOwnProfile = !!mySeller && !!seller && mySeller.id === seller.id;
+
+  const onPressEditProfile = (): void => {
+    void lightHaptic();
+    router.push('/(protected)/edit-seller-profile');
+  };
 
   const onPressBack = () => {
     void lightHaptic();
@@ -88,7 +102,62 @@ export default function SellerProfileScreen(): React.ReactElement {
           {`${formatCount(seller.salesCount)} ${t('marketplace.salesUnit', { count: seller.salesCount })}`}
         </Text>
       </View>
+      <View style={styles.socialStatsRow}>
+        <Pressable
+          onPress={() => {
+            void lightHaptic();
+            router.push(`/(protected)/seller/${seller.id}/followers` as Href);
+          }}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={t('social.viewFollowersAriaLabel', {
+            count: seller.followersCount,
+          })}
+          style={({ pressed }) => [styles.socialStatBlock, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.socialStatNumber}>
+            {formatCountIntl(seller.followersCount, lang === 'fr' ? 'fr-FR' : 'en-US')}
+          </Text>
+          <Text style={styles.socialStatLabel}>{t('social.followers')}</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            void lightHaptic();
+            router.push(`/(protected)/seller/${seller.id}/following` as Href);
+          }}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={t('social.viewFollowingAriaLabel', {
+            count: seller.followingCount,
+          })}
+          style={({ pressed }) => [styles.socialStatBlock, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.socialStatNumber}>
+            {formatCountIntl(seller.followingCount, lang === 'fr' ? 'fr-FR' : 'en-US')}
+          </Text>
+          <Text style={styles.socialStatLabel}>{t('social.following_count_label')}</Text>
+        </Pressable>
+      </View>
       {seller.bio ? <Text style={styles.bio}>{seller.bio}</Text> : null}
+      <View style={styles.actionRow}>
+        {isOwnProfile ? (
+          <Chip
+            label={t('profile.editProfile')}
+            variant="outlined"
+            size="md"
+            leadingIcon={
+              <Ionicons name="create-outline" size={14} color={colors.text.primary} />
+            }
+            onPress={onPressEditProfile}
+            accessibilityLabel={t('profile.editProfile')}
+          />
+        ) : (
+          <>
+            <FollowButton sellerId={seller.id} sellerName={seller.name} size="md" />
+            <MessageButton sellerId={seller.id} sellerName={seller.name} size="md" />
+          </>
+        )}
+      </View>
       {seller.isPro && (seller.website || seller.phonePublic || seller.emailPublic) ? (
         <View style={styles.contactCard}>
           <Text style={styles.contactLabel}>{t('sellerProfile.contactPro')}</Text>
@@ -197,6 +266,26 @@ const styles = StyleSheet.create({
   statBlock: { flexDirection: 'row', alignItems: 'center' },
   statText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
   statDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.4)', marginHorizontal: 8 },
+  socialStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    marginTop: 8,
+  },
+  socialStatBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  socialStatNumber: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  socialStatLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 16,
+  },
   sectionTitle: {
     alignSelf: 'flex-start',
     color: 'rgba(255,255,255,0.55)',

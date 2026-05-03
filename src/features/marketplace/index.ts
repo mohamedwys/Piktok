@@ -11,6 +11,17 @@ export {
 export { useUserEngagement } from './hooks/useUserEngagement';
 export { useToggleLike } from './hooks/useToggleLike';
 export { useToggleBookmark } from './hooks/useToggleBookmark';
+export { useToggleFollow, type ToggleFollowVars } from './hooks/useToggleFollow';
+export { useFollowers } from './hooks/useFollowers';
+export { useFollowing } from './hooks/useFollowing';
+export {
+  followSeller,
+  unfollowSeller,
+  listFollowers,
+  listFollowing,
+  type FollowerRow,
+  type ListPageOpts,
+} from './services/follows';
 export { useCreateProduct } from './hooks/useCreateProduct';
 export { useUpdateProduct } from './hooks/useUpdateProduct';
 export { useProduct } from './hooks/useProduct';

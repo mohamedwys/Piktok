@@ -1,234 +1,792 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import { Avatar, Pressable, Surface, Text } from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useUpdateMySeller } from '@/features/marketplace/hooks/useUpdateMySeller';
-import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
-import { colors } from '@/theme';
+import {
+  type UpdateMySellerInput,
+} from '@/features/marketplace/services/sellers';
+import EditProfileLocationSheet from '@/components/profile/EditProfileLocationSheet';
+import FormField from '@/components/profile/FormField';
+import SectionHeader from '@/components/profile/SectionHeader';
+import TypedConfirmModal from '@/components/profile/TypedConfirmModal';
+import { useEditProfileLocationSheetStore } from '@/stores/useEditProfileLocationSheetStore';
+import { useAuthStore } from '@/stores/useAuthStore';
+import {
+  deleteAvatarByUrl,
+  uploadAvatar,
+} from '@/lib/storage/avatars';
+import { deleteMyAccount } from '@/features/auth/services/auth';
+import { supabase } from '@/lib/supabase';
+import type { GeoLocation } from '@/lib/geocoding/types';
+
+const BIO_MAX = 500;
+const URL_PATTERN = /^https?:\/\//i;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
+
+type FormState = {
+  name: string;
+  bio: string;
+  website: string;
+  phonePublic: string;
+  emailPublic: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationText: string;
+};
+
+type FormErrors = Partial<Record<keyof FormState, string>>;
+
+const EMPTY_FORM: FormState = {
+  name: '',
+  bio: '',
+  website: '',
+  phonePublic: '',
+  emailPublic: '',
+  latitude: null,
+  longitude: null,
+  locationText: '',
+};
 
 export default function EditSellerProfileScreen(): React.ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+
   const { data: existing, isLoading } = useMySeller(true);
   const updateMutation = useUpdateMySeller();
+  const openLocationSheet = useEditProfileLocationSheetStore((s) => s.open);
 
-  const [bio, setBio] = useState('');
-  const [website, setWebsite] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [initialForm, setInitialForm] = useState<FormState>(EMPTY_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!existing) return;
-    setBio(existing.bio ?? '');
-    setWebsite(existing.website ?? '');
-    setPhone(existing.phonePublic ?? '');
-    setEmail(existing.emailPublic ?? '');
+    const initial: FormState = {
+      name: existing.name ?? '',
+      bio: existing.bio ?? '',
+      website: existing.website ?? '',
+      phonePublic: existing.phonePublic ?? '',
+      emailPublic: existing.emailPublic ?? '',
+      latitude: existing.latitude,
+      longitude: existing.longitude,
+      locationText: existing.locationText ?? '',
+    };
+    setForm(initial);
+    setInitialForm(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id]);
 
-  const onPressBack = () => {
-    void lightHaptic();
-    router.back();
-  };
+  const dirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm],
+  );
 
-  const onSubmit = () => {
-    void mediumHaptic();
-    updateMutation.mutate(
-      {
-        bio: bio.trim(),
-        website: website.trim(),
-        phonePublic: phone.trim(),
-        emailPublic: email.trim(),
-      },
-      {
-        onSuccess: () => {
-          Alert.alert(t('sellerProfile.saveSuccess'));
-          router.back();
+  const validate = useCallback((next: FormState): FormErrors => {
+    const e: FormErrors = {};
+    if (next.name.trim().length === 0) {
+      e.name = t('profile.validationNameRequired');
+    }
+    if (next.website.trim().length > 0 && !URL_PATTERN.test(next.website.trim())) {
+      e.website = t('profile.validationWebsiteInvalid');
+    }
+    if (
+      next.emailPublic.trim().length > 0
+      && !EMAIL_PATTERN.test(next.emailPublic.trim())
+    ) {
+      e.emailPublic = t('profile.validationEmailInvalid');
+    }
+    if (
+      next.phonePublic.trim().length > 0
+      && next.phonePublic.trim().length < 6
+    ) {
+      e.phonePublic = t('profile.validationPhoneTooShort');
+    }
+    if (next.bio.length > BIO_MAX) {
+      e.bio = t('profile.validationBioTooLong');
+    }
+    return e;
+  }, [t]);
+
+  const visibleErrors = useMemo(() => validate(form), [form, validate]);
+  const hasErrors = Object.keys(visibleErrors).length > 0;
+
+  const handleSetField = useCallback(<K extends keyof FormState>(
+    key: K,
+    value: FormState[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => {
+      if (prev[key] === undefined) return prev;
+      const { [key]: _omit, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const handleLocationSelect = useCallback((loc: GeoLocation) => {
+    setForm((prev) => ({
+      ...prev,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      locationText: loc.displayName,
+    }));
+  }, []);
+
+  const handlePickPhoto = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        t('profile.permissionRequiredTitle'),
+        t('profile.permissionRequiredBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.openSettings'),
+            onPress: () => {
+              void Linking.openSettings();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const { data: u } = await supabase.auth.getUser();
+    const userId = u.user?.id;
+    if (!userId) {
+      Alert.alert(
+        t('profile.uploadErrorTitle'),
+        t('profile.uploadErrorBody'),
+      );
+      return;
+    }
+
+    const previousUrl = existing?.avatarUrl ?? '';
+    setUploading(true);
+    try {
+      const { publicUrl } = await uploadAvatar(userId, result.assets[0].uri);
+      await updateMutation.mutateAsync({ avatarUrl: publicUrl });
+      if (previousUrl.length > 0 && previousUrl !== publicUrl) {
+        void deleteAvatarByUrl(previousUrl);
+      }
+    } catch {
+      Alert.alert(
+        t('profile.uploadErrorTitle'),
+        t('profile.uploadErrorBody'),
+      );
+    } finally {
+      setUploading(false);
+    }
+  }, [existing?.avatarUrl, updateMutation, t]);
+
+  const handleDeletePhoto = useCallback(() => {
+    Alert.alert(
+      t('profile.deletePhotoConfirmTitle'),
+      t('profile.deletePhotoConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.deletePhoto'),
+          style: 'destructive',
+          onPress: async () => {
+            const previousUrl = existing?.avatarUrl ?? '';
+            setUploading(true);
+            try {
+              await updateMutation.mutateAsync({ avatarUrl: '' });
+              if (previousUrl.length > 0) {
+                void deleteAvatarByUrl(previousUrl);
+              }
+            } catch {
+              Alert.alert(
+                t('profile.deleteErrorTitle'),
+                t('profile.deleteErrorBody'),
+              );
+            } finally {
+              setUploading(false);
+            }
+          },
         },
-        onError: (err) => {
-          Alert.alert(t('sellerProfile.saveFail'), err.message);
-        },
-      },
+      ],
     );
-  };
+  }, [existing?.avatarUrl, updateMutation, t]);
+
+  const handleEditPhoto = useCallback(() => {
+    if (uploading) return;
+    const hasAvatar = (existing?.avatarUrl ?? '').length > 0;
+    const buttons = hasAvatar
+      ? [
+          { text: t('profile.choosePhoto'), onPress: () => void handlePickPhoto() },
+          {
+            text: t('profile.deletePhoto'),
+            style: 'destructive' as const,
+            onPress: handleDeletePhoto,
+          },
+          { text: t('common.cancel'), style: 'cancel' as const },
+        ]
+      : [
+          { text: t('profile.choosePhoto'), onPress: () => void handlePickPhoto() },
+          { text: t('common.cancel'), style: 'cancel' as const },
+        ];
+    Alert.alert(t('profile.editPhotoTitle'), undefined, buttons);
+  }, [
+    uploading,
+    existing?.avatarUrl,
+    handlePickPhoto,
+    handleDeletePhoto,
+    t,
+  ]);
+
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleChangeEmail = useCallback(() => {
+    router.push('/(protected)/account/change-email');
+  }, [router]);
+
+  const handleChangePassword = useCallback(() => {
+    router.push('/(protected)/account/change-password');
+  }, [router]);
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      t('profile.signOutTitle'),
+      t('profile.signOutBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.signOutConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await useAuthStore.getState().logout();
+            } catch {
+              // The auth listener will reconcile state regardless.
+            }
+            router.replace('/(auth)/login');
+          },
+        },
+      ],
+    );
+  }, [router, t]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      t('profile.deleteAccountTitle'),
+      t('profile.deleteAccountWarning'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.deleteAccountContinue'),
+          style: 'destructive',
+          onPress: () => setDeleteModalVisible(true),
+        },
+      ],
+    );
+  }, [t]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    setDeleteModalVisible(false);
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : t('profile.deleteErrorBody');
+      Alert.alert(t('profile.deleteErrorTitle'), message);
+    } finally {
+      setDeleting(false);
+    }
+  }, [router, t]);
+
+  const performSave = useCallback(async () => {
+    const finalErrors = validate(form);
+    if (Object.keys(finalErrors).length > 0) {
+      setErrors(finalErrors);
+      return false;
+    }
+
+    const patch: UpdateMySellerInput = {};
+    if (form.name.trim() !== initialForm.name) patch.name = form.name.trim();
+    if (form.bio !== initialForm.bio) patch.bio = form.bio.trim();
+    if (form.website !== initialForm.website) {
+      patch.website = form.website.trim();
+    }
+    if (form.phonePublic !== initialForm.phonePublic) {
+      patch.phonePublic = form.phonePublic.trim();
+    }
+    if (form.emailPublic !== initialForm.emailPublic) {
+      patch.emailPublic = form.emailPublic.trim();
+    }
+    if (form.latitude !== initialForm.latitude) patch.latitude = form.latitude;
+    if (form.longitude !== initialForm.longitude) {
+      patch.longitude = form.longitude;
+    }
+    if (form.locationText !== initialForm.locationText) {
+      patch.locationText = form.locationText.length > 0
+        ? form.locationText
+        : null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      // Nothing actually changed in trimmed values.
+      setInitialForm(form);
+      return true;
+    }
+
+    try {
+      await updateMutation.mutateAsync(patch);
+      setInitialForm(form);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert(t('sellerProfile.saveFail'), message);
+      return false;
+    }
+  }, [form, initialForm, updateMutation, validate, t]);
+
+  const handleSavePress = useCallback(async () => {
+    const ok = await performSave();
+    if (ok) router.back();
+  }, [performSave, router]);
+
+  const handleBackPress = useCallback(() => {
+    if (!dirty) {
+      router.back();
+      return;
+    }
+    Alert.alert(
+      t('profile.unsavedChangesTitle'),
+      t('profile.unsavedChangesBody'),
+      [
+        { text: t('profile.continueEditing'), style: 'cancel' },
+        {
+          text: t('profile.discardChanges'),
+          style: 'destructive',
+          onPress: () => {
+            setInitialForm(form);
+            // Defer navigation so the listener sees a non-dirty form.
+            requestAnimationFrame(() => router.back());
+          },
+        },
+      ],
+    );
+  }, [dirty, form, router, t]);
+
+  // System back / swipe gesture guard.
+  useEffect(() => {
+    const sub = navigation.addListener('beforeRemove', (e) => {
+      if (!dirty) return;
+      e.preventDefault();
+      Alert.alert(
+        t('profile.unsavedChangesTitle'),
+        t('profile.unsavedChangesBody'),
+        [
+          { text: t('profile.continueEditing'), style: 'cancel' },
+          {
+            text: t('profile.discardChanges'),
+            style: 'destructive',
+            onPress: () => {
+              setInitialForm(form);
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+      );
+    });
+    return sub;
+  }, [navigation, dirty, form, t]);
+
+  const submitting = updateMutation.isPending;
+  const saveDisabled = submitting || !dirty || hasErrors;
 
   if (isLoading) {
     return (
-      <View style={[styles.root, styles.center, { paddingTop: insets.top + 16 }]}>
-        <ActivityIndicator color="#fff" />
+      <View
+        style={[
+          styles.root,
+          styles.center,
+          { paddingTop: insets.top + 16 },
+        ]}
+      >
+        <ActivityIndicator color={colors.text.primary} />
       </View>
     );
   }
 
-  const submitting = updateMutation.isPending;
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Pressable
-        onPress={onPressBack}
-        style={({ pressed }) => [
-          styles.backBtn,
-          { top: insets.top + 12 },
-          pressed && { opacity: 0.6 },
-        ]}
-        hitSlop={12}
-      >
-        <Ionicons name="chevron-back" size={28} color="#fff" />
-      </Pressable>
+      <View style={styles.headerBar}>
+        <Pressable
+          haptic="light"
+          onPress={handleBackPress}
+          hitSlop={12}
+          style={styles.headerIcon}
+          accessibilityLabel={t('common.cancel')}
+        >
+          <Ionicons name="chevron-back" size={26} color={colors.text.primary} />
+        </Pressable>
+        <Text variant="title" weight="semibold" style={styles.headerTitle}>
+          {t('profile.editTitle')}
+        </Text>
+        <Pressable
+          haptic="medium"
+          onPress={() => void handleSavePress()}
+          disabled={saveDisabled}
+          hitSlop={12}
+          style={[
+            styles.saveBtn,
+            saveDisabled && styles.saveBtnDisabled,
+          ]}
+          accessibilityLabel={t('profile.saveButton')}
+        >
+          {submitting ? (
+            <ActivityIndicator color={colors.text.primary} size="small" />
+          ) : (
+            <Text
+              variant="body"
+              weight="semibold"
+              style={{
+                color: saveDisabled ? colors.text.tertiary : colors.brand,
+              }}
+            >
+              {t('profile.saveButton')}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 8}
+        keyboardVerticalOffset={insets.top + 56}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: spacing.huge + insets.bottom },
+          ]}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>{t('sellerProfile.editTitle')}</Text>
-            <Text style={styles.subtitle}>{t('sellerProfile.editSubtitle')}</Text>
+          {/* Photo */}
+          <View style={styles.photoSection}>
+            <View>
+              <Avatar
+                source={
+                  existing?.avatarUrl ? { uri: existing.avatarUrl } : undefined
+                }
+                name={form.name || existing?.name}
+                size="xl"
+              />
+              {uploading ? (
+                <View style={styles.avatarOverlay} pointerEvents="none">
+                  <ActivityIndicator color={colors.text.primary} />
+                </View>
+              ) : null}
+            </View>
+            <Pressable
+              haptic="light"
+              onPress={handleEditPhoto}
+              disabled={uploading}
+              hitSlop={8}
+            >
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={{
+                  color: uploading ? colors.text.tertiary : colors.brand,
+                }}
+              >
+                {t('profile.editPhoto')}
+              </Text>
+            </Pressable>
           </View>
 
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{t('sellerProfile.bio')}</Text>
-            <TextInput
-              value={bio}
-              onChangeText={setBio}
-              placeholder={t('sellerProfile.bioPlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              multiline
-              numberOfLines={4}
-              style={[styles.input, styles.inputMultiline]}
+          {/* Identité */}
+          <SectionHeader title={t('profile.sectionIdentity')} />
+          <FormField
+            label={t('profile.fieldName')}
+            value={form.name}
+            onChangeText={(v) => handleSetField('name', v)}
+            error={errors.name}
+            required
+            autoCapitalize="words"
+          />
+
+          {/* À propos */}
+          <SectionHeader title={t('profile.sectionAbout')} />
+          <FormField
+            label={t('profile.fieldBio')}
+            value={form.bio}
+            onChangeText={(v) => handleSetField('bio', v)}
+            error={errors.bio}
+            helper={`${form.bio.length}/${BIO_MAX}`}
+            multiline
+            maxLength={BIO_MAX}
+            placeholder={t('sellerProfile.bioPlaceholder')}
+          />
+
+          {/* Contact */}
+          <SectionHeader title={t('profile.sectionContact')} />
+          <FormField
+            label={t('profile.fieldWebsite')}
+            value={form.website}
+            onChangeText={(v) => handleSetField('website', v)}
+            error={errors.website}
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder={t('sellerProfile.websitePlaceholder')}
+          />
+          <FormField
+            label={t('profile.fieldPhonePublic')}
+            value={form.phonePublic}
+            onChangeText={(v) => handleSetField('phonePublic', v)}
+            error={errors.phonePublic}
+            keyboardType="phone-pad"
+            placeholder={t('sellerProfile.phonePlaceholder')}
+          />
+          <FormField
+            label={t('profile.fieldEmailPublic')}
+            value={form.emailPublic}
+            onChangeText={(v) => handleSetField('emailPublic', v)}
+            error={errors.emailPublic}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder={t('sellerProfile.emailPlaceholder')}
+          />
+
+          {/* Position de vente */}
+          <SectionHeader title={t('profile.sectionSellingFrom')} />
+          <Surface variant="surfaceElevated" radius="lg" padding="md" border>
+            <View style={styles.locationRow}>
+              <Ionicons name="navigate" size={18} color={colors.brand} />
+              <View style={{ flex: 1, gap: spacing.xs }}>
+                <Text variant="body" weight="semibold" numberOfLines={2}>
+                  {form.locationText
+                    ? form.locationText
+                    : t('profile.noLocationSet')}
+                </Text>
+                {form.latitude !== null && form.longitude !== null ? (
+                  <Text variant="caption" color="tertiary">
+                    {form.latitude.toFixed(4)}, {form.longitude.toFixed(4)}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                haptic="light"
+                onPress={openLocationSheet}
+                hitSlop={8}
+              >
+                <Text
+                  variant="caption"
+                  weight="semibold"
+                  style={{ color: colors.brand }}
+                >
+                  {t('profile.changeLocation')}
+                </Text>
+              </Pressable>
+            </View>
+          </Surface>
+
+          {/* Compte */}
+          <SectionHeader title={t('profile.sectionAccount')} />
+          <Surface variant="surfaceElevated" radius="lg" border>
+            <AccountRow
+              icon="mail-outline"
+              label={t('profile.changeEmail')}
+              onPress={handleChangeEmail}
+              showDivider
             />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{t('sellerProfile.website')}</Text>
-            <TextInput
-              value={website}
-              onChangeText={setWebsite}
-              placeholder={t('sellerProfile.websitePlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              keyboardType="url"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
+            <AccountRow
+              icon="lock-closed-outline"
+              label={t('profile.changePassword')}
+              onPress={handleChangePassword}
+              showDivider
             />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{t('sellerProfile.phone')}</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder={t('sellerProfile.phonePlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              keyboardType="phone-pad"
-              style={styles.input}
+            <AccountRow
+              icon="log-out-outline"
+              label={t('profile.signOutTitle')}
+              onPress={handleSignOut}
+              danger
+              showDivider
             />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{t('sellerProfile.email')}</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder={t('sellerProfile.emailPlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
+            <AccountRow
+              icon="trash-outline"
+              label={t('profile.deleteAccount')}
+              onPress={handleDeleteAccount}
+              danger
+              disabled={deleting}
             />
-          </View>
-
-          <Pressable
-            onPress={onSubmit}
-            disabled={submitting}
-            style={({ pressed }) => [
-              styles.submitButton,
-              (pressed || submitting) && { opacity: 0.7 },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitText}>{t('sellerProfile.save')}</Text>
-            )}
-          </Pressable>
+          </Surface>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <EditProfileLocationSheet onSelect={handleLocationSelect} />
+
+      <TypedConfirmModal
+        visible={deleteModalVisible}
+        title={t('profile.deleteAccountConfirmTitle')}
+        body={t('profile.deleteAccountConfirmBody')}
+        expectedPhrase={t('profile.deleteAccountConfirmPhrase')}
+        confirmLabel={t('profile.deleteAccountFinal')}
+        onConfirm={() => void handleDeleteConfirm()}
+        onCancel={() => setDeleteModalVisible(false)}
+      />
     </View>
   );
 }
 
+type AccountRowProps = {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+  showDivider?: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+};
+
+function AccountRow({
+  icon,
+  label,
+  onPress,
+  showDivider = false,
+  danger = false,
+  disabled = false,
+}: AccountRowProps): React.ReactElement {
+  return (
+    <Pressable
+      haptic="light"
+      onPress={onPress}
+      disabled={disabled}
+      pressScale={0.98}
+    >
+      <View
+        style={[
+          styles.accountRow,
+          showDivider && styles.accountRowDivider,
+          disabled && { opacity: 0.5 },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={18}
+          color={danger ? colors.feedback.danger : colors.text.secondary}
+        />
+        <Text
+          variant="body"
+          style={{
+            flex: 1,
+            color: danger ? colors.feedback.danger : colors.text.primary,
+          }}
+        >
+          {label}
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={16}
+          color={colors.text.tertiary}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  backBtn: {
-    position: 'absolute',
-    left: 12,
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  headerIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  saveBtn: {
+    minWidth: 72,
+    height: 40,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 80,
-    gap: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.md,
   },
-  header: { gap: 4 },
-  title: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  subtitle: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
-  field: { gap: 6 },
-  fieldLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  photoSection: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
   },
-  input: {
-    color: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-  },
-  inputMultiline: {
-    minHeight: 96,
-    textAlignVertical: 'top',
-  },
-  submitButton: {
-    backgroundColor: colors.brand,
-    borderRadius: 999,
-    paddingVertical: 14,
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 999,
   },
-  submitText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  accountRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
 });

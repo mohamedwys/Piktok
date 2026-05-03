@@ -2446,6 +2446,1165 @@ The generated `Returns` row marks every column as non-null (`category_id: string
 
 `git revert <commit>` removes the new import line and restores the hand-written alias. The generated `src/types/supabase.ts` from Op.1 is untouched and remains correct for any future consumer.
 
+---
+
+## Step B.1.5 Changelog (2026-05-03) — Sellers Update Grant Hardening
+
+Migration-only step. Closes the self-elevation gap surfaced in [PROFILE_AUDIT.md §3.3](PROFILE_AUDIT.md): the `sellers update own` RLS policy authorizes any authenticated user to UPDATE their own row across **every** column, which combined with the broad table-level UPDATE grant lets a user self-set `verified`, `is_pro`, `rating`, `sales_count`, and `stripe_*`. After this migration applies, `authenticated` can only UPDATE the user-controlled subset; `service_role` (Stripe webhooks, admin paths) is unaffected because it bypasses grants by design.
+
+The RLS policy itself is **unchanged** — it still controls *which row* a user may touch. The column-level grant restricts *which columns* the policy can be exercised against.
+
+### Reconnaissance findings
+
+#### Full `sellers` column inventory
+
+Source: [src/types/supabase.ts:367-437](src/types/supabase.ts:367), cross-referenced with the migration files that introduced each column.
+
+| # | Column | Type | Added in | Category |
+| --- | --- | --- | --- | --- |
+| 1 | `id` | uuid (PK) | 20260501 | System |
+| 2 | `name` | text not null | 20260501 | **User-editable** |
+| 3 | `avatar_url` | text not null default `''` | 20260501 | **User-editable** |
+| 4 | `verified` | boolean not null default false | 20260501 | System (admin / moderation) |
+| 5 | `is_pro` | boolean not null default false | 20260501 | System (admin / business) |
+| 6 | `rating` | numeric(3,2) not null default 0 | 20260501 | System (no client mutation pipeline) |
+| 7 | `sales_count` | integer not null default 0 | 20260501 | System (server-managed) |
+| 8 | `created_at` | timestamptz not null default now() | 20260501 | System (immutable) |
+| 9 | `user_id` | uuid FK → auth.users(id), unique | 20260503 | System (set at row creation by `get_or_create_seller_for_current_user`) |
+| 10 | `bio` | text | 20260508 | **User-editable** |
+| 11 | `website` | text | 20260508 | **User-editable** |
+| 12 | `phone_public` | text | 20260508 | **User-editable** |
+| 13 | `email_public` | text | 20260508 | **User-editable** |
+| 14 | `stripe_account_id` | text | 20260511 | System (Stripe webhook) |
+| 15 | `stripe_charges_enabled` | boolean not null default false | 20260511 | System (Stripe webhook) |
+| 16 | `stripe_payouts_enabled` | boolean not null default false | 20260511 | System (Stripe webhook) |
+| 17 | `latitude` | double precision | 20260513 | **User-editable** |
+| 18 | `longitude` | double precision | 20260513 | **User-editable** |
+| 19 | `location_text` | text | 20260513 | **User-editable** |
+| 20 | `location_updated_at` | timestamptz | 20260513 | **User-editable** |
+| 21 | `location_point` | geography(Point, 4326) | 20260513 | Generated (`generated always as ... stored` — non-writable regardless of grant) |
+
+#### Allowlist (kept writable for `authenticated`)
+
+```
+name, avatar_url, bio, website, phone_public, email_public,
+latitude, longitude, location_text, location_updated_at
+```
+
+`name` is included because it is the seller's free-form display name — not a system-managed field, and PROFILE_AUDIT.md §10.8's recommendation explicitly enumerates `name` in the allowlist alongside the geo and contact columns. The existing `updateMySeller` service does not touch `name` today, but B.2 / B.3 will (per audit §4.4 and §9.D1). Granting it now avoids a future migration when B.2 lands.
+
+`avatar_url` is included for the same reason: B.3 will write to it when the avatar storage bucket is created (audit §5.4 / §10.2).
+
+The `location_*` columns are included so the future B.4 "Where I sell from" picker can persist its result client-side without an extra migration. `location_point` is **deliberately omitted** — it is a stored generated column derived from `(latitude, longitude)`, and Postgres rejects writes to it regardless of grants.
+
+#### Disallowed list (no longer writable by the JS client)
+
+```
+id, user_id, created_at,
+verified, is_pro, rating, sales_count,
+stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled
+```
+
+These remain writable by `service_role` (Stripe webhooks, admin scripts, the `get_or_create_seller_for_current_user` SECURITY DEFINER RPC). The brief mentioned `stripe_customer_id` as a representative of the `stripe_*` family — note that the current schema only has `stripe_account_id`, `stripe_charges_enabled`, `stripe_payouts_enabled`. No `stripe_customer_id` column exists; if one is added later it must be considered system-managed and excluded from the allowlist.
+
+#### Brief deviation: `updated_at`
+
+The brief's allowlist included `updated_at`. The `sellers` table does **not** have an `updated_at` column today — only `location_updated_at` (added in 20260513). `location_updated_at` is in the allowlist; no fictional `updated_at` is granted. If a generic `updated_at` column is added in a future migration, the column-level GRANT will need to be extended to include it.
+
+#### Every JS call site that mutates `sellers`
+
+Searched with `rg "from\(['\"]sellers['\"]\)" src/` (the project uses single quotes; double-quote variant returned no extra matches).
+
+| File:line | Operation | Columns touched | Within allowlist? |
+| --- | --- | --- | --- |
+| [src/features/marketplace/services/sellers.ts:53-58](src/features/marketplace/services/sellers.ts:53) | SELECT (`getSellerById`) | — | n/a (read) |
+| [src/features/marketplace/services/sellers.ts:79-84](src/features/marketplace/services/sellers.ts:79) | SELECT (`getMySeller`) | — | n/a (read) |
+| [src/features/marketplace/services/sellers.ts:113-116](src/features/marketplace/services/sellers.ts:113) | **UPDATE** (`updateMySeller`) | `bio`, `website`, `phone_public`, `email_public` | **Yes — all four are in the allowlist** |
+| [src/features/marketplace/services/messaging.ts:105](src/features/marketplace/services/messaging.ts:105) | SELECT (thread participant lookup) | — | n/a (read) |
+| [src/features/marketplace/services/messaging.ts:156](src/features/marketplace/services/messaging.ts:156) | SELECT (thread participant lookup) | — | n/a (read) |
+| [src/features/marketplace/services/products.ts:242](src/features/marketplace/services/products.ts:242) | SELECT (seller merge for nearby products) | — | n/a (read) |
+| [src/features/marketplace/services/products.ts:298](src/features/marketplace/services/products.ts:298) | SELECT (seller merge) | — | n/a (read) |
+
+`from('sellers').insert(...)` returns **zero hits** in `src/`. The only path that creates a seller row is the `get_or_create_seller_for_current_user` SECURITY DEFINER RPC ([20260503_sell_setup.sql:7-34](supabase/migrations/20260503_sell_setup.sql:7)) — runs as definer, bypasses RLS, unaffected by this migration.
+
+`from('sellers').delete(...)` returns zero hits. Deletion happens only via `ON DELETE CASCADE` from `auth.users(id)` — service_role path, unaffected.
+
+#### Migration / seed files that UPDATE `sellers`
+
+`rg "update.*sellers|sellers.*update" supabase/` returned only RLS policy DDL (no data UPDATE statements). Specifically:
+
+- [supabase/migrations/20260508_seller_contact.sql:7-11](supabase/migrations/20260508_seller_contact.sql:7) — creates the `sellers update own` RLS policy. **Untouched by this migration** (it gates row authorization; the column grant is the orthogonal layer).
+- [supabase/migrations/20260513_geo_columns.sql:47](supabase/migrations/20260513_geo_columns.sql:47) — comment in the rollback block, not a real statement.
+
+No seed file or migration runs UPDATE statements as `authenticated`. Migrations execute as the database owner / `postgres`, which is unaffected by the `authenticated` role grant.
+
+#### Verification: no JS code path writes to a disallowed column
+
+Confirmed by reading every UPDATE call site (single hit at [services/sellers.ts:113-116](src/features/marketplace/services/sellers.ts:113)). The `updateMySeller` service builds a sparse `patch` containing only `bio`, `website`, `phone_public`, `email_public`. No code path constructs a patch containing `verified`, `is_pro`, `rating`, `sales_count`, or any `stripe_*` column. The migration is therefore backward-compatible for the existing edit form (audit §4.2) and every other consumer of the `sellers` table.
+
+### Migration file
+
+- Path: [supabase/migrations/20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql)
+- Wrapped in `begin; ... commit;`. Inline rollback SQL block at the top.
+- REVOKEs the table-wide UPDATE grant from `authenticated`, then GRANTs UPDATE on the 10-column allowlist. REVOKE / GRANT are naturally idempotent for the same target and column set.
+
+### Inline rollback (cited from the migration file header)
+
+```sql
+begin;
+  revoke update on public.sellers from authenticated;
+  grant  update on public.sellers to   authenticated;
+commit;
+```
+
+Run this against any database the migration was already applied to in order to restore the prior broad grant. The `git revert <commit>` step alone only removes the file from the migration set — it does not undo the schema state.
+
+### Production apply commands
+
+The project's apply pattern is the user-explicit `db:push` (configured in [package.json](package.json#L11)):
+
+```bash
+npm run db:push     # equivalent to: supabase db push --linked
+```
+
+This step **stops at the apply boundary**. The migration file is generated, syntactically valid, and ready — the user runs `db:push` when they are ready to apply. Same pattern as G.1 / G.5.
+
+### Optional local apply
+
+The project does not yet have a configured local Supabase environment (no `supabase/config.toml`, no `.supabase/` directory) — same blocker carried over from G.1 / G.5. Local pre-flight is therefore deferred. If the user sets up a local stack later, the migration can be verified with:
+
+```bash
+supabase start              # first-time only — boots local Postgres
+supabase db reset           # replays every migration including this one
+npm run gen:types:local     # OPTIONAL — see "Type regeneration" below; not required for this migration
+```
+
+### Type regeneration — NOT required
+
+Column-level grants are runtime auth, not schema. They do not surface in the generated `Database` interface in [src/types/supabase.ts](src/types/supabase.ts) — TypeGen only describes columns, types, nullability, and relationships. Running `npm run gen:types` after applying this migration would produce a byte-identical file.
+
+The runtime impact is at query time only: any JS client UPDATE that includes a disallowed column will throw a Postgres permission error along the lines of `permission denied for column X`. This will surface as a runtime exception in the `error` returned by `supabase.from('sellers').update(...)`, not as a TypeScript compile error.
+
+### Verification performed
+
+- `tsc --noEmit` → exit 0. No source changes; only a new SQL file under `supabase/migrations/`.
+- `expo export --platform ios` → exit 0; iOS Hermes bundle (6.08 MB) produced clean.
+- Migration SQL is syntactically valid by manual inspection (Postgres-specific column-list grant syntax is hard to lint statically; the form `GRANT UPDATE (col1, col2, ...) ON public.<table> TO <role>` is documented at [postgresql.org/docs/current/sql-grant.html](https://www.postgresql.org/docs/current/sql-grant.html)).
+- The existing edit form ([src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) → [services/sellers.ts:95-118](src/features/marketplace/services/sellers.ts:95)) only writes columns in the allowlist (`bio`, `website`, `phone_public`, `email_public`). No call-site changes are required and the form continues to work unchanged.
+
+### Reversion
+
+- **The migration file:** `git revert <commit>` removes [supabase/migrations/20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql) and this changelog section.
+- **Any database the migration has been applied to:** the `git revert` does not undo the applied DDL. Run the rollback SQL from the top of the migration file (or from this changelog section) against each environment where the migration was applied.
+
+### Operational debt
+
+Zero new operational debt. The migration is reversible, idempotent, type-neutral, and backward-compatible with every existing call site. It sits ready for the user to apply at their convenience via `npm run db:push`.
+
+### Known follow-up
+
+- **B.2 / B.3 form additions.** When B.2 / B.3 land (avatar picker, display-name field, geo picker), the writes will target columns already in the allowlist (`name`, `avatar_url`, `latitude`, `longitude`, `location_text`, `location_updated_at`). No further grant migration is required for those steps.
+- **Future `updated_at` column.** If a generic `updated_at` column is added to `sellers` in a later migration (e.g., a `BEFORE UPDATE` trigger pattern), that migration must extend the column-level GRANT to include it — otherwise the trigger-driven UPDATE issued by the JS client will fail.
+- **SECURITY DEFINER RPC alternative.** The brief explicitly says "Do NOT introduce a SECURITY DEFINER RPC in this step." Should a future requirement need stricter validation (e.g., enforcing URL format on `website`, normalizing `phone_public`), a `SECURITY DEFINER` RPC that whitelists fields is the natural next layer. Today's column-grant approach is sufficient for the current call-site shape.
 
 
+---
 
+## Step B.2 Changelog (2026-05-03) — Edit Profile Redesign
+
+Step B.2 reshapes the existing 4-field bio/contact form at [src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) into a sectioned premium form: avatar header, **Identité**, **À propos**, **Contact**, **Position de vente**, and a stub **Compte** section (B.4 will wire the real auth actions). All writes go through the same `updateMySeller(...)` service hardened by B.1.5's column-level grants. No new schema, no avatar upload (B.3 owns the bucket and pipeline), no auth flows.
+
+### Reconnaissance findings (no code changes)
+
+- **Existing screen:** [src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) — vanilla `useState` × 4 (`bio`, `website`, `phone`, `email`), pulls data via `useMySeller(true)`, mutates via `useUpdateMySeller()`, presents inline `TextInput`s with hardcoded dark styling. Save calls `Alert.alert` then `router.back()`. No header bar, no validation, no dirty-state guard.
+- **Mutation service:** [src/features/marketplace/services/sellers.ts:95-118](src/features/marketplace/services/sellers.ts:95) — `updateMySeller(input)` builds a partial patch, ensures the seller row exists via the `get_or_create_seller_for_current_user` RPC, then issues `.update(patch).eq('user_id', user.id)`. The undefined-key guard already supports a partial-write pattern; extension to the full B.1.5 allowlist is purely additive.
+- **Seller fetch hook:** [src/features/marketplace/hooks/useMySeller.ts](src/features/marketplace/hooks/useMySeller.ts) — React Query, `MY_SELLER_KEY = ['marketplace','my-seller']`, returns `SellerProfile | null`. The `SellerProfile` type previously did **not** expose `latitude` / `longitude` / `locationText`; B.2 extends `SellerProfile` + `SellerRow` + `rowToSeller()` to surface them so the form can hydrate.
+- **G.6 location primitives (reused, not modified):** [src/components/feed/CitySearchInput.tsx](src/components/feed/CitySearchInput.tsx) exposes a clean `onSelect(GeoLocation)` prop; [src/hooks/useDeviceLocation.ts](src/hooks/useDeviceLocation.ts) gives `{ status, request, refresh, openSettings, loading }`; [src/lib/geocoding/index.ts](src/lib/geocoding/index.ts) provides `reverseGeocode(coord)` for converting GPS coords into a `displayName` for the form.
+- **G.6 store pattern:** [src/stores/useLocationSheetStore.ts](src/stores/useLocationSheetStore.ts) is a 13-line Zustand `{ isOpen, open, close }`. B.2 mirrors it exactly for the profile sheet (separate concept; never opens the user-location sheet from this screen).
+- **Bottom sheet pattern:** [src/components/feed/LocationSheet.tsx](src/components/feed/LocationSheet.tsx) — base `BottomSheet` from `@gorhom/bottom-sheet` driven by an `isOpen` Zustand store via a `useEffect` that calls `snapToIndex(0)` / `close()`, with `BottomSheetBackdrop` (`pressBehavior="close"`) and `BottomSheetScrollView`. B.2's sheet copies this scaffolding, drops the radius picker, and shrinks snap to `['65%']`.
+- **Alert pattern:** Confirmed across all touched screens — only `Alert.alert(title, message, buttons?)`. No toast / snackbar infrastructure exists; B.2 follows suit.
+- **Navigation API:** [package.json](package.json) → `expo-router ~6.0.23` + `@react-navigation/native ^7.1.8`. `usePreventRemove` is available (re-exported from `@react-navigation/core`); B.2 uses the simpler `useNavigation().addListener('beforeRemove', ...)` form for the gesture/system-back guard. Header back-button uses an explicit `Alert.alert`.
+- **Text primitive constraints:** [src/components/ui/Text.tsx](src/components/ui/Text.tsx) only supports `color: 'primary' | 'secondary' | 'tertiary' | 'inverse'`. For `brand` and `danger` text (Save label, error messages, delete-account row, asterisk), B.2 passes `style={{ color: colors.brand }}` / `colors.feedback.danger`.
+- **Database types up-to-date:** [src/types/supabase.ts:377-401](src/types/supabase.ts:377) already includes `location_text` and `location_updated_at` on `sellers` (via the latest `chore(types): generate supabase types` commit). No regen required.
+
+### Files created
+
+| Path | Purpose |
+| --- | --- |
+| [src/stores/useEditProfileLocationSheetStore.ts](src/stores/useEditProfileLocationSheetStore.ts) | Zustand `{ isOpen, open, close }` for the profile-only location sheet. Session-ephemeral (no persistence). Mirrors `useLocationSheetStore` exactly. |
+| [src/components/profile/EditProfileLocationSheet.tsx](src/components/profile/EditProfileLocationSheet.tsx) | Bottom sheet that lets the user pick a profile location. Reuses `CitySearchInput` (G.6) and `useDeviceLocation`; reverse-geocodes GPS coords to derive a `displayName`; writes back to the form via the `onSelect(GeoLocation)` prop. Snap `['65%']`. |
+| [src/components/profile/FormField.tsx](src/components/profile/FormField.tsx) | Label + `TextInput` + inline error + helper-right hint. Handles `required` (red asterisk), `multiline`, `maxLength`, `keyboardType`, `autoCapitalize`. Border turns red when an error is present. |
+| [src/components/profile/SectionHeader.tsx](src/components/profile/SectionHeader.tsx) | Form-tuned section header: small `label`-variant title (uppercase, secondary color) + optional caption-color subtitle. Distinct from `CategorySectionHeader` (which is sized for category rails). |
+
+### Files modified
+
+| Path | Change |
+| --- | --- |
+| [src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) | Full redesign. Vanilla `useState` form preserved, expanded from 4 → 8 fields. Adds atomic save (diff-only patch), inline validation, dirty-state guard, header bar with disabled-state Save button, photo placeholder, location row, account stub. |
+| [src/features/marketplace/services/sellers.ts](src/features/marketplace/services/sellers.ts) | `SellerProfile` + `SellerRow` extended with `latitude`, `longitude`, `locationText`, `locationUpdatedAt`. `UpdateMySellerInput` extended to accept the full B.1.5 allowlist (`name`, `avatarUrl`, `bio`, `website`, `phonePublic`, `emailPublic`, `latitude`, `longitude`, `locationText`). When any geo field is being written, `location_updated_at` is auto-stamped server-side via `new Date().toISOString()`. Mutation now `.select('*').single()` and returns the updated `SellerProfile` so the cache can be patched in place. |
+| [src/features/marketplace/hooks/useUpdateMySeller.ts](src/features/marketplace/hooks/useUpdateMySeller.ts) | Return type `void → SellerProfile`. `onSuccess` now `setQueryData(MY_SELLER_KEY, next)` instead of plain invalidate (instant cache update). The `['seller','byId']` invalidation is preserved so any open public-profile screen refetches. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Adds 30+ `profile.*` keys (section titles, field labels, validation strings, dirty-state strings, coming-soon labels). |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | Mirror of the FR additions. |
+
+### Sections shipped
+
+1. **Photo (top, centered)** — `Avatar size="xl"` + "Modifier la photo" pressable. Tap shows a `Bientôt disponible` alert. B.3 will replace the alert with the upload pipeline.
+2. **Identité** — `name` (required, autocap=words).
+3. **À propos** — `bio` (multiline, `maxLength={500}`, live `{n}/500` counter on the right).
+4. **Contact** — `website` (URL kbd, autocap=none, autocorrect=off), `phonePublic` (phone-pad), `emailPublic` (email kbd, autocap=none).
+5. **Position de vente** — Surface row with a navigation icon, `locationText` (or "Aucune position définie" placeholder), 4-decimal lat/lng caption when set, and a "Modifier" pressable that opens the new `EditProfileLocationSheet`. Selection from the sheet calls back into form state.
+6. **Compte (stub)** — Surface with three muted rows: change email, change password, delete account (red icon + label). Each row is fully tappable but only fires a `Bientôt disponible` alert. B.4 owns the real flows (signOut also lives there). The previous screen had no signOut affordance, so none is added here.
+
+### Avatar handling
+
+Form reads `existing.avatarUrl` from `useMySeller` and renders it through `Avatar source={{ uri }}`. The "Modifier la photo" affordance is wired only to a coming-soon `Alert.alert` — no upload, no permissions, no Supabase Storage calls. B.3 will replace `handleEditPhoto` with the real upload pipeline (bucket + RLS + image picker + signed-URL fetch) and write the resulting URL back to the form via `handleSetField('avatarUrl', ...)` (the field is already supported by `UpdateMySellerInput`).
+
+### Validation rules implemented
+
+| Field | Rule | Error key |
+| --- | --- | --- |
+| `name` | trim, non-empty | `profile.validationNameRequired` |
+| `website` | if non-empty, must match `/^https?:\/\//i` | `profile.validationWebsiteInvalid` |
+| `emailPublic` | if non-empty, must include an `@` and have non-whitespace on both sides | `profile.validationEmailInvalid` |
+| `phonePublic` | if non-empty, ≥ 6 trimmed characters | `profile.validationPhoneTooShort` |
+| `bio` | ≤ 500 chars (TextInput `maxLength` enforces; rule is a defensive check) | `profile.validationBioTooLong` |
+
+`validate()` is computed on every render (cheap; small object) to drive the Save button's disabled state. Errors are also surfaced as on-blur-style inline messages via per-key state set during the explicit `performSave()` flow. Once the user edits a field with an existing error, `handleSetField` clears that key from `errors`.
+
+### Dirty-state guard
+
+- **Cheap diffing:** `dirty = JSON.stringify(form) !== JSON.stringify(initialForm)`. The form is small enough (8 keys, all primitives) that this is well under a microsecond per render and avoids per-field equality plumbing.
+- **Three entry points covered:**
+  1. **Header back button** → explicit `handleBackPress` → `Alert.alert` if dirty; otherwise `router.back()`. The "Quitter sans enregistrer" button resets `initialForm` to current form (clears dirty) and then `requestAnimationFrame(() => router.back())` so the gesture-listener (below) sees a non-dirty form and lets navigation through.
+  2. **iOS swipe-back / Android system back** → `useNavigation().addListener('beforeRemove', ...)`. When dirty, calls `e.preventDefault()` and presents the same alert; on "Quitter sans enregistrer", resets `initialForm` and dispatches `e.data.action` to complete the original navigation.
+  3. **Save** → `performSave()` returns `true` on success and triggers `router.back()`. The mutation is awaited; on error the alert surfaces the message and the user stays on the screen.
+- **Atomic save:** `performSave` builds a `patch: UpdateMySellerInput` containing only fields whose value changed since `initialForm`. If the diff is empty (e.g. user touched a field then reverted it), the mutation is skipped entirely and `initialForm` is set to current form (clears dirty without a network round-trip).
+
+### Verification results
+
+- `npx tsc --noEmit` → **exit 0**. No type errors. New types (`SellerProfile.latitude`/`.longitude`/`.locationText`/`.locationUpdatedAt`) propagate through the codebase without breaking existing call sites; the mutation hook's return type is internally consumed only.
+- Bundler check: every import path resolves; the new screen imports exclusively from `@/components/ui`, `@/components/profile/*`, `@/stores/*`, `@/features/marketplace/*`, `@/lib/geocoding/types`, `@/theme`, plus stable RN / expo-router / react-i18next / `@react-navigation/native` / `@expo/vector-icons` packages already in use elsewhere in the app.
+- Visual / runtime verification is **deferred to the user**. It requires the B.1.5 migration (`20260515_tighten_sellers_update_grants.sql`) and B.1's geo migration (`20260513_geo_columns.sql`) to be applied to the active Supabase project; the screen will compile and render without them, but Save will fail at the database layer for the location fields if the geo columns are missing, and writes to disallowed columns (e.g. `verified`) will be rejected (which is the desired B.1.5 behavior).
+- No changes to any G.6 component (`useUserLocation`, `useLocationSheetStore`, `LocationSheet`, `RadiusPicker`, `CitySearchInput`). `CitySearchInput` is **read** as a child component; its file is unmodified.
+- No changes to the Profile tab screen; only the Edit route changed.
+
+### Reversion
+
+```
+git revert <B.2 commit>
+```
+
+This restores:
+- The legacy 4-field [edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx).
+- The narrow `UpdateMySellerInput` and `void`-returning `updateMySeller` in [services/sellers.ts](src/features/marketplace/services/sellers.ts).
+- The narrow `SellerProfile` / `SellerRow` shape (no geo fields exposed in TS).
+- Removes [src/stores/useEditProfileLocationSheetStore.ts](src/stores/useEditProfileLocationSheetStore.ts) and the new files under [src/components/profile/](src/components/profile/).
+- Strips the new `profile.*` i18n keys from both locales.
+
+No database migration to revert — B.2 ships zero schema changes.
+
+### Known follow-ups
+
+- **B.3 — avatar upload.** Replace `handleEditPhoto` in [edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) with the real flow (image picker → resize/compress → Supabase Storage bucket → write `avatar_url` via the existing `updateMySeller({ avatarUrl })`). The `UpdateMySellerInput.avatarUrl` field is already plumbed through B.2.
+- **B.4 — Account section + auth flows.** Replace `AccountStubRow.onPress` (currently `Alert.alert(comingSoon)`) with concrete handlers for sign-out (preserve from existing UX if any), change-email, change-password, delete-account. The visual treatment ("muted, tappable, chevron, 'Soon' label") is already in place — B.4 mostly fills in the click handlers.
+- **No-op guard around inline reverts.** If a user types into a field then exactly restores the original value, `dirty` flips back to `false` (good). The `validate()` pass on Save still runs cleanly because the diff-only patch is empty, and `performSave()` short-circuits with `setInitialForm(form)`.
+- **`name`-vs-`username` semantics.** The `sellers.name` column has historically been backfilled from `auth.user_metadata.username` via the `get_or_create_seller_for_current_user` RPC. Now that B.2 lets the user edit it freely, future user-onboarding work should make sure the two stay coherent (e.g. if a "username uniqueness" requirement lands, `sellers.name` may need to drift apart from the auth username, or the RPC may need a unique-name guard). Out of scope for B.2.
+
+---
+
+## Step B.3 Changelog (2026-05-03) — Avatar Upload Pipeline
+
+Step B.3 replaces B.2's "Modifier la photo" placeholder with the real upload flow: media-library permission → picker (square crop) → client-side resize/compress → upload to a per-user folder in a new `avatars` Supabase Storage bucket → atomic write of the public URL via the existing `updateMySeller` mutation → React-Query cache update → best-effort delete of the previous avatar file. Photo changes commit immediately and are deliberately decoupled from the form's atomic-save dirty state.
+
+### Reconnaissance findings (no code changes)
+
+- **Dependencies already in place:** [package.json:38](package.json:38) — `expo-image-picker ~17.0.11` was already installed (the brief assumed it wasn't). The plugin entry was already present in [app.json:56-61](app.json) with an English `photosPermission`. **Only `expo-image-manipulator` needed installation.**
+- **Plugin entry update:** Existing `expo-image-picker` plugin block carried English copy. B.3 swaps it (and the `NSPhotoLibraryUsageDescription` Info.plist key) for a French string that covers both flows ("Pictok accède à votre bibliothèque photo pour vos annonces et votre photo de profil") since the same OS-level prompt is shared with the Sell flow. No new permissions are introduced; the optional `cameraPermission` / `microphonePermission` keys on the plugin tuple are deliberately omitted (Sell already declares camera via [app.json:48-54](app.json) `expo-camera` plugin; the avatar flow is library-only).
+- **Storage migration pattern (followed exactly):** [supabase/migrations/20260503_sell_setup.sql:53-70](supabase/migrations/20260503_sell_setup.sql:53) and [supabase/migrations/20260506_owner_delete.sql:11-17](supabase/migrations/20260506_owner_delete.sql:11) established the project's storage convention — lowercase DDL, `drop policy if exists` + `create policy`, folder-based RLS via `(storage.foldername(name))[1] = auth.uid()::text`. B.3's migration mirrors this exactly. No `service_role` carve-outs needed.
+- **Upload primitive pattern:** [src/features/marketplace/services/sell.ts:53-69](src/features/marketplace/services/sell.ts:53) demonstrates the canonical project upload: `new File(uri).bytes()` from `expo-file-system` (the new SDK 54 API) → `supabase.storage.from(bucket).upload(path, bytes, { contentType, upsert: false })` → `getPublicUrl`. Filename uses `${userId}/${Date.now()}.${ext}`. B.3 reuses the bytes-pattern verbatim and adds a random suffix to the filename (`${Date.now()}-${rand}.jpg`) to harden against simultaneous uploads from the same user (a non-issue for avatars but free defense).
+- **Auth-user id source:** [sell.ts:33-37](src/features/marketplace/services/sell.ts:33) uses `supabase.auth.getUser()` inline. There is no `useAuth()` hook in the project; [src/stores/useAuthStore.ts](src/stores/useAuthStore.ts) is a Zustand store with `user.id`, but `sell.ts`'s inline pattern is the established convention for service-layer reads. B.3's screen handler matches that pattern (server-truth at the moment of upload, no dependency on store hydration).
+- **B.2 screen state:** [edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx) reads `existing.avatarUrl` directly from the React-Query cache (`useMySeller`), not from form state. Combined with `useUpdateMySeller.onSuccess → setQueryData(MY_SELLER_KEY, next)` (B.2), this means a successful avatar mutation immediately flips the cached value and the `Avatar` re-renders without any extra plumbing — and crucially, without polluting the form's `dirty` JSON-diff. This decoupling is intentional: photo changes are atomic and immediate; field changes are batched into the explicit Save button. Documented in the screen and in this changelog so B.4 doesn't accidentally re-couple them.
+- **`useUpdateMySeller` already supports avatar:** B.2's `UpdateMySellerInput` includes `avatarUrl`. No service or hook changes required for B.3.
+- **Avatar primitive:** [src/components/ui/Avatar.tsx](src/components/ui/Avatar.tsx) accepts `source: ImageSource | number` — passing `{ uri: publicUrl }` works without any primitive changes.
+- **Image manipulator API:** [node_modules/expo-image-manipulator/build/index.d.ts](node_modules/expo-image-manipulator/build/index.d.ts) exports both the new context-based `ImageManipulator` API and the legacy `manipulateAsync`. B.3 uses `manipulateAsync` because the picker's `allowsEditing + aspect [1,1]` already crops to square — only a final 512×512 resize + JPEG @ 0.8 pass is needed, and the legacy single-call signature is the cleanest fit.
+- **`MediaTypeOptions` deprecation:** [node_modules/expo-image-picker/build/ImagePicker.types.d.ts](node_modules/expo-image-picker/build/ImagePicker.types.d.ts) exports both `MediaTypeOptions` (enum, on its way out) and `MediaType = 'images' | 'videos' | 'livePhotos'` (string literals, the future-safe form). B.3 uses `mediaTypes: ['images']` to dodge the deprecation warning.
+
+### Dependencies installed
+
+- `expo-image-manipulator ~14.0.8` via `npx expo install expo-image-manipulator` — SDK-54-aligned, no plugin entry needed (pure native module, no permissions). Recorded in [package.json](package.json).
+- `expo-image-picker ~17.0.11` — **already installed**, no action needed beyond the plugin-string swap below.
+
+### `app.json` plugin & Info.plist tweaks
+
+| Path | Before | After |
+| --- | --- | --- |
+| [app.json](app.json) `plugins[expo-image-picker].photosPermission` | English (Sell-only copy) | French covering Sell + avatar profile photo. |
+| [app.json](app.json) `ios.infoPlist.NSPhotoLibraryUsageDescription` | English (Sell-only copy) | French covering both flows. |
+
+The `cameraPermission` / `microphonePermission` keys are intentionally omitted from the picker plugin tuple — `expo-image-picker` only injects them when set, and the project's existing `expo-camera` plugin already declares `NSCameraUsageDescription` / `NSMicrophoneUsageDescription` (currently in **English**, which is the locale-mismatch caveat already documented in the G.3 changelog as a Step 8 unification follow-up).
+
+### Migration file
+
+| Path | Purpose |
+| --- | --- |
+| [supabase/migrations/20260516_create_avatars_bucket.sql](supabase/migrations/20260516_create_avatars_bucket.sql) | Creates the `avatars` bucket (public read, 1 MiB cap, JPEG/PNG/WebP allowlist) and four `storage.objects` policies. |
+
+#### Bucket configuration
+
+- `id = 'avatars'`, `name = 'avatars'`, `public = true` (avatars render across the marketplace next to seller listings; signed URLs are unnecessary).
+- `file_size_limit = 1048576` (1 MiB) — the client pipeline produces ~50–100 KiB JPEGs, so this is purely defensive against accidental direct API uploads.
+- `allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']` — the client always uploads JPEG; PNG and WebP are allowed in case future flows write them directly.
+
+#### RLS policies
+
+| Policy | Role | Rule |
+| --- | --- | --- |
+| `avatars public read` | `public` | `bucket_id = 'avatars'` (anyone can fetch any avatar by URL) |
+| `avatars user insert` | `authenticated` | bucket match **and** `(storage.foldername(name))[1] = auth.uid()::text` |
+| `avatars user update` | `authenticated` | bucket match **and** folder match (defensive — flow uses INSERT + DELETE, never UPDATE) |
+| `avatars user delete` | `authenticated` | bucket match **and** folder match |
+
+Folder-based RLS means user A cannot read/list user B's files via the storage API even though `getPublicUrl` (a public CDN URL) works for everyone. Combined with `upsert: false`, an attacker cannot overwrite another user's avatar even with a guessed filename.
+
+### Storage helpers — public API
+
+`src/lib/storage/avatars.ts`:
+
+| Symbol | Signature | Behavior |
+| --- | --- | --- |
+| `uploadAvatar` | `(userId, fileUri) → Promise<{ publicUrl, path }>` | Resize to 512×512 JPEG @ 0.8 via `manipulateAsync` → read as bytes via `expo-file-system` → upload to `avatars/<userId>/<ts>-<rand>.jpg` → return public URL + storage path. Throws on upload error. |
+| `deleteAvatarByPath` | `(path) → Promise<void>` | `supabase.storage.from('avatars').remove([path])`. Errors **swallowed by design** — the new avatar is already saved on the seller row; a cleanup failure must not break the foreground UX. |
+| `deleteAvatarByUrl` | `(publicUrl) → Promise<void>` | Parses out the `<userId>/<filename>` segment by string-matching `/storage/v1/object/public/avatars/`. Silent no-op if the URL doesn't belong to the bucket (legacy URL, third-party host, empty string). Delegates to `deleteAvatarByPath`. |
+
+### Edit Profile screen changes
+
+[src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx):
+
+- **New imports:** `Linking` from RN, `* as ImagePicker from 'expo-image-picker'`, `uploadAvatar` + `deleteAvatarByUrl` from the new helper, `supabase` for the inline `auth.getUser()` call.
+- **New state:** `const [uploading, setUploading] = useState(false)`. Drives the spinner overlay on the avatar and disables the "Modifier la photo" pressable mid-flight.
+- **`handleEditPhoto` rewritten:** Now opens an `Alert.alert(t('profile.editPhotoTitle'), undefined, buttons)` with two-or-three options:
+  - When an avatar exists: `[Choisir une photo, Supprimer la photo (destructive), Annuler]`.
+  - When no avatar exists: `[Choisir une photo, Annuler]`.
+  - Bails immediately if `uploading === true` (prevents double-tap re-entry).
+- **`handlePickPhoto`:**
+  1. `ImagePicker.requestMediaLibraryPermissionsAsync()`. On denial, present an Alert with `[Annuler, Ouvrir les Réglages]` (the second button calls `Linking.openSettings()`).
+  2. `ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 })`. The picker handles the square crop UX; the full-quality image gets passed to our resize step.
+  3. `supabase.auth.getUser()` for the auth user id (matches `sell.ts`'s pattern).
+  4. `uploadAvatar(userId, asset.uri)` → `updateMutation.mutateAsync({ avatarUrl: publicUrl })` → on success, fire-and-forget `deleteAvatarByUrl(previousUrl)` if a different previous URL existed.
+  5. On any error: `Alert.alert(t('profile.uploadErrorTitle'), t('profile.uploadErrorBody'))`. The `existing` cache is unchanged so the avatar visually reverts to the old URL.
+  6. `finally { setUploading(false) }`.
+- **`handleDeletePhoto`:** Confirmation `Alert.alert` with `[Annuler, Supprimer la photo (destructive)]`. On confirm: `updateMutation.mutateAsync({ avatarUrl: '' })` → fire-and-forget `deleteAvatarByUrl(previousUrl)`. On error: `Alert.alert` of the delete failure.
+- **Avatar render:** Wrapped in a relative `<View>` so an `ActivityIndicator` overlay (`rgba(0,0,0,0.45)` scrim, fully circular) can sit on top while `uploading === true`. The "Modifier la photo" pressable text fades to `text.tertiary` and is `disabled` while uploading.
+- **Dirty-state decoupling — explicit and intentional:** The avatar render reads from `existing?.avatarUrl` (React-Query cache), not from `form` state. Because B.2's `useUpdateMySeller.onSuccess` calls `setQueryData(MY_SELLER_KEY, next)`, a successful avatar mutation flips the cached value, the `<Avatar>` re-renders, and the JSON-diff between `form` and `initialForm` is unaffected. So you can edit the bio, then change the photo, and the bio's dirty marker is still accurate — and Save still only writes the bio. Conversely, the photo never gets re-sent on Save (its mutation already happened). This is the right shape for an "atomic immediate" affordance vs. an "atomic batched" one. **Do not add `avatarUrl` to `FormState` in B.4** — it would re-couple the two flows.
+- **Stale i18n keys preserved:** B.2's `profile.editPhotoComingSoonTitle` / `…Body` are no longer referenced by the screen but are left in both locale files. This way `git revert` of B.3 restores B.2 cleanly without missing-key fallbacks.
+
+### i18n keys added (FR + EN, mirrored)
+
+Under `profile.*`: `editPhotoTitle`, `choosePhoto`, `deletePhoto`, `deletePhotoConfirmTitle`, `deletePhotoConfirmBody`, `uploadErrorTitle`, `uploadErrorBody`, `deleteErrorTitle`, `deleteErrorBody`, `permissionRequiredTitle`, `permissionRequiredBody`.
+
+Under `common.*`: `openSettings`.
+
+### Verification results
+
+- `npx tsc --noEmit` → **exit 0**. Strict mode, no `any`, no implicit-any callbacks. The picker's `MediaType[]` literal-string API works under strict (no enum-import dance), and `manipulateAsync` types resolve cleanly.
+- JSON validation: `app.json`, `src/i18n/locales/fr.json`, `src/i18n/locales/en.json` all parse via `JSON.parse`.
+- New imports resolve: `expo-image-picker`, `expo-image-manipulator`, `expo-file-system` (transitive Expo SDK dep, used by Sell already).
+- No changes to: `EditProfileLocationSheet`, `FormField`, `SectionHeader`, `useEditProfileLocationSheetStore`, the Account stub section, `useMySeller`, `useUpdateMySeller`, the sellers service, the location store, or the Avatar primitive.
+- Visual / runtime verification is **deferred to the user**. Steps to validate after `npm run db:push`:
+  1. Tap "Modifier la photo" → Alert offers `[Choisir une photo, Annuler]` (or `+ Supprimer la photo` if one is set).
+  2. Choose a photo → French permission prompt (first run only) → library opens → square crop → ~1–2 s upload → avatar updates.
+  3. Reload the app → avatar persists (URL is in `sellers.avatar_url`).
+  4. Replace the photo → check Supabase dashboard → previous file is gone from `avatars/<userId>/`.
+  5. Sign in as a different user → cannot list, write, or delete the first user's folder (RLS enforced; will return 403/empty depending on the operation).
+  6. Save the rest of the form (bio, name, etc.) → the avatar field is **not** part of the diff sent to `updateMySeller` (verifiable via the network tab).
+
+### Production apply
+
+```
+npm run db:push
+```
+
+Applies [supabase/migrations/20260516_create_avatars_bucket.sql](supabase/migrations/20260516_create_avatars_bucket.sql) to the linked Supabase project. Type regen is **not required** — storage policies and `storage.buckets` rows do not surface in `Database['public']` (the generated [src/types/supabase.ts](src/types/supabase.ts) describes only the `public` schema). Running `npm run gen:types` after the migration would produce a byte-identical file.
+
+### Reversion
+
+```
+git revert <B.3 commit>
+```
+
+This restores:
+- B.2's placeholder `handleEditPhoto` (Alert "Bientôt disponible") in [edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx).
+- The English `photosPermission` and `NSPhotoLibraryUsageDescription` strings in [app.json](app.json).
+- Removes [src/lib/storage/avatars.ts](src/lib/storage/avatars.ts), [supabase/migrations/20260516_create_avatars_bucket.sql](supabase/migrations/20260516_create_avatars_bucket.sql), and the new `profile.*` + `common.openSettings` i18n keys.
+- Removes `expo-image-manipulator` from `package.json`.
+
+If the migration was already applied to a Supabase project, run the rollback SQL block at the top of the migration file against each environment manually — `git revert` removes the migration file but does not undo applied DDL.
+
+### Known follow-ups
+
+- **Camera capture as a second option.** Out of scope for v1 per brief. When added, extend the `Alert.alert(t('profile.editPhotoTitle'), ...)` button list with a "Prendre une photo" entry that uses `ImagePicker.launchCameraAsync` (the `expo-camera` plugin already declares `NSCameraUsageDescription`).
+- **Server-side resize via Supabase Image Transformations.** The pipeline currently does the only resize on the client. Supabase's `getPublicUrl(path, { transform: { width, height } })` would let us serve thumbnails (e.g. 64×64 for inline avatars in lists) without pre-uploading multiple sizes. Would also remove `expo-image-manipulator` as a dependency. Defer until thumbnail demand is real.
+- **French / English Info.plist unification (Step 8).** The `expo-camera` plugin still declares English `cameraPermission` / `microphonePermission`. With this changelog, the photo-library permission is now French, so an iOS user picking a photo for their avatar sees a French prompt while the same user opening the camera in Sell sees an English prompt. Documented as a unification follow-up since G.3.
+- **Avatar visibility across the app.** With B.3, `existing.avatarUrl` becomes a real CDN URL on first upload. Any other render path that reads `seller.avatar_url` (public profile screen, listing cards, message threads) will pick up the new URL automatically — but those surfaces should be smoke-tested for Image cache busting (the URL is unique per upload, so cache busting is automatic).
+- **`uploading` swipe-back interaction.** A user could in theory tap the back gesture mid-upload. The `beforeRemove` listener does not currently block on `uploading` — the upload promise will continue in the background and either succeed (cache updates while the user is on the previous screen) or fail silently. Acceptable for v1; revisit if user reports surface.
+
+---
+
+## Step B.4 Changelog (2026-05-03) — Auth Flows
+
+Step B.4 retires the four "Bientôt disponible" stub rows that B.2 left behind in the Account section and ships the real auth flows: **sign out**, **change email**, **change password**, and **delete account**. The latter ships with a SECURITY DEFINER RPC because Supabase doesn't expose a client-callable self-delete on `auth.users`. Two-step confirmation (Alert + cross-platform typed-phrase modal) gates the destructive path. After this step, **Phase B is complete end-to-end**: profile audit (B.1) → grant tightening (B.1.5) → sectioned form (B.2) → avatar pipeline (B.3) → auth flows (B.4).
+
+### Reconnaissance findings (no code changes)
+
+- **Existing sign-out:** [src/stores/useAuthStore.ts:75-84](src/stores/useAuthStore.ts:75) — `useAuthStore.getState().logout()` calls `supabase.auth.signOut()` and clears the store. The Profile tab uses it at [src/app/(protected)/(tabs)/profile.tsx:170](src/app/(protected)/(tabs)/profile.tsx:170) followed by `router.replace('/(protected)/(tabs)')`. B.4 reuses this helper but follows up with `router.replace('/(auth)/login')` instead, since (protected) is **not auth-gated** ([src/app/(protected)/_layout.tsx](src/app/(protected)/_layout.tsx) — "Free browsing: no auth gate at the route level"). The Edit Profile screen would otherwise stay mounted with a now-stale `useMySeller` query after sign-out.
+- **Auth state listener:** [src/app/_layout.tsx:82](src/app/_layout.tsx:82) wires `subscribeToAuthChanges` from the auth store at app boot, so `supabase.auth.signOut()` (whether explicit or as a side effect of the delete RPC) reconciles store state automatically. B.4 doesn't need to touch the listener.
+- **Login route:** `/(auth)/login`. `(auth)/_layout.tsx` redirects authenticated users back to `/`, so once an unauthenticated user lands on login the rest of the auth flow is intact.
+- **No `auth` features folder existed.** B.4 creates `src/features/auth/services/auth.ts` for the new helpers (`changeEmail`, `changePassword`, `deleteMyAccount`) and intentionally does **not** add a duplicate `signOut` helper there — `useAuthStore.logout()` is already the project's canonical sign-out path and shadowing it would invite drift.
+- **FK CASCADE inventory** — read every existing migration that references `auth.users(id)` or `sellers/products/conversations/orders` IDs to determine whether `auth.users` deletion would cascade cleanly:
+
+| Table.column | References | Action | Notes |
+| --- | --- | --- | --- |
+| `sellers.user_id` | `auth.users(id)` | **CASCADE** | [20260503_sell_setup.sql:3](supabase/migrations/20260503_sell_setup.sql:3) |
+| `bookmarks.user_id` | `auth.users(id)` | **CASCADE** | [20260501_initial_marketplace_schema.sql:65](supabase/migrations/20260501_initial_marketplace_schema.sql:65) |
+| `likes.user_id` | `auth.users(id)` | **CASCADE** | [20260501_initial_marketplace_schema.sql:76](supabase/migrations/20260501_initial_marketplace_schema.sql:76) |
+| `conversations.buyer_id` | `auth.users(id)` | **CASCADE** | [20260509_messaging.sql:5](supabase/migrations/20260509_messaging.sql:5) |
+| `conversations.seller_user_id` | `auth.users(id)` | **CASCADE** | [20260509_messaging.sql:6](supabase/migrations/20260509_messaging.sql:6) |
+| `messages.sender_id` | `auth.users(id)` | **CASCADE** | [20260509_messaging.sql:20](supabase/migrations/20260509_messaging.sql:20) |
+| `push_tokens.user_id` | `auth.users(id)` | **CASCADE** | [20260512_push_tokens.sql:3](supabase/migrations/20260512_push_tokens.sql:3) |
+| `orders.buyer_id` | `auth.users(id)` | **CASCADE** | [20260510_orders.sql:3](supabase/migrations/20260510_orders.sql:3) |
+| `products.seller_id` | `sellers(id)` | CASCADE (transitive) | Via `sellers.user_id` cascade |
+| `bookmarks.product_id`, `likes.product_id`, `conversations.product_id`, `messages.conversation_id` | (various) | CASCADE (transitive) | Via products/conversations cascade |
+| **`orders.seller_id`** | **`sellers(id)`** | **RESTRICT** ⚠️ | [20260510_orders.sql:5](supabase/migrations/20260510_orders.sql:5) — **blocks the cascade chain** when the user has any sales |
+| **`orders.product_id`** | **`products(id)`** | **RESTRICT** ⚠️ | [20260510_orders.sql:4](supabase/migrations/20260510_orders.sql:4) — **same row set** as the `seller_id` block |
+
+The two RESTRICTs together mean a `DELETE FROM auth.users WHERE id = X` will fail any time user X has acted as a seller in an existing order. The B.4 RPC pre-deletes the offending `orders` rows (`seller_id IN (SELECT id FROM sellers WHERE user_id = v_user_id)`, which by construction also covers the `product_id` RESTRICT for the same rows) before issuing the auth-users delete. **This loses sales-history rows** — flagged as a v1 trade-off vs. a future "anonymize-and-keep" variant in the follow-ups section below.
+
+### Migration file
+
+| Path | Purpose |
+| --- | --- |
+| [supabase/migrations/20260517_delete_my_account_rpc.sql](supabase/migrations/20260517_delete_my_account_rpc.sql) | Defines `public.delete_my_account()` (SECURITY DEFINER), pre-deletes blocking `orders` rows, then `DELETE FROM auth.users WHERE id = auth.uid()`. EXECUTE granted to `authenticated` only; revoked from `public` and `anon`. |
+
+#### RPC signature
+
+```sql
+public.delete_my_account() returns void
+```
+
+- `SECURITY DEFINER` — runs with the migration owner's rights so the JS client (which has no access to `auth.users` or to RESTRICTed `orders` rows) can still execute the chain.
+- `set search_path = pg_catalog, public, auth` — pinned to defeat the classic SECURITY DEFINER search-path hijack vector.
+- Body re-checks `auth.uid()`; raises `'unauthenticated'` for anon JWTs (defensive — the EXECUTE grant already excludes `anon`, but the explicit guard makes the error path well-defined).
+
+### Auth helpers
+
+[src/features/auth/services/auth.ts](src/features/auth/services/auth.ts):
+
+| Symbol | Behavior |
+| --- | --- |
+| `changeEmail(newEmail)` | `supabase.auth.updateUser({ email })`. Triggers Supabase's email-confirmation flow; the change is pending until the user clicks the link delivered to the new address. |
+| `IncorrectCurrentPasswordError` | Typed sentinel error. Lets the change-password screen render an inline error on the "current password" field instead of showing a generic Alert. |
+| `changePassword(current, next)` | 1. `supabase.auth.getUser()` → email. 2. `signInWithPassword({ email, password: current })` to validate the current password (Supabase's `updateUser` does not verify it). On failure, throws `IncorrectCurrentPasswordError`. 3. `updateUser({ password: next })`. |
+| `deleteMyAccount()` | `supabase.rpc('delete_my_account')` → on success, best-effort `supabase.auth.signOut()`. The sign-out step is wrapped in try/catch because the user is already deleted server-side; a failed local clean-up is not a data-integrity issue. |
+
+#### Type-system shim
+
+The `delete_my_account` function name is **not yet in** [src/types/supabase.ts](src/types/supabase.ts) (types were last regenerated before this migration). To keep `tsc --noEmit` green without `any`, the call uses `'delete_my_account' as never` — the supabase-js community's standard escape hatch for a "function exists but types are stale" gap. Running `npm run gen:types` after applying the migration will register the function name and the `as never` cast can be cleaned up. The cast is documented in-line so a future maintainer doesn't accidentally forget it.
+
+### New sub-routes
+
+| Path | Purpose |
+| --- | --- |
+| [src/app/(protected)/account/change-password.tsx](src/app/(protected)/account/change-password.tsx) | Three-field form (`current`, `next`, `confirm`) using the B.2 `FormField` primitive (now with `secureTextEntry`). Validation: `current` non-empty, `next` ≥ 8 chars, `confirm` matches `next`. On `IncorrectCurrentPasswordError`, surfaces the error inline on the `current` field. On success, alert → `router.back()`. |
+| [src/app/(protected)/account/change-email.tsx](src/app/(protected)/account/change-email.tsx) | Renders a read-only "Email actuel" block above the new-email field. Validation: non-empty + `^[^\s@]+@[^\s@]+\.[^\s@]+$` + must differ from current. A surface below the input explains the email-confirmation flow ("Vous recevrez un email de confirmation à la nouvelle adresse"). On success, alert → `router.back()`. |
+
+Both routes mirror B.2's screen scaffolding (header bar with back + centered title + right-aligned Save), so the sub-flow visually belongs to the Edit Profile experience.
+
+### TypedConfirmModal — cross-platform replacement for `Alert.prompt`
+
+[src/components/profile/TypedConfirmModal.tsx](src/components/profile/TypedConfirmModal.tsx) — `Alert.prompt` is iOS-only. Rather than splitting the delete-account UX across two platform branches, B.4 ships a small (≈155-line) RN `Modal` that:
+
+- Renders a translucent backdrop scrim (tap to dismiss).
+- Centers a card with title + body + a single uppercase TextInput + a Cancel + Delete row.
+- Disables the destructive button until the trimmed, case-insensitive input matches the `expectedPhrase` prop.
+- Resets its input on every `visible` flip so re-opening starts clean.
+- Is mounted once at the bottom of the Edit Profile screen tree alongside `EditProfileLocationSheet` (mirroring B.2's mounting pattern).
+
+The phrase comes from i18n: `profile.deleteAccountConfirmPhrase` (`SUPPRIMER` in FR, `DELETE` in EN). Localizing the phrase rather than hardcoding it means a future locale add-on doesn't require a code change.
+
+### `FormField` extension
+
+[src/components/profile/FormField.tsx](src/components/profile/FormField.tsx) gained two additive props (B.2 didn't need them, B.4 does):
+
+- `secureTextEntry?: boolean`
+- `textContentType?: TextInputProps['textContentType']` (lets iOS surface password-strength + autofill hints on `'password'` / `'newPassword'`)
+
+No behavior change for B.2 callers — defaults preserve the exact prior render.
+
+### EditProfile Account section: stub → real
+
+[src/app/(protected)/edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx):
+
+- Removed `handleAccountStubPress`. Added four real handlers + two new local state pieces:
+  - `handleChangeEmail` → `router.push('/(protected)/account/change-email')`.
+  - `handleChangePassword` → `router.push('/(protected)/account/change-password')`.
+  - `handleSignOut` → confirmation `Alert.alert` → on confirm, `await useAuthStore.getState().logout()` + `router.replace('/(auth)/login')`.
+  - `handleDeleteAccount` → warning `Alert.alert` (`Continuer` / `Annuler`) → on continue, `setDeleteModalVisible(true)`.
+  - `handleDeleteConfirm` (called from the modal) → `await deleteMyAccount()` → `router.replace('/(auth)/login')`. Errors fall through to a localized `Alert.alert`. State: `[deleteModalVisible, deleting]`.
+- Renamed `AccountStubRow` → `AccountRow`. Made the "Soon" chip optional (now omitted entirely, since none of the rows are stubs). Added a `disabled` prop so the Delete row dims while a deletion is in flight.
+- The Account section now renders **four** rows (was three with stubs, no signOut row before): Change email, Change password, **Sign out** (danger), Delete account (danger). Each is a real `Pressable` with the existing haptic + chevron treatment.
+- Mounted `<TypedConfirmModal>` alongside `<EditProfileLocationSheet>` at the bottom of the screen tree.
+- **Avatar dirty-state guardrail respected** — no avatar-related code was touched. Photo mutations remain decoupled from the form's atomic-save dirty diff (B.3 invariant).
+
+### i18n keys added (FR + EN, mirrored)
+
+Under `profile.*`: `sectionSecurity`, `signOutTitle`, `signOutBody`, `signOutConfirm`, `changeEmailTitle`, `changeEmailNotice`, `changeEmailSuccessTitle`, `changeEmailSuccessBody`, `changeEmailCurrentLabel`, `changeEmailNewLabel`, `validationEmailNewSameAsCurrent`, `changePasswordTitle`, `changePasswordCurrentLabel`, `changePasswordNewLabel`, `changePasswordConfirmLabel`, `changePasswordHelper`, `changePasswordSuccessTitle`, `changePasswordSuccessBody`, `validationPasswordRequired`, `validationPasswordTooShort`, `validationPasswordMismatch`, `validationCurrentPasswordIncorrect`, `deleteAccountTitle`, `deleteAccountWarning`, `deleteAccountContinue`, `deleteAccountConfirmTitle`, `deleteAccountConfirmBody`, `deleteAccountConfirmPhrase`, `deleteAccountFinal`, `deleteAccountMismatch`.
+
+The B.2 stub keys (`comingSoonTitle`, `comingSoonBody`, `comingSoonShort`) are preserved so a `git revert` of B.4 restores the stub behavior cleanly without missing-key fallbacks.
+
+### Verification results
+
+- `npx tsc --noEmit` → **exit 0**. Strict mode, no `any`. The `'delete_my_account' as never` cast is the only type-system escape hatch and is documented inline + here.
+- JSON validation: both locale files parse via `JSON.parse`.
+- New imports resolve: `expo-router`, `react-native` (`Modal`, `KeyboardAvoidingView`, `Platform`), `@expo/vector-icons`, `@/lib/supabase`, `@/components/profile/*`, `@/components/ui`, `@/stores/useAuthStore`, `@/features/auth/services/auth`.
+- Untouched (per constraints): `useUpdateMySeller`, `useMySeller`, the sellers service, the avatar pipeline (`src/lib/storage/avatars.ts`), `EditProfileLocationSheet`, `useEditProfileLocationSheetStore`, the Avatar primitive, the form's atomic-save logic.
+- Visual / runtime verification deferred to the user (see "Production apply" below). Steps to validate:
+  1. Open Edit Profile → Account section now shows four rows: Changer l'email, Changer le mot de passe, Se déconnecter (red), Supprimer le compte (red).
+  2. **Sign out** → confirmation Alert → on confirm, redirected to `/(auth)/login`.
+  3. **Change email** → sub-route → enter a new email → success alert → return. Open the new email's inbox to verify the confirmation link.
+  4. **Change password** → sub-route → wrong current → inline error on first field. Right current + 8+ char new + matching confirm → success alert → return.
+  5. **Delete account** → warning Alert (`Continuer`) → typed-confirm modal → type `SUPPRIMER` → button enables → confirm → `auth.users` row gone (verify in Supabase dashboard) → redirected to login. Verify the user's `sellers`, `products`, `conversations`, `messages`, `bookmarks`, `likes`, `push_tokens`, and any seller-side `orders` are gone.
+
+### Production apply
+
+```
+npm run db:push           # applies the SECURITY DEFINER RPC migration
+npm run gen:types         # OPTIONAL but recommended — registers delete_my_account
+                          # in the generated Database types so the `as never`
+                          # cast in src/features/auth/services/auth.ts can be
+                          # cleaned up.
+```
+
+Both commands are safe to re-run; the migration is idempotent (CREATE OR REPLACE, REVOKE/GRANT) and gen:types overwrites the types file deterministically.
+
+### Reversion
+
+```
+git revert <B.4 commit>
+```
+
+This restores:
+- B.2's stub `handleAccountStubPress` and `AccountStubRow` in [edit-seller-profile.tsx](src/app/(protected)/edit-seller-profile.tsx).
+- The narrower `FormField` (no `secureTextEntry`/`textContentType`) — B.2 didn't pass them, so existing call sites are unaffected.
+- Removes [supabase/migrations/20260517_delete_my_account_rpc.sql](supabase/migrations/20260517_delete_my_account_rpc.sql), [src/features/auth/services/auth.ts](src/features/auth/services/auth.ts), [src/components/profile/TypedConfirmModal.tsx](src/components/profile/TypedConfirmModal.tsx), and the two `account/*` route files.
+- Strips the new `profile.*` i18n keys from both locales.
+
+If the migration was already applied, run the rollback SQL block at the top of the migration file against each Supabase environment manually — `git revert` removes the migration file but does not undo applied DDL. The rollback also revokes the `EXECUTE` grant explicitly (defensive — `DROP FUNCTION` already revokes implicitly).
+
+### Phase B end-to-end summary
+
+| Step | Date | Scope | Migration(s) | Files (added/modified) |
+| --- | --- | --- | --- | --- |
+| **B.1**   | (audit) | PROFILE_AUDIT.md — gap inventory across schema, grants, storage, auth, UI | — | `PROFILE_AUDIT.md` |
+| **B.1.5** | 2026-05-15 | Tighten column-level UPDATE grants on `sellers` (close self-elevation gap) | `20260515_tighten_sellers_update_grants.sql` | (no source code changes) |
+| **B.2**   | 2026-05-03 | Sectioned Edit Profile form (Identité, À propos, Contact, Position de vente, Compte stub) + atomic save + dirty-state guard | — | `edit-seller-profile.tsx`, `sellers.ts`, `useUpdateMySeller`, `FormField`, `SectionHeader`, `EditProfileLocationSheet`, `useEditProfileLocationSheetStore`, locales |
+| **B.3**   | 2026-05-03 | Avatar upload pipeline (bucket + RLS + image picker + resize + URL persist + best-effort cleanup) | `20260516_create_avatars_bucket.sql` | `avatars.ts`, `edit-seller-profile.tsx`, `app.json`, `package.json` (image-manipulator), locales |
+| **B.4**   | 2026-05-03 | Auth flows (sign out, change email, change password, delete account via SECURITY DEFINER RPC) | `20260517_delete_my_account_rpc.sql` | `features/auth/services/auth.ts`, `change-email.tsx`, `change-password.tsx`, `TypedConfirmModal`, `FormField` (+secureTextEntry), `edit-seller-profile.tsx`, locales |
+
+After B.4, the Edit Profile screen is **functionally complete**: every row in the section list does what its label says. The remaining work for Phase C / D / future steps lives outside this surface.
+
+### Known follow-ups
+
+- **Forgot-password flow on the login screen.** Out of Phase B scope per brief — that's a sign-in / pre-auth concern. When added, it will live at `/(auth)/forgot-password` and call `supabase.auth.resetPasswordForEmail(email)` with a deep-link redirect target; the redirect handler then opens the existing change-password screen in a "new password only" mode.
+- **Email-change verification status.** After `changeEmail`, Supabase keeps the session on the old email until verification. The Edit Profile screen currently shows the old email until the user signs back in (or the auth listener fires a refresh). A future "pending email change" indicator could read `auth.user.new_email` (Supabase exposes it post-`updateUser` while the change is pending) and surface a subtle banner.
+- **Password strength meter.** Currently the only UI feedback is a static `≥ 8 characters` helper. Adding a real-time strength indicator (zxcvbn or similar) is a small UX win but a non-trivial bundle add.
+- **Anonymize-instead-of-delete for `orders`.** B.4's RPC deletes the user's seller-side orders to free the cascade chain. A privacy-friendlier variant would set the seller_id to a tombstone seller row + null out `name`/`avatar_url`/etc. on the `sellers` row instead of cascading. Worth doing once a real audit / Stripe-compliance requirement lands.
+- **Re-auth window for destructive actions.** Currently any signed-in user can issue the delete RPC. A more cautious flow would require a fresh password re-entry (similar to the change-password current-password check) before the delete. Defer until a security review surfaces the gap.
+- **Type regen.** The `'delete_my_account' as never` cast in `src/features/auth/services/auth.ts` is intentional but should be removed once `npm run gen:types` runs against an environment where the migration is applied. Trivial cleanup; tracked here so it's not forgotten.
+
+---
+
+## Step C.2 Changelog (2026-05-03) — Follows Schema + Counter Trigger
+
+Schema-only step. Adds the `follows` table, two counter columns on `sellers`, a `SECURITY DEFINER` trigger that maintains the counters, three RLS policies, and the table-level grants needed by the JS client. No TypeScript / source-code changes.
+
+> **Audit referenced:** [FOLLOWING_AUDIT.md](FOLLOWING_AUDIT.md) — recommended schema direction **S1** (composite PK on `sellers.id`, public-authenticated SELECT, owner-scoped INSERT/DELETE, counter columns maintained by trigger).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **Greenfield.** No existing `follows` / `followers` / `following` table or code. Verified by grepping `src/` and `supabase/migrations/` (FOLLOWING_AUDIT.md §1). C.2 is a clean add — no stub to reconcile.
+- **Likes pattern referenced.** [supabase/migrations/20260501_initial_marketplace_schema.sql:64-70](supabase/migrations/20260501_initial_marketplace_schema.sql#L64) for the table shape (composite PK, CASCADE FKs, single supplementary index on the non-leading column). [supabase/migrations/20260502_engagement_triggers.sql:17-41](supabase/migrations/20260502_engagement_triggers.sql#L17) for the trigger shape (`SECURITY DEFINER`, `greatest(x - 1, 0)` clamp, `AFTER INSERT OR DELETE`). One deliberate deviation from likes: SELECT is open to authenticated users, not private-to-owner — follower lists must be discoverable. Documented in the migration header.
+- **B.1.5 grant constraint reaffirmed.** [supabase/migrations/20260515_tighten_sellers_update_grants.sql:53-64](supabase/migrations/20260515_tighten_sellers_update_grants.sql#L53) re-grants UPDATE on `sellers` only on the user-controlled allowlist (`name, avatar_url, bio, website, phone_public, email_public, latitude, longitude, location_text, location_updated_at`). The new `followers_count` / `following_count` columns are deliberately **not** added to the allowlist. Their only writer is the trigger function, which is `SECURITY DEFINER` so it bypasses the column grant. Adding them to the allowlist would re-open the self-elevation gap that B.1.5 closed.
+- **`sellers` FK shape confirmed.** `sellers.id uuid primary key default uuid_generate_v4()` ([supabase/migrations/20260501_initial_marketplace_schema.sql:21-30](supabase/migrations/20260501_initial_marketplace_schema.sql#L21)) and `sellers.user_id uuid references auth.users(id) on delete cascade unique` ([supabase/migrations/20260503_sell_setup.sql:2-4](supabase/migrations/20260503_sell_setup.sql#L2)). The follows FKs both reference `sellers(id)` (UUID); the RLS policies translate `auth.uid()` → `sellers.id` via the `sellers.user_id` 1:1 mapping.
+- **Migration naming convention.** `YYYYMMDD_description.sql`. Latest existing is `20260517`. New file is `20260518_follows_schema_and_counters.sql` to preserve lexical apply ordering even though today's calendar date is earlier — mirrors the convention used by B.2/B.3/B.4 (changelog dated 2026-05-03, migrations dated 20260515-20260517).
+
+### Migration
+
+**File:** [supabase/migrations/20260518_follows_schema_and_counters.sql](supabase/migrations/20260518_follows_schema_and_counters.sql)
+
+**Schema additions in seven steps (all wrapped in a single `BEGIN; ... COMMIT;`):**
+
+| # | Action | Statement |
+| --- | --- | --- |
+| 1 | Counter columns on `sellers` | `alter table public.sellers add column if not exists followers_count integer not null default 0, add column if not exists following_count integer not null default 0;` — backfills existing rows to 0 (no follow rows exist yet, so this is correct). |
+| 2 | `follows` table | `create table if not exists public.follows ( follower_id uuid not null references public.sellers(id) on delete cascade, following_id uuid not null references public.sellers(id) on delete cascade, created_at timestamptz not null default now(), primary key (follower_id, following_id), constraint follows_no_self_follow check (follower_id <> following_id) );` |
+| 3 | Supplementary index | `create index if not exists follows_following_id_idx on public.follows (following_id);` — the PK already covers the leading-column `follower_id` lookup; this covers the reverse direction. |
+| 4 | Trigger function | `create or replace function public.handle_follow_change() returns trigger language plpgsql security definer set search_path = public, pg_catalog as $$ ... $$;` — `INSERT` branch: increment `sellers[NEW.following_id].followers_count` and `sellers[NEW.follower_id].following_count`. `DELETE` branch: decrement both with `greatest(x - 1, 0)` clamp. |
+| 5 | Trigger wiring | `drop trigger if exists follows_change_trigger on public.follows; create trigger follows_change_trigger after insert or delete on public.follows for each row execute function public.handle_follow_change();` |
+| 6 | RLS policies (3) | `alter table public.follows enable row level security;` then `"follows authenticated read"` (`select to authenticated using (true)`), `"follows self insert"` (`with check follower_id in (select id from public.sellers where user_id = auth.uid())`), `"follows self delete"` (`using ...` same subquery). No UPDATE policy — follow rows are immutable. |
+| 7 | Table-level grant | `grant select, insert, delete on public.follows to authenticated;` — no grant to `anon`, no `update` to anyone. |
+
+### Trigger SECURITY DEFINER rationale (cite B.1.5)
+
+After B.1.5 ([20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql)), the `authenticated` role has no UPDATE grant on `sellers` columns outside the user-editable allowlist. `followers_count` / `following_count` are intentionally outside that allowlist — they are server-managed counters, not user-editable profile fields. For the trigger function to UPDATE columns the calling user has no grant on, it must be `SECURITY DEFINER` so it runs with the migration owner's rights instead of the calling user's rights. The function additionally pins `set search_path = public, pg_catalog` to defeat the classic SECURITY DEFINER hijack vector — without this, a malicious user could create a `public.sellers` shadow object in their own schema and trick the trigger into resolving it. Both clauses are required; neither is optional.
+
+The older trigger functions in [20260502_engagement_triggers.sql](supabase/migrations/20260502_engagement_triggers.sql) (`on_like_change` / `on_bookmark_change`) are also `SECURITY DEFINER` but predate B.1.5 and rely on the default `search_path`. The new `handle_follow_change()` lands post-B.1.5 and locks `search_path` explicitly — a small hardening upgrade for any new trigger going forward.
+
+### Three-scenario policy walk-through (informal proof)
+
+| Scenario | Inputs | RLS outcome | Trigger outcome |
+| --- | --- | --- | --- |
+| **(a) Self-follow as me** | User A (`sellers.id = a`, `auth.uid = uA`) inserts `(a, b)` into `follows`. | `WITH CHECK` subquery resolves `a.user_id = uA` → matches `auth.uid()`. **Pass.** | Increments `sellers[b].followers_count` and `sellers[a].following_count`. |
+| **(b) Follow on someone else's behalf** | User A (`auth.uid = uA`) tries to insert `(b, c)` where `b.user_id ≠ uA`. | `WITH CHECK` subquery resolves `b.user_id ≠ uA`. **Deny.** PostgREST returns 403. | Never fires; the row is never written. |
+| **(c) Unfollow my own row** | User A deletes their own `(a, b)` row. | `USING` subquery resolves `a.user_id = uA`. **Pass.** | Decrements `sellers[b].followers_count` and `sellers[a].following_count`, both with `greatest(x - 1, 0)` clamp. |
+
+The CHECK constraint `follower_id <> following_id` blocks `(a, a)` self-follow at the DB layer — this fires before the RLS policy on INSERT and surfaces as a Postgres `23514` (check_violation) to the client, separate from any 403 RLS denial. The JS client should also gate the FollowButton to never show a "follow yourself" affordance, but the DB is the source of truth.
+
+### Composition with B.4's `delete_my_account` RPC
+
+The cascade chain in [20260517_delete_my_account_rpc.sql:11-28](supabase/migrations/20260517_delete_my_account_rpc.sql#L11) gains two new CASCADE-direct paths via `follows`:
+
+```
+auth.users → sellers (CASCADE on user_id)
+            → follows.follower_id  (CASCADE on follower_id)   -- NEW
+            → follows.following_id (CASCADE on following_id)  -- NEW
+```
+
+No edit to the B.4 RPC is required. As the cascade unwinds:
+
+1. `delete from auth.users where id = v_user_id` ([20260517_delete_my_account_rpc.sql:98](supabase/migrations/20260517_delete_my_account_rpc.sql#L98)) cascades to the deleted user's `sellers` row.
+2. The `sellers` delete cascades to every `follows` row where `follower_id` or `following_id` matches the deleted seller.
+3. Each `follows` DELETE fires `handle_follow_change()`, which decrements the surviving sellers' counters with the `greatest(x - 1, 0)` clamp.
+
+The end state is consistent: the deleted user's outgoing follows are gone, the deleted user's followers' `following_count` is decremented (since they were following someone who no longer exists), and the people the deleted user followed have their `followers_count` decremented.
+
+### Production apply
+
+```
+npm run db:push      # applies 20260518_follows_schema_and_counters.sql
+npm run gen:types    # REQUIRED — regenerates src/types/supabase.ts
+git add src/types/supabase.ts && git commit -m "chore(types): generate supabase types after C.2"
+```
+
+Both commands are safe to re-run; the migration is idempotent (`IF NOT EXISTS` / `OR REPLACE` / `DROP IF EXISTS` on every DDL) and `gen:types` overwrites the types file deterministically.
+
+### Type regen — REQUIRED before C.3
+
+Unlike B.1.5 (grant changes do not surface in generated types), this migration adds:
+
+- A new public-schema table → `Database['public']['Tables']['follows']` (with `Row`, `Insert`, `Update`, `Relationships`).
+- Two new columns on `sellers` → `Database['public']['Tables']['sellers']['Row']` gains `followers_count: number` and `following_count: number`; same for `Insert` (optional with default 0) and `Update` (optional).
+
+C.3 implements `useToggleFollow` against `from('follows').insert(...)` and reads `followers_count` from the `sellers` row. Without `gen:types`, the table is unknown to TypeScript and the `from('follows')` call would require an `as never` escape-hatch cast (the same pattern B.4 used for `'delete_my_account' as never` while types were stale). To keep C.3 cleanly typed, run `gen:types` between C.2 apply and C.3 implementation.
+
+### Verification (this step)
+
+- `npx tsc --noEmit` → **exit 0**. No source changes; the migration file is SQL-only.
+- Migration SQL syntactically inspected:
+  - Balanced `BEGIN; ... COMMIT;` (single transaction wrapper).
+  - Every `CREATE` has matching `IF NOT EXISTS` (table, columns, index) or `OR REPLACE` (function) or `DROP ... IF EXISTS` + `CREATE` (trigger, policies). Re-running is a no-op.
+  - No `GRANT ... TO anon` or `GRANT ... TO public` anywhere. Only `GRANT SELECT, INSERT, DELETE ON public.follows TO authenticated`.
+  - Trigger function is `SECURITY DEFINER` with `SET search_path = public, pg_catalog` — both required, both present.
+  - No `UPDATE` policy on `follows` — follow rows are immutable; toggling = INSERT/DELETE.
+  - `CHECK (follower_id <> following_id)` is named (`follows_no_self_follow`) so a future drop/replace is unambiguous.
+  - Inline rollback SQL block is a complete reverse of the forward migration (revokes grants → drops policies → drops trigger → drops function → drops index → drops table → drops counter columns).
+- Local apply is OPTIONAL per Op.1's STOP boundary. The user runs production apply explicitly.
+
+### Reversion
+
+```
+git revert <C.2 commit>
+```
+
+This removes [supabase/migrations/20260518_follows_schema_and_counters.sql](supabase/migrations/20260518_follows_schema_and_counters.sql) from source control. **If the migration was already applied to a database, `git revert` does NOT undo applied DDL** — the rollback SQL block at the top of the migration file must be run manually against each environment:
+
+```sql
+begin;
+  revoke select, insert, delete on public.follows from authenticated;
+  drop policy if exists "follows authenticated read" on public.follows;
+  drop policy if exists "follows self insert"        on public.follows;
+  drop policy if exists "follows self delete"        on public.follows;
+  drop trigger  if exists follows_change_trigger     on public.follows;
+  drop function if exists public.handle_follow_change();
+  drop index    if exists public.follows_following_id_idx;
+  drop table    if exists public.follows;
+  alter table   public.sellers drop column if exists followers_count;
+  alter table   public.sellers drop column if exists following_count;
+commit;
+```
+
+The rollback also revokes the table-level GRANT explicitly (defensive — `DROP TABLE` already revokes implicitly). Order matters: drop policies / trigger / function before the table so the dependencies unwind cleanly. After running, also `npm run gen:types` to remove `Database['public']['Tables']['follows']` and the new `sellers` columns from the generated types.
+
+### C.3 handoff
+
+C.3 is unblocked once the migration is applied and types are regenerated. The hooks/services to write next, all mirroring existing precedent:
+
+- **Extend `UserEngagement`** in [src/features/marketplace/services/products.ts:384-407](src/features/marketplace/services/products.ts#L384) with `followingSellerIds: Set<string>` so a single `listUserEngagement()` round-trip primes follow-state alongside likes and bookmarks. Cache key stays `USER_ENGAGEMENT_QUERY_KEY = ['marketplace', 'engagement']` ([useUserEngagement.ts:7](src/features/marketplace/hooks/useUserEngagement.ts#L7)) — no key churn.
+- **`followSeller(targetSellerId)` / `unfollowSeller(targetSellerId)`** service functions adopting the `PG_UNIQUE_VIOLATION = '23505'` swallow pattern from [products.ts:346, 353](src/features/marketplace/services/products.ts#L346). The follower's own `sellers.id` is resolved via the `getOrCreateSellerForCurrentUser` RPC (already invoked by `updateMySeller` in [sellers.ts:115-118](src/features/marketplace/services/sellers.ts#L115)).
+- **`useToggleFollow(targetSellerId)`** mutation hook mirroring [useToggleLike.ts:15-45](src/features/marketplace/hooks/useToggleLike.ts#L15) exactly: `onMutate` snapshot → optimistic patch via `setQueryData` → `onError` rollback → `onSettled` invalidation. Two extensions over the like/bookmark template:
+  1. `onSettled` invalidates `['seller', 'byId', targetSellerId]` so the public seller profile's `followers_count` refreshes (likes/bookmarks invalidate the products list for `likes_count`).
+  2. The optimistic patch toggles `followingSellerIds` on the `UserEngagement` cache entry, not `likedIds` / `bookmarkedIds`.
+- **No UI work in C.3.** The `FollowButton` UI / placement is C.4's scope (per FOLLOWING_AUDIT.md §10 / U1).
+
+---
+
+## Step C.3 Changelog (2026-05-03) — Follow Hooks + UserEngagement Extension
+
+JS-only step. Ships the React Query hooks layer for follow/unfollow on top of C.2's schema. Three new hooks (`useToggleFollow`, `useFollowers`, `useFollowing`), one new service (`follows.ts`), and one additive type extension on `UserEngagement` so any component can answer "am I following this seller?" via O(1) Set membership without an extra round trip. No UI changes — C.4 wires the FollowButton.
+
+### Reconnaissance findings
+
+- **Type regen confirmed.** [src/types/supabase.ts:106-138](src/types/supabase.ts#L106) now includes `Database['public']['Tables']['follows']` (Row / Insert / Update / Relationships with both FKs to `sellers`); [src/types/supabase.ts:406-407, 431-432, 456-457](src/types/supabase.ts#L406) gain `followers_count: number` and `following_count: number` on the `sellers` Row / Insert / Update. The user ran `npm run db:push` + `npm run gen:types` between C.2 and C.3. C.3 uses the regenerated types directly — no `as never` / `as any` escape hatches.
+- **`UserEngagement` location.** Defined at [src/features/marketplace/services/products.ts:384-407](src/features/marketplace/services/products.ts#L384) (type + `listUserEngagement()` fetcher); read via the hook at [src/features/marketplace/hooks/useUserEngagement.ts](src/features/marketplace/hooks/useUserEngagement.ts) keyed by `USER_ENGAGEMENT_QUERY_KEY = ['marketplace', 'engagement']` with `staleTime: 5 * 60_000`. Pre-extension shape: `{ likedIds: Set<string>; bookmarkedIds: Set<string> }`.
+- **Existing toggle pattern.** [src/features/marketplace/hooks/useToggleLike.ts:15-45](src/features/marketplace/hooks/useToggleLike.ts#L15) and [useToggleBookmark.ts:15-45](src/features/marketplace/hooks/useToggleBookmark.ts#L15) are byte-for-byte identical except for the `liked` / `bookmarked` field name. Both take `(productId: string)` at hook construction and `currentlyXXX: boolean` as the mutation variable. Both follow `onMutate` snapshot → `setQueryData` patch → `onError` rollback → `onSettled` invalidate (`['marketplace', 'products', 'list']`). Auth gating is **not** in the hook — call sites use `useRequireAuth`.
+- **`currentSellerId` source.** No top-level auth-context exposes a seller-row id. The pattern used by `updateMySeller` ([sellers.ts:115-124](src/features/marketplace/services/sellers.ts#L115)) is to call the SECURITY DEFINER RPC `get_or_create_seller_for_current_user(p_username, p_avatar_url)` which returns `string` (the seller UUID). The RPC is idempotent — calling it returns the existing row's id if one exists, or creates one and returns the new id. C.3's `followSeller` / `unfollowSeller` adopt the same pattern. The `useMySeller` hook ([useMySeller.ts:1-13](src/features/marketplace/hooks/useMySeller.ts#L1), key `MY_SELLER_KEY = ['marketplace', 'my-seller']`) wraps `getMySeller()` (read-only `select('*').eq('user_id', auth.user.id)`); does not auto-create.
+- **Seller query key shape.** [useSeller.ts:8](src/features/marketplace/hooks/useSeller.ts#L8) — `['seller', 'byId', id]`. `useToggleFollow.onSettled` invalidates this so `followers_count` refreshes on the public profile after a toggle.
+- **Path convention.** No `src/features/social/` directory exists. The brief explicitly green-lights `src/features/marketplace/services/follows.ts` as the alternative; placing the new files alongside `useToggleLike` / `useToggleBookmark` / `useUserEngagement` keeps the engagement story coherent and avoids spawning a one-file `social` feature for what is conceptually marketplace social.
+- **`useInfiniteQuery` first use.** No prior `useInfiniteQuery` call in `src/`; `@tanstack/react-query ^5.95.2` is already a dependency so no install needed. The list hooks (`useFollowers` / `useFollowing`) are the project's first paginated React Query consumers — pattern is conventional (initial `pageParam: 0`, `getNextPageParam` returns `allPages.length * PAGE_SIZE` until a short page indicates end-of-list).
+
+### Files added
+
+| Path | Role |
+| --- | --- |
+| [src/features/marketplace/services/follows.ts](src/features/marketplace/services/follows.ts) | Service layer: `followSeller`, `unfollowSeller`, `listFollowers`, `listFollowing`, plus `FollowerRow` and `ListPageOpts` types. |
+| [src/features/marketplace/hooks/useToggleFollow.ts](src/features/marketplace/hooks/useToggleFollow.ts) | Optimistic-toggle mutation; takes `{ sellerId, currentlyFollowing }` per call (vs the like/bookmark hooks which bind `productId` at hook construction — see "Signature deviation" below). |
+| [src/features/marketplace/hooks/useFollowers.ts](src/features/marketplace/hooks/useFollowers.ts) | Paginated `useInfiniteQuery` over `listFollowers(sellerId)`. |
+| [src/features/marketplace/hooks/useFollowing.ts](src/features/marketplace/hooks/useFollowing.ts) | Symmetric — `useInfiniteQuery` over `listFollowing(sellerId)`. |
+
+### Files modified
+
+| Path | Change |
+| --- | --- |
+| [src/features/marketplace/services/products.ts](src/features/marketplace/services/products.ts) | `UserEngagement` gains `followingSellerIds: Set<string>`. `listUserEngagement()` resolves the calling user's `sellers.id` in parallel with the likes/bookmarks queries (single round trip), then fetches their follows by `follower_id`. Unauthenticated users get an empty set; users without a seller row get an empty set without firing the follows query. Two extra round trips at most (sellers lookup is parallelized with the existing two queries; follows is sequenced after). |
+| [src/features/marketplace/index.ts](src/features/marketplace/index.ts) | Re-exports `useToggleFollow`, `useFollowers`, `useFollowing`, `followSeller`, `unfollowSeller`, `listFollowers`, `listFollowing`, `FollowerRow`, `ListPageOpts`, and `ToggleFollowVars`. |
+
+### Optimistic-update pattern (mirrors `useToggleLike`)
+
+```ts
+useMutation<void, Error, { sellerId: string; currentlyFollowing: boolean }, { prev: UserEngagement | undefined }>({
+  mutationFn:  if currentlyFollowing -> unfollowSeller(sellerId)
+              else                    -> followSeller(sellerId),
+  onMutate:   await qc.cancelQueries({ queryKey: USER_ENGAGEMENT_QUERY_KEY })
+              const prev = qc.getQueryData<UserEngagement>(USER_ENGAGEMENT_QUERY_KEY)
+              if (prev) {
+                const next = new Set(prev.followingSellerIds)
+                if (currentlyFollowing) next.delete(sellerId) else next.add(sellerId)
+                qc.setQueryData(USER_ENGAGEMENT_QUERY_KEY, { ...prev, followingSellerIds: next })
+              }
+              return { prev },
+  onError:    if (ctx?.prev) qc.setQueryData(USER_ENGAGEMENT_QUERY_KEY, ctx.prev),
+  onSettled:  invalidate USER_ENGAGEMENT_QUERY_KEY (re-fetches Set from server)
+              invalidate ['seller', 'byId', sellerId]                  (refresh followers_count)
+              invalidate ['social', 'followers', sellerId]             (list page UI if open)
+              invalidate ['social', 'following', sellerId]             (list page UI if open),
+})
+```
+
+### Signature deviation from `useToggleLike` / `useToggleBookmark`
+
+`useToggleLike(productId: string)` and `useToggleBookmark(productId: string)` both bind the target id at **hook construction** so each card's `onPress` only needs to pass the boolean. `useToggleFollow()` takes both at **mutation invocation** — `mutate({ sellerId, currentlyFollowing })`. Two reasons:
+
+1. The seller profile header (C.4's primary integration point) renders one `FollowButton` for one seller — same ergonomics either way.
+2. Future use sites (followers list with a per-row "Follow back" button, future "Suggested sellers" rail) need a single hook instance that toggles different seller ids per row. Binding the id at the hook level would force one `useToggleFollow` per row, which is awkward and breaks React's hook-rule expectations on conditional rendering.
+
+The brief specifies this signature explicitly under §4 ("Signature: `UseMutationResult<void, Error, { sellerId: string; currentlyFollowing: boolean }>`"). C.4 will pass the constant `sellerId` from props and read `currentlyFollowing` from `useUserEngagement().followingSellerIds.has(sellerId)`.
+
+### `FollowerRow` shape — type honesty over brief wording
+
+The brief specifies all fields as non-nullable. The DB allows `sellers.user_id`, `sellers.bio`, and `sellers.location_text` to be null ([supabase.ts:367-389](src/types/supabase.ts#L367)). `FollowerRow` follows the DB:
+
+```ts
+export type FollowerRow = {
+  id: string;
+  user_id: string | null;     // sellers may pre-exist their auth user
+  name: string;
+  avatar_url: string;          // DB: NOT NULL DEFAULT '' — never undefined
+  bio: string | null;
+  verified: boolean;
+  is_pro: boolean;
+  followed_at: string;         // follows.created_at
+};
+```
+
+C.5's list-row component should treat `bio` as `?? ''` for layout and treat `user_id === null` as a non-clickable seller (cannot route to a profile that has no auth-user owner). Strict typing means C.5 will hit type errors on these cases and have to handle them explicitly — desirable.
+
+### `listFollowers` / `listFollowing` — FK-disambiguating join
+
+`follows` has two FKs to `sellers` (`follower_id`, `following_id`), so a plain `select('*, follower:sellers(*)')` would be ambiguous. PostgREST accepts either the FK constraint name (`follows_follower_id_fkey`) or the column name (`follower_id`) as the disambiguation hint after `!`. The column-name form is more readable:
+
+```ts
+.select(`created_at, follower:sellers!follower_id(${SELLER_JOIN_COLUMNS})`)
+.eq('following_id', sellerId)
+```
+
+`SELLER_JOIN_COLUMNS = 'id, user_id, name, avatar_url, bio, verified, is_pro'` — the slim subset C.5's row component needs. Counter columns (`followers_count` / `following_count`) are deliberately omitted from the join to keep payload small; if C.5 needs them, the seller's own profile query (`useSeller`) already returns them after the C.2 type regen.
+
+### `listUserEngagement()` — parallel-fetch redesign
+
+Pre-extension: two parallel queries (likes, bookmarks) keyed by `auth.user.id`. Post-extension: three parallel queries (sellers lookup, likes, bookmarks) keyed by `auth.user.id`, then **one** sequenced query (follows) keyed by the resolved `sellers.id`. Total: 2 round trips for users with a seller row, 1 round trip for users without (the follows query is skipped). Trade-off vs a single super-query (e.g., a custom RPC returning all four sets): more round trips but no new SQL surface. The follows query short-circuits cleanly when `followerSellerId === null` (no seller row → no follows possible → empty set), avoiding a needless empty-result query.
+
+The 5-minute `staleTime` on `useUserEngagement` means this fires once per session for most users; the extra latency is invisible.
+
+### `followSeller` / `unfollowSeller` — idempotent + auth-aware
+
+`getMySellerIdOrCreate()` private helper:
+1. `supabase.auth.getUser()` → throw `AuthRequiredError` if no user.
+2. Build a `username` fallback chain (user_metadata → email-local-part → 'User'), matching `updateMySeller`'s convention exactly.
+3. RPC `get_or_create_seller_for_current_user({ p_username, p_avatar_url: '' })` → returns the seller UUID (existing or freshly created).
+
+`followSeller(followingId)`:
+- Resolve `followerId` via the helper.
+- INSERT `(follower_id, following_id)`.
+- Swallow `error.code === '23505'` (unique-violation) — re-follows are idempotent. Mirrors `likeProduct` / `bookmarkProduct` ([products.ts:343-353](src/features/marketplace/services/products.ts#L343)).
+
+`unfollowSeller(followingId)`:
+- Resolve `followerId` via the helper.
+- DELETE WHERE `follower_id = me AND following_id = target`.
+- No special error swallowing — DELETE of a non-existent row is silently a no-op at the SQL layer.
+
+The C.2 schema's `CHECK (follower_id <> following_id)` constraint means a self-follow attempt would surface a Postgres `23514` (check_violation) here. Not specially handled — the C.4 FollowButton will gate this in UI by hiding for "this is me", and a defensive double-check is noise. If a self-follow ever bubbles up, the user sees a generic error — appropriate for a scenario the UI should never produce.
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0**. Strict mode, no `any`, no `as never`. The single `as unknown as Row[]` cast in each `listFollowers` / `listFollowing` mapper is the conventional supabase-js pattern for embedded-select results (PostgREST returns relation columns as `unknown` in the generated types because the disambiguation hint is parsed at runtime).
+- New imports resolve: `@/lib/supabase`, `@/features/marketplace/services/products` (for `AuthRequiredError`), `@tanstack/react-query` (no version change).
+- No new dependencies. `useInfiniteQuery` is in the existing `@tanstack/react-query ^5.95.2`.
+- No app behavior change — no UI consumes the hooks yet. Existing surfaces (feed, seller profile, edit profile, marketplace screen) render identically.
+- `UserEngagement` extension is purely additive — no consumer of the existing two fields breaks. Verified by re-running `tsc --noEmit` after each file landed.
+
+### Manual sanity (deferred to user, after C.4 lands)
+
+1. Sign in as user A. Open user B's profile.
+2. Tap Follow → optimistic UI shows "Following" instantly. Network tab shows `INSERT INTO follows`.
+3. Refresh user B's profile → `followers_count` is +1 (C.2 trigger ran).
+4. `useUserEngagement().followingSellerIds.has(B)` returns `true` synchronously after `onSettled` invalidate.
+5. Tap Following → optimistic UI shows "Follow". Network tab shows `DELETE FROM follows`.
+6. Refresh user B's profile → `followers_count` is back to original (clamp prevents going below 0 even if the trigger somehow double-fires).
+7. Open `useFollowers(B)` → user A appears at the top of the list (most recent first). Pagination via `fetchNextPage()` returns next page when available.
+
+### Reversion
+
+```
+git revert <C.3 commit>
+```
+
+This restores:
+- The pre-C.3 `UserEngagement` shape (`{ likedIds, bookmarkedIds }` only).
+- The pre-C.3 `listUserEngagement()` body (two parallel queries, no sellers lookup, no follows query).
+- The pre-C.3 `src/features/marketplace/index.ts` barrel (no follow exports).
+
+Removes:
+- `src/features/marketplace/services/follows.ts`
+- `src/features/marketplace/hooks/useToggleFollow.ts`
+- `src/features/marketplace/hooks/useFollowers.ts`
+- `src/features/marketplace/hooks/useFollowing.ts`
+
+The C.2 migration is **not** reverted by this — C.3 only adds JS layer over the C.2 schema. To fully unwind both, also `git revert` the C.2 commit and run the rollback SQL block from [supabase/migrations/20260518_follows_schema_and_counters.sql](supabase/migrations/20260518_follows_schema_and_counters.sql) against any DB the migration was applied against.
+
+### C.4 handoff — FollowButton component spec
+
+C.4 builds the `FollowButton` UI component. Inputs:
+
+- **Target seller id** (`sellerId: string`) — the seller being followed.
+- **Current user's seller id** — read from `useMySeller(isAuthenticated)`. Used to gate "this is me" → render nothing (or render a "Edit profile" button, deferred to C.4 design call).
+- **Follow state** — `useUserEngagement().data?.followingSellerIds.has(sellerId) ?? false`. O(1) Set membership; no extra query.
+- **Auth gating** — wrap `onPress` in `useRequireAuth().requireAuth()` (matches the like/bookmark call-site pattern on `ProductFeedItem`). On unauthenticated tap, surface the existing sign-in Alert from `useRequireAuth`.
+
+Mutation invocation:
+
+```ts
+const { mutate: toggleFollow, isPending } = useToggleFollow();
+// ...
+const onPress = () => {
+  if (!requireAuth()) return;
+  void mediumHaptic();
+  toggleFollow({ sellerId, currentlyFollowing });
+};
+```
+
+Visual states (per FOLLOWING_AUDIT.md §10 / U1):
+
+- **Not following**: filled primary background ("Follow" / "Suivre").
+- **Following**: outlined / glass variant with checkmark ("Following" / "Suivi").
+- **Pending**: button stays in the optimistic next-state; small loading affordance optional but not required (the optimistic toggle is instant, so a spinner adds noise).
+- **Self (sellerId === my sellerId)**: render nothing.
+
+Integration point: [src/app/(protected)/seller/[id].tsx](src/app/(protected)/seller/[id].tsx) — add a horizontal action row immediately under the `statsRow` (between [seller/[id].tsx:90-91](src/app/(protected)/seller/[id].tsx#L90)) containing `[FollowButton] [Message]`. The Message button's data flow already exists via the `start_or_get_conversation` RPC (see [messaging.ts:88-128](src/features/marketplace/services/messaging.ts#L88)) — wiring it is C.4's call to bundle or defer.
+
+`SellerPill` inline FollowButton variant is **not** part of C.4 per FOLLOWING_AUDIT.md §10 / U1 ("FollowButton on seller profile header only").
+
+### i18n keys C.4 will add (heads-up for the locale files)
+
+Reserve under `seller.*` to keep the namespace tight:
+- `seller.follow` (FR: "Suivre", EN: "Follow")
+- `seller.following` (FR: "Suivi", EN: "Following")
+- `seller.followFailed` (FR: "Impossible de suivre", EN: "Could not follow")
+- `seller.unfollowFailed` (FR: "Impossible de ne plus suivre", EN: "Could not unfollow")
+- `seller.followers` (already in use? — C.4 to verify; if collision, namespace under `seller.followersCount` or `seller.followersLabel`)
+- `seller.followingLabel` (for the pluralized count display, e.g., "342 abonnements" / "342 following")
+
+---
+
+## Step C.4 Changelog (2026-05-03) — FollowButton + Profile Integration
+
+UI step. Adds a `FollowButton` (filled coral / outlined-glass) and a `MessageButton` to the seller profile header, plus a social-stats row showing `followers_count` / `following_count`. Self-profile shows an "Edit profile" Chip in place of Follow/Message. Counter labels render as plain text — C.5 will make them tappable as entry points to follower/following list sub-routes.
+
+> **Audit referenced:** [FOLLOWING_AUDIT.md §10 / U1](FOLLOWING_AUDIT.md) — recommended UI direction (FollowButton on seller profile header only, no FollowButton on `SellerPill`, lists deferred to C.5, Following feed deferred to C.6).
+
+### Reconnaissance findings
+
+- **Seller profile structure** ([src/app/(protected)/seller/[id].tsx](src/app/(protected)/seller/[id].tsx)) is a single `<FlatList>` of products with a custom `ListHeaderComponent`. Header order: avatar → name + verified + PRO → memberSince → statsRow (★ rating · sales) → bio (conditional) → contactCard (PRO + has-contact, conditional) → "LISTINGS" sectionTitle. No CTA buttons today; no action row to preserve.
+- **`Chip` primitive** at [src/components/ui/Chip.tsx](src/components/ui/Chip.tsx) already exposes `'filled' | 'outlined'` variants and `'sm' | 'md'` sizes, plus a `leadingIcon` prop and built-in `'light'` haptic via the wrapped `Pressable` ([Pressable.tsx:71-75](src/components/ui/Pressable.tsx#L71)). No new primitive needed; both buttons compose on top.
+- **`useRequireAuth()`** at [src/stores/useRequireAuth.ts](src/stores/useRequireAuth.ts) returns `{ isAuthenticated, user, requireAuth }`. The `requireAuth(): boolean` function alerts a sign-in CTA on `false`. Identical contract to the like/bookmark gate pattern.
+- **`useMySeller(isAuthenticated)`** at [src/features/marketplace/hooks/useMySeller.ts:6-13](src/features/marketplace/hooks/useMySeller.ts#L6) returns the current user's seller row keyed by `MY_SELLER_KEY = ['marketplace', 'my-seller']`. Used here to compute `isOwnProfile = mySeller?.id === seller.id`.
+- **Messaging entry point status — DEFERRED.** The existing RPC `start_or_get_conversation(p_product_id uuid)` ([supabase/migrations/20260509_messaging.sql:88-128](supabase/migrations/20260509_messaging.sql#L88)) is **product-scoped** — every conversation belongs to a `(product, buyer)` pair via the unique constraint on `conversations(product_id, buyer_id)`. There is no per-seller (product-less) conversation path in the current backend. Per the brief's fallback ("If neither exists, surface and defer Message button wiring to a follow-up — render the button disabled with a tooltip / 'Bientôt' alert"), C.4 ships the `MessageButton` visually but routes its `onPress` to a localized "Bientôt disponible" Alert. Surfaced as a known follow-up (see "Follow-up" below).
+- **Seller query key shape.** [useSeller.ts:8](src/features/marketplace/hooks/useSeller.ts#L8) — `['seller', 'byId', id]`. Matches the invalidation key in C.3's `useToggleFollow.onSettled` ([useToggleFollow.ts:50](src/features/marketplace/hooks/useToggleFollow.ts#L50)). `followers_count` refetches automatically after each toggle.
+- **`formatCount`** — two helpers exist. [src/features/marketplace/utils/formatCount.ts](src/features/marketplace/utils/formatCount.ts) is the legacy English-style "1.2k" used today on this screen. [src/lib/format.ts:30-39](src/lib/format.ts#L30) is the locale-aware Intl-backed helper that produces the French "1,2k" the brand brief requires for new code (per the in-file comment at [lib/format.ts:1-17](src/lib/format.ts#L1)). C.4 imports both: the legacy import stays untouched on rating/sales (preserves existing layout); the new social-stat counts use `formatCountIntl` from `@/lib/format` with explicit locale.
+
+### Files added
+
+| Path | Role |
+| --- | --- |
+| [src/components/profile/FollowButton.tsx](src/components/profile/FollowButton.tsx) | ~55 lines. Reads `useUserEngagement().followingSellerIds`, gates via `useRequireAuth().requireAuth()`, dispatches `useToggleFollow().mutate({ sellerId, currentlyFollowing })`. Variant flips `'filled' ↔ 'outlined'`; label flips `Suivre ↔ Suivi(e)`. Optional `sellerName` prop personalizes the accessibility label. |
+| [src/components/profile/MessageButton.tsx](src/components/profile/MessageButton.tsx) | ~55 lines. Outlined Chip with `chatbubble-outline` leading icon. `onPress` is auth-gated then surfaces a localized "Bientôt disponible" Alert (named variant when `sellerName` is provided). Inline header comment documents the deferral and the reason (product-scoped messaging). |
+
+### Files modified
+
+| Path | Change |
+| --- | --- |
+| [src/features/marketplace/services/sellers.ts](src/features/marketplace/services/sellers.ts) | `SellerProfile` gains `followersCount: number`, `followingCount: number`. Hand-typed `SellerRow` gains `followers_count: number`, `following_count: number`. `rowToSeller()` maps both with `?? 0` defensive defaults (a database that hasn't applied C.2 yet would return undefined; the defaults keep the screen renderable without crashing during a partial-rollout window). |
+| [src/app/(protected)/seller/[id].tsx](src/app/(protected)/seller/[id].tsx) | Imports `useMySeller`, `useAuthStore`, `Chip`, `FollowButton`, `MessageButton`, and `formatCount as formatCountIntl` from `@/lib/format`. Computes `isOwnProfile`. Adds a `socialStatsRow` (followers · following) immediately under the existing `statsRow`. Adds an `actionRow` between `bio` and `contactCard`: `[Edit profile]` for self, `[Follow] [Message]` for others. Anonymous viewers see `[Follow] [Message]` (the buttons gate via `requireAuth()` on tap). Six new style entries; existing styles untouched. |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | Adds `profile.editProfile` and the new `social.*` namespace (12 keys including aria labels and the deferred-message-coming-soon copy). |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Mirrors EN keys exactly. `Suivre` / `Suivi(e)` / `abonnés` / `abonnements`. |
+
+### Self-profile guard
+
+`isOwnProfile = !!mySeller && !!seller && mySeller.id === seller.id` — computed before the loading early returns; safely evaluates to `false` while either side is undefined. The action row is conditional:
+
+- **Other user** (`isOwnProfile = false`): `[Follow] [Message]`. `Follow` toggles via the C.3 mutation; `Message` shows the deferred Alert.
+- **Self** (`isOwnProfile = true`): `[Modifier le profil]` — pill chip with `create-outline` icon routes to `/(protected)/edit-seller-profile`. Replaces nothing — the existing seller profile screen had no CTA before C.4.
+- **Anonymous viewer** (`isAuthenticated = false`): falls into the "other user" branch since `mySeller` is undefined → `isOwnProfile = false`. The `Follow` button's `requireAuth()` gate alerts the sign-in CTA on tap. The `Message` button does the same before its deferred Alert. This preserves the existing read-only-with-CTA-prompt-on-tap pattern used by like/bookmark on the feed.
+
+The C.2 schema's `CHECK (follower_id <> following_id)` is the DB safety net; the UI guard ensures the button never offers a self-follow that the DB would have to reject.
+
+### Counter display pattern
+
+Renders as a separate row right below the existing `statsRow`, two label-value pairs side by side with `gap: 24`. Layout:
+
+```
+★ 4.8 · 1,2k ventes
+342 abonnés     87 abonnements
+```
+
+Number uses `Text bold 14px white`; label uses `12px secondary`. Numbers are formatted via `formatCountIntl(n, 'fr-FR' | 'en-US')` per the brand-aware helper at [src/lib/format.ts:30](src/lib/format.ts#L30) so French sees "1,2k" and English sees "1.2k". Counter labels are **not** wrapped in `Pressable` and have no `accessibilityRole='button'` — they are plain text. C.5 is the step that converts them into tappable navigation entry points (currently they look like static stats, which is the desired affordance for C.4's surface).
+
+### React Query refresh on toggle
+
+Already wired in C.3: [useToggleFollow.ts:50-53](src/features/marketplace/hooks/useToggleFollow.ts#L50) invalidates `['seller', 'byId', sellerId]` in `onSettled`. The seller profile uses the same key via `useSeller(id)` ([useSeller.ts:8](src/features/marketplace/hooks/useSeller.ts#L8)). Post-toggle:
+
+1. Optimistic patch flips `followingSellerIds` immediately → button text and variant update synchronously.
+2. Mutation completes server-side → the C.2 trigger increments/decrements `followers_count`.
+3. `onSettled` invalidates the seller-by-id query → `useSeller` refetches → `followersCount` displays the new value.
+
+Verified the key matches the call site (no mismatch — C.3 chose `['seller', 'byId', sellerId]` based on its own reconnaissance of the existing `useSeller` hook).
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0**. Strict mode, no `any`, no `as never`.
+- Both locale files parse via `JSON.parse` — verified with `node -e 'JSON.parse(...)'` after the edits.
+- Zero new dependencies. `Chip`, `Pressable` (with built-in haptic), Ionicons, and `useRequireAuth` are all already in the codebase.
+- No regression in existing surfaces — the legacy `formatCount` import is preserved; rating/sales render byte-identically; contactCard (for PRO sellers with public contact info) is untouched and still renders below the new action row.
+- The `?? 0` defaults in `rowToSeller()` mean a database without the C.2 migration applied would render the seller profile with `0 abonnés / 0 abonnements` instead of crashing on missing fields. Acceptable degraded state during a partial-rollout window.
+
+### Visual verification (deferred to user)
+
+1. Open someone else's seller profile: `[Follow] [Message]` action row sits between bio and the optional contactCard. `Follow` is filled coral. Counters show `0 abonnés` and `0 abonnements` until follows accumulate.
+2. Tap `Follow` → button instantly flips to outlined `Suivi(e)` (optimistic). Within ~200ms the followers counter increments by 1 (post-`onSettled` refetch).
+3. Tap `Suivi(e)` → reverts to filled `Follow`; counter decrements.
+4. Open your own profile: action row shows only `[Modifier le profil]` outlined chip; tapping it routes to `/(protected)/edit-seller-profile`.
+5. Sign out, open someone else's profile: `[Follow] [Message]` are visible; tapping either surfaces the sign-in alert before the action.
+6. Switch to English locale: chip label flips to `Follow`/`Following`/`Message`; counter labels flip to `followers`/`following`; numbers format with English thousands separator.
+
+### Reversion
+
+```
+git revert <C.4 commit>
+```
+
+This restores:
+- The pre-C.4 `SellerProfile` and `SellerRow` types (no follower/following counts).
+- The pre-C.4 `rowToSeller()` mapper.
+- The pre-C.4 [src/app/(protected)/seller/[id].tsx](src/app/(protected)/seller/[id].tsx) (no action row, no social stats row, no `useMySeller` import).
+- Strips the new `social.*` namespace and `profile.editProfile` from both locales.
+
+Removes:
+- [src/components/profile/FollowButton.tsx](src/components/profile/FollowButton.tsx)
+- [src/components/profile/MessageButton.tsx](src/components/profile/MessageButton.tsx)
+
+C.2 migration and C.3 hooks are independent of C.4 and remain functional after revert — `useToggleFollow` and the schema continue to exist; only the UI surface goes away.
+
+### Follow-up surfaced
+
+- **Direct messaging from a seller profile is deferred.** The existing `start_or_get_conversation` RPC requires a `product_id`. To wire `MessageButton` for real, a future migration would need either (a) a new `start_or_get_seller_conversation(p_seller_user_id uuid)` RPC and a corresponding `conversations.product_id NULL`-allowed schema change, or (b) UI that picks a product to anchor the conversation against (mid-tap product picker sheet). Option (a) is simpler for the C.4 user-flow but expands the messaging schema's invariant. Defer to whoever owns Phase D / messaging hardening. Until then, the deferred Alert tells the user to "open one of their listings to start a conversation" — a workable workaround using the existing per-product chat entry on the product detail screen.
+
+### C.5 handoff
+
+C.5 builds the followers / following list sub-routes. Required steps:
+
+1. **Convert `seller/[id].tsx` to a folder route.** Move the current file to `src/app/(protected)/seller/[id]/index.tsx`. Add siblings:
+   - `src/app/(protected)/seller/[id]/followers.tsx` — paginated list consuming `useFollowers(sellerId)` from C.3.
+   - `src/app/(protected)/seller/[id]/following.tsx` — paginated list consuming `useFollowing(sellerId)` from C.3.
+2. **Make the social-stat counter labels tappable.** Wrap each `socialStatBlock` in a `Pressable` with `haptic="light"` that pushes the corresponding sub-route. Add `accessibilityRole="button"` and a localized accessibility label (e.g., "View 342 followers"). The C.4 layout (`socialStatBlock` is already a `<View row gap=4>`) is shaped for this drop-in.
+3. **List row UI.** Each row renders `Avatar(48) + name + verified/PRO badges + bio (1 line, secondary) + Follow button on the right` (the inline `Follow` chip on the right uses C.4's `FollowButton` with `size="sm"`). Tap on the row routes to that seller's profile via `router.push(\`/(protected)/seller/\${id}\`)`. Empty state: "Aucun abonné pour le moment" / "No followers yet". Loading: skeleton rows. Pagination: `onEndReached → fetchNextPage()` with `onEndReachedThreshold = 0.5`.
+4. **`FollowButton` reuse — no changes needed in the component itself.** C.4's `size` prop already handles the smaller list-row variant. The existing self-profile guard in the seller profile remains specific to that screen; the `FollowButton` itself does not gate self-follow because the followers/following lists never include the current user looking at someone else's followers (you can be in your own list, but the row component should hide its `FollowButton` for the row matching the viewer's own seller id).
+5. **i18n keys to add for C.5** (under `social.*`): `followersTitle`, `followingTitle`, `noFollowers`, `noFollowing`, `followersAriaLabel`, `followingAriaLabel`, `viewFollowers`, `viewFollowing`. Reserve under the same `social.*` namespace C.4 introduced.
+
+C.6 (Following feed as third tab) remains explicitly out of scope — defer until enough sellers are followed to populate a stream meaningfully (per FOLLOWING_AUDIT.md §6.3).
+
+---
+
+## Step C.5 Changelog (2026-05-03) — Folder Route + Followers/Following Lists
+
+Structural step. Converts the seller route from a leaf to a folder so list sub-routes can live alongside it, then ships the followers / following list screens consuming C.3's `useFollowers` / `useFollowing` hooks. C.4's social-stat counters are now tappable navigation entry points. After this step, the social graph is fully navigable.
+
+> **Audit referenced:** [FOLLOWING_AUDIT.md §10 / U1](FOLLOWING_AUDIT.md) — sub-route lists at `/(protected)/seller/[id]/followers` and `.../following`. Following feed (C.6) deferred.
+
+### Reconnaissance findings
+
+- **Three call sites push to the seller route**, all using the URL pattern `/(protected)/seller/${id}`:
+  - [src/features/marketplace/components/ProductFeedItem.tsx:99](src/features/marketplace/components/ProductFeedItem.tsx#L99)
+  - [src/features/marketplace/components/ProductDetailSheet.tsx:406](src/features/marketplace/components/ProductDetailSheet.tsx#L406)
+  - [src/features/marketplace/components/SellerCard.tsx:24](src/features/marketplace/components/SellerCard.tsx#L24)
+- All three use `as Href` casting to bypass Expo Router's `experiments.typedRoutes`. Expo Router resolves both `seller/[id].tsx` and `seller/[id]/index.tsx` to the same URL pattern (`/seller/:id`), so the file move is **transparent** to all three call sites — verified post-move with `tsc --noEmit` exit 0 + manual inspection.
+- **No deep-link references** to `seller` in [app.json](app.json) (verified: zero matches case-insensitive).
+- **No push-notification handlers** target `seller` routes — [src/services/pushNotifications.ts](src/services/pushNotifications.ts) and [src/hooks/usePushNotifications.ts](src/hooks/usePushNotifications.ts) both grep clean.
+- **C.4 counter labels** at [seller/[id]/index.tsx:105-118](src/app/(protected)/seller/[id]/index.tsx#L105) (post-move path). Two `socialStatBlock` Views inside `socialStatsRow` — surgical wrap-in-Pressable target.
+- **`Pressable` from `@/components/ui`** has built-in scale animation on press (`pressScale: 0.96`, [Pressable.tsx:51-67](src/components/ui/Pressable.tsx#L51)) plus a `haptic` prop. Used by `FollowerRow` so we don't need a custom press-state background or a manual `lightHaptic()` call.
+- **`ProBadge`** at [src/components/ui/ProBadge.tsx:29](src/components/ui/ProBadge.tsx#L29) defaults `label = 'PRO'`, so omitting the prop is safe.
+
+### Folder conversion
+
+```
+git mv src/app/(protected)/seller/[id].tsx \
+       src/app/(protected)/seller/[id]/index.tsx
+```
+
+Tracked in `git status` as `RM src/app/(protected)/seller/[id].tsx -> src/app/(protected)/seller/[id]/index.tsx` (rename detected — preserves blame history). The file's contents are unchanged from C.4 except for the two diffs in §"Files modified" below.
+
+### Files added
+
+| Path | Role |
+| --- | --- |
+| [src/components/profile/FollowerRow.tsx](src/components/profile/FollowerRow.tsx) | Reusable list row: Avatar(48) + name + verified + PRO + 1-line bio + inline `FollowButton size="sm"`. Tap row → `router.push(/(protected)/seller/${id})`. `showFollowButton` defaults true; pass `false` for the self-row defensive guard. Uses the `@/components/ui/Pressable` (scale animation + built-in `'light'` haptic) so no custom press-state styling needed. |
+| [src/components/profile/FollowerListPrimitives.tsx](src/components/profile/FollowerListPrimitives.tsx) | Two co-located primitives shared between the followers and following screens: `FollowerListSkeletons` (renders `count` skeleton rows matching `FollowerRow` geometry — 48px circle + two text bars + button placeholder) and `FollowerListEmpty` (centered icon + title + optional body, `iconName` is caller-supplied so the followers screen uses `people-outline` and the following screen uses `person-add-outline`). Co-located rather than scattered to keep the list-screen surface tight. |
+| [src/app/(protected)/seller/[id]/followers.tsx](src/app/(protected)/seller/[id]/followers.tsx) | `SellerFollowersScreen`. Reads `useSeller(id)` for the header context (parent seller's name) and `useMySeller(isAuthenticated)` for the self-row guard. Consumes `useFollowers(id)` (C.3 `useInfiniteQuery`, page size 20). FlatList with `onEndReached` + `RefreshControl` + skeleton loader + empty state. Custom in-screen header bar with chevron-back + dynamic title. |
+| [src/app/(protected)/seller/[id]/following.tsx](src/app/(protected)/seller/[id]/following.tsx) | `SellerFollowingScreen`. Symmetric to followers.tsx but consumes `useFollowing(id)` and uses `social.followingOfTitle` / `social.noFollowingTitle` copy. |
+
+### Files modified
+
+| Path | Change |
+| --- | --- |
+| [src/app/(protected)/seller/[id]/index.tsx](src/app/(protected)/seller/[id]/index.tsx) | Imports `Href` from `expo-router`. Wraps each of C.4's two `socialStatBlock` Views in a `Pressable` with `onPress` → `router.push(/(protected)/seller/${seller.id}/followers \| /following as Href)`, `lightHaptic()`, `hitSlop: 6`, `accessibilityRole: 'button'`, and parameterized `accessibilityLabel` carrying the count for screen readers. Press feedback via `pressed && { opacity: 0.6 }` style callback. **No other change** — the action row, FollowButton/MessageButton placement, contactCard, listings grid all stay identical. |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | Adds 9 new keys under the `social.*` namespace (extending C.4's set): `followersOfTitle`, `followingOfTitle`, `followersTitle`, `followingTitle`, `noFollowersTitle`, `noFollowingTitle`, `viewProfileAriaLabel`, `viewFollowersAriaLabel`, `viewFollowingAriaLabel`. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Mirrors EN keys exactly. `Abonnés de {{name}}` / `Abonnements de {{name}}` / `Aucun abonné pour le moment`, etc. |
+
+### List screen pattern
+
+Both screens use the same shape:
+
+```ts
+const items = query.data?.pages.flatMap((page) => page) ?? [];
+
+<FlatList
+  data={items}
+  keyExtractor={(item) => item.id}
+  renderItem={({ item }) => <FollowerRow seller={...} showFollowButton={...}/>}
+  onEndReached={() => {
+    if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+  }}
+  onEndReachedThreshold={0.5}
+  ListEmptyComponent={query.isLoading ? <Skeletons/> : <Empty/>}
+  ListFooterComponent={query.isFetchingNextPage ? <Spinner/> : null}
+  refreshControl={
+    <RefreshControl
+      refreshing={query.isRefetching && !query.isFetchingNextPage}
+      onRefresh={() => void query.refetch()}
+      tintColor={colors.text.secondary}
+    />
+  }
+  contentContainerStyle={items.length === 0 ? { flexGrow: 1 } : undefined}
+/>
+```
+
+The `isRefetching && !isFetchingNextPage` predicate on `RefreshControl.refreshing` prevents the pull-to-refresh spinner from spinning when the user merely scrolls to the bottom and triggers a next-page fetch — the next-page footer spinner handles that case independently. The `flexGrow: 1` on the empty contentContainer lets the empty-state view fill the screen vertically (centered) instead of collapsing to its intrinsic height at the top.
+
+### Self-row guard
+
+`showFollowButton={!mySeller || mySeller.id !== item.id}`:
+
+- For an unauthenticated viewer (`mySeller === undefined`): show the FollowButton on every row. Tapping it triggers the auth gate via `useRequireAuth().requireAuth()` (already wired in C.4's `FollowButton`).
+- For an authenticated viewer: hide the FollowButton on the row that matches their own seller id.
+
+The C.2 schema's `CHECK (follower_id <> following_id)` makes self-follow a DB-level error (`23514` check_violation), so the user could never actually trigger one even if the button were shown — the row is reachable in their own following list (showing who they follow) but never in their own followers list (you can only appear as a follower of someone else). Defensive UI keeps the button from advertising an action the DB will reject, in either direction. The cost is a per-row equality check, which is trivial.
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0** before AND after the file move. Strict mode, no `any`. Three pre-existing `as Href` casts in unrelated callers are unchanged; the four new `as Href` casts in C.5 follow the same project convention for typedRoutes-with-dynamic-segments.
+- Both locale files parse via `JSON.parse` — verified with `node -e 'JSON.parse(...)'` after each edit.
+- File move tracked correctly by git as `RM src/app/(protected)/seller/[id].tsx -> src/app/(protected)/seller/[id]/index.tsx` (rename, not delete + add — git's `--similarity` heuristic detected the unchanged contents).
+- All three pre-existing call sites resolve to the same URL post-move:
+  - [ProductFeedItem.tsx:99](src/features/marketplace/components/ProductFeedItem.tsx#L99) → `/(protected)/seller/${id}` → resolves to `seller/[id]/index.tsx`. ✅
+  - [ProductDetailSheet.tsx:406](src/features/marketplace/components/ProductDetailSheet.tsx#L406) → same. ✅
+  - [SellerCard.tsx:24](src/features/marketplace/components/SellerCard.tsx#L24) → same. ✅
+- Zero new dependencies. `RefreshControl` is from `react-native` core; `useInfiniteQuery` already in `@tanstack/react-query`.
+
+### Visual verification (deferred to user)
+
+1. Open a seller profile → tap "342 abonnés" → followers list opens, header shows "Abonnés de Maison Nova".
+2. Each row: avatar + name + (verified ✓) + (PRO badge) + 1-line bio + small filled `Suivre` button on the right.
+3. Tap a row → navigates to that seller's profile.
+4. Tap `Suivre` on a row → button optimistically flips to outlined `Suivi(e)`. The followers list parent's count refreshes only when navigating back (the parent profile invalidates its `['seller', 'byId']` key on toggle via C.3's `onSettled`).
+5. Scroll to bottom → next page loads (footer spinner appears, then 20 more rows).
+6. Pull down to refresh → top spinner appears, list re-fetches from offset 0.
+7. Open the **following** list for a seller with no follows → empty state with `person-add-outline` icon + "Aucun abonnement pour le moment".
+8. Open your own profile → tap your own followers count → opens YOUR followers list. If you appear in someone else's following list, the `Suivre` button on your own row is hidden (defensive guard).
+
+### Reversion
+
+```
+git revert <C.5 commit>
+```
+
+This restores:
+- The pre-C.5 leaf-route file at `src/app/(protected)/seller/[id].tsx` (git rename → revert recreates the leaf file with C.4 contents).
+- The pre-C.5 [src/app/(protected)/seller/[id]/index.tsx](src/app/(protected)/seller/[id]/index.tsx) social stats row (untappable plain-text counters from C.4).
+- Strips the 9 new `social.*` keys from both locales.
+
+Removes:
+- [src/components/profile/FollowerRow.tsx](src/components/profile/FollowerRow.tsx)
+- [src/components/profile/FollowerListPrimitives.tsx](src/components/profile/FollowerListPrimitives.tsx)
+- [src/app/(protected)/seller/[id]/followers.tsx](src/app/(protected)/seller/[id]/followers.tsx)
+- [src/app/(protected)/seller/[id]/following.tsx](src/app/(protected)/seller/[id]/following.tsx)
+- The (now-empty) `src/app/(protected)/seller/[id]/` directory.
+
+C.2 / C.3 / C.4 are independent of C.5 and remain functional after revert — the schema, hooks, FollowButton, and the seller profile (C.4 counters as plain text) all continue to work; only the list sub-routes go away.
+
+### C.6 readiness
+
+A "Following" feed is now an option but **explicitly remains out of Phase C scope** per FOLLOWING_AUDIT.md §6.3 ("defer until enough sellers are followed to populate a stream meaningfully"). When/if C.6 ships, all the data + components are in place:
+
+- **Hook** `useFollowing(mySeller.id)` returns the seller ids the user follows; a future `useFollowingFeed(...)` would query products via `seller_id IN (sellerIdsIFollow)` ordered by `created_at desc`, paginated with `useInfiniteQuery` mirroring C.5's pattern.
+- **Tab integration** would extend [src/stores/useMainTabStore.ts](src/stores/useMainTabStore.ts) `MainTabId = 'pour-toi' | 'marketplace' | 'following'` and add a third `<TabItem>` to [src/components/feed/MarketplaceHeader.tsx](src/components/feed/MarketplaceHeader.tsx). Header content max-width is currently 640px ([MarketplaceHeader.tsx:26](src/components/feed/MarketplaceHeader.tsx#L26)); three labels fit comfortably on phone width.
+- **Empty state** for users who follow nobody: prompt them to discover sellers (link to a "discover" surface that doesn't exist yet — would need to be a ranked seller list or a search affordance).
+- **Realtime** is optional. C.2's migration did not add `follows` to the `supabase_realtime` publication; if C.6 needs live feed updates, an additive migration would `alter publication supabase_realtime add table public.follows;` and the feed query would resubscribe per-row. React Query invalidation in `onSettled` is sufficient for v1.
+
+The social graph is now fully navigable: Follow button on every other-user profile, counters tappable to followers/following lists, every row tappable to its seller profile, every row's inline `Suivre` button toggleable. Phase C's product surface is functionally complete.

@@ -19,7 +19,7 @@
         "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"],
         "NSCameraUsageDescription": "Pictok uses your camera so you can take photos and videos of items to list on the marketplace.",
         "NSMicrophoneUsageDescription": "Pictok uses your microphone when you record videos for your marketplace listings.",
-        "NSPhotoLibraryUsageDescription": "Pictok accesses your photo library so you can pick existing photos to attach to your marketplace listings.",
+        "NSPhotoLibraryUsageDescription": "Pictok accède à votre bibliothèque photo pour vos annonces et votre photo de profil.",
         "NSPhotoLibraryAddUsageDescription": "Pictok saves photos and videos you capture in the app to your photo library."
       }
     },
@@ -56,7 +56,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pictok accesses your photo library so you can pick existing photos to attach to your marketplace listings."
+          "photosPermission": "Pictok accède à votre bibliothèque photo pour vos annonces et votre photo de profil."
         }
       ],
       [

@@ -384,24 +384,52 @@ export async function unbookmarkProduct(productId: string): Promise<void> {
 export type UserEngagement = {
   likedIds: Set<string>;
   bookmarkedIds: Set<string>;
+  followingSellerIds: Set<string>;
 };
 
 export async function listUserEngagement(): Promise<UserEngagement> {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) {
-    return { likedIds: new Set(), bookmarkedIds: new Set() };
+    return {
+      likedIds: new Set(),
+      bookmarkedIds: new Set(),
+      followingSellerIds: new Set(),
+    };
   }
   const userId = userData.user.id;
-  const [likes, bookmarks] = await Promise.all([
+
+  // Likes / bookmarks key by auth.users.id; follows key by sellers.id
+  // (the calling user's seller-row id). Fetch the seller_id in parallel
+  // with the engagement queries — no serial latency. If the user has not
+  // yet been promoted to a seller row (e.g., they have only browsed),
+  // they cannot have follow rows either, so followingSellerIds is empty.
+  const [sellerRowResult, likes, bookmarks] = await Promise.all([
+    supabase.from('sellers').select('id').eq('user_id', userId).maybeSingle(),
     supabase.from('likes').select('product_id').eq('user_id', userId),
     supabase.from('bookmarks').select('product_id').eq('user_id', userId),
   ]);
+  if (sellerRowResult.error) throw sellerRowResult.error;
   if (likes.error) throw likes.error;
   if (bookmarks.error) throw bookmarks.error;
+
+  const followerSellerId = sellerRowResult.data?.id ?? null;
+  let followingSellerIds = new Set<string>();
+  if (followerSellerId) {
+    const follows = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', followerSellerId);
+    if (follows.error) throw follows.error;
+    followingSellerIds = new Set(
+      follows.data.map((row) => row.following_id as string),
+    );
+  }
+
   return {
     likedIds: new Set(likes.data.map((row) => row.product_id as string)),
     bookmarkedIds: new Set(
       bookmarks.data.map((row) => row.product_id as string)
     ),
+    followingSellerIds,
   };
 }

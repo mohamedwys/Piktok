@@ -131,7 +131,11 @@ export function usePostComment(
       );
       // Refresh the action-rail counter on the parent product card.
       // Trigger-maintained `comments_count` is now incremented server-side.
-      qc.invalidateQueries({ queryKey: ['product', 'byId', productId] });
+      // Keys mirror useProduct / useProducts at hooks/useProduct.ts:11 and
+      // hooks/useProducts.ts:9.
+      qc.invalidateQueries({
+        queryKey: ['marketplace', 'products', 'byId', productId],
+      });
       qc.invalidateQueries({ queryKey: ['marketplace', 'products', 'list'] });
     },
 

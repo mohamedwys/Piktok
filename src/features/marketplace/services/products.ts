@@ -1,3 +1,5 @@
+import { Share } from 'react-native';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import type {
   Product,
@@ -432,4 +434,58 @@ export async function listUserEngagement(): Promise<UserEngagement> {
     ),
     followingSellerIds,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Share helpers (Phase E.2)
+//
+// `incrementShareCount` calls the SECURITY DEFINER RPC defined by
+// supabase/migrations/20260521_increment_share_count_rpc.sql. The RPC bumps
+// products.shares_count by 1 — the JS client cannot UPDATE the column
+// directly because D.1.5 (20260519_tighten_products_update_grants.sql)
+// excluded shares_count from the authenticated allowlist.
+//
+// `shareProduct` composes the system Share sheet. Per SHARE_AUDIT.md §5 the
+// `url` and `message` fields are passed both because iOS shows them
+// separately while Android appends url to message — passing both gives the
+// best cross-platform behavior at the cost of a slight URL duplication on
+// Android.
+//
+// The brand name "Marqe" is hardcoded in the message templates pending
+// Phase F's brand-name decision. Locale branching is inline (fr / en) to
+// avoid coupling the share message to the i18n bundles for v1; if a
+// future requirement adds more variants, move to t('share.message', ...).
+// ---------------------------------------------------------------------------
+
+type IncrementShareCountRpc = (
+  fn: 'increment_share_count',
+  args: { p_product_id: string },
+) => Promise<{ error: { message: string } | null }>;
+
+export async function incrementShareCount(productId: string): Promise<void> {
+  // Cast through unknown until `npm run gen:types` registers the function
+  // in Database['public']['Functions']. The runtime call is unaffected;
+  // only the static signature is augmented.
+  const rpc = supabase.rpc as unknown as IncrementShareCountRpc;
+  const { error } = await rpc('increment_share_count', {
+    p_product_id: productId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export type ShareProductInput = {
+  productId: string;
+  title: string;
+  priceLabel: string;
+  locale: 'fr' | 'en';
+};
+
+export async function shareProduct(input: ShareProductInput): Promise<void> {
+  const url = Linking.createURL(`product/${input.productId}`);
+  const message =
+    input.locale === 'en'
+      ? `Check out ${input.title} for ${input.priceLabel} on Marqe`
+      : `Découvrez ${input.title} à ${input.priceLabel} sur Marqe`;
+
+  await Share.share({ message, url });
 }

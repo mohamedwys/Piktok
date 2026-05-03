@@ -52,6 +52,7 @@ export { useCreateCheckoutSession } from './hooks/useCreateCheckoutSession';
 export { StripeNotConfiguredError } from './services/orders';
 export type { Order, OrderStatus } from './services/orders';
 export { useComments, COMMENTS_QUERY_KEY } from './hooks/useComments';
+export { useCommentsRealtime } from './hooks/useCommentsRealtime';
 export { usePostComment, type PostCommentVars } from './hooks/usePostComment';
 export { useDeleteComment, type DeleteCommentVars } from './hooks/useDeleteComment';
 export { useEditComment, type EditCommentVars } from './hooks/useEditComment';
@@ -60,8 +61,11 @@ export {
   postComment,
   deleteComment,
   editComment,
+  getCommentWithAuthor,
+  subscribeToProductComments,
   type CommentRow,
   type CommentAuthor,
   type CommentWithAuthor,
   type CommentPage,
+  type CommentRealtimeHandlers,
 } from './services/comments';

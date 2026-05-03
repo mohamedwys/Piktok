@@ -128,6 +128,60 @@ export async function deleteComment(commentId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function getCommentWithAuthor(
+  commentId: string,
+): Promise<CommentWithAuthor | null> {
+  // Used by D.5's realtime hook to enrich INSERT payloads with the author
+  // join (postgres_changes events carry only the raw row, never embedded
+  // selects). Same `as unknown as ...` cast as listComments / postComment.
+  const { data, error } = await supabase
+    .from('comments')
+    .select(SELECT_WITH_AUTHOR)
+    .eq('id', commentId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? (data as unknown as CommentWithAuthor) : null;
+}
+
+export type CommentRealtimeHandlers = {
+  onInsert?: (row: CommentRow) => void;
+  onUpdate?: (row: CommentRow) => void;
+  onDelete?: (oldRow: { id: string }) => void;
+};
+
+// Subscribes to postgres_changes on public.comments filtered by product_id.
+// Returns an unsubscribe function. Mirrors the cleanup idiom used by
+// `subscribeToMessages` / `subscribeToConversations` in services/messaging.ts
+// (lines 233-272) — callers receive `() => void`, not the RealtimeChannel
+// itself, to keep cleanup invocation uniform across the codebase.
+export function subscribeToProductComments(
+  productId: string,
+  handlers: CommentRealtimeHandlers,
+): () => void {
+  const filter = `product_id=eq.${productId}`;
+  const channel = supabase
+    .channel(`comments:${productId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'comments', filter },
+      (payload) => handlers.onInsert?.(payload.new as CommentRow),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'comments', filter },
+      (payload) => handlers.onUpdate?.(payload.new as CommentRow),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'comments', filter },
+      (payload) => handlers.onDelete?.(payload.old as { id: string }),
+    )
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 export async function editComment(input: {
   commentId: string;
   body: string;

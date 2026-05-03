@@ -318,6 +318,23 @@
     "activatePromptTitle": "Enable geolocation",
     "activatePromptBody": "See products near you"
   },
+  "comments": {
+    "title": "Comments",
+    "inputPlaceholder": "Add a comment…",
+    "emptyTitle": "Be the first to comment",
+    "editedSuffix": "edited",
+    "editingIndicator": "Editing a comment",
+    "deleteConfirmTitle": "Delete comment",
+    "deleteConfirmBody": "This action cannot be undone.",
+    "deleteConfirmAction": "Delete",
+    "actionsTitle": "Comment",
+    "actionEdit": "Edit",
+    "actionDelete": "Delete",
+    "openActionsAriaLabel": "Comment options",
+    "submitCreateAriaLabel": "Post comment",
+    "submitEditAriaLabel": "Save edit",
+    "unknownAuthor": "User"
+  },
   "social": {
     "follow": "Follow",
     "following": "Following",

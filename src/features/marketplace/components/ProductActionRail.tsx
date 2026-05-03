@@ -1,12 +1,16 @@
+import { useShareProduct } from '@/features/marketplace/hooks/useShareProduct';
 import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { getLocalized } from '@/i18n/getLocalized';
+import { formatPrice } from '@/lib/format';
+import { useCommentsSheetStore } from '@/stores/useCommentsSheetStore';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme';
@@ -20,11 +24,12 @@ export default function ProductActionRail({
   product,
   tabBarHeight = 0,
 }: ProductActionRailProps): React.ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: engagement } = useUserEngagement();
   const isLiked = engagement?.likedIds.has(product.id) ?? false;
   const likeCount = product.engagement.likes;
   const toggleLike = useToggleLike(product.id);
+  const shareMutation = useShareProduct();
   const { requireAuth } = useRequireAuth();
   const isPro = product.seller.isPro;
 
@@ -38,8 +43,33 @@ export default function ProductActionRail({
     void mediumHaptic();
     useProductSheetStore.getState().open(product.id);
   };
-  const onPressComment = (): void => {};
-  const onPressShare = (): void => {};
+  const onPressComment = (): void => {
+    void lightHaptic();
+    useCommentsSheetStore.getState().open(product.id);
+  };
+  const onPressShare = useCallback((): void => {
+    if (!requireAuth()) return;
+    void lightHaptic();
+    const locale: 'fr' | 'en' = i18n.language?.startsWith('en') ? 'en' : 'fr';
+    shareMutation.mutate({
+      productId: product.id,
+      title: getLocalized(product.title, locale),
+      priceLabel: formatPrice(
+        product.price,
+        product.currency ?? 'EUR',
+        locale === 'fr' ? 'fr-FR' : 'en-US',
+      ),
+      locale,
+    });
+  }, [
+    i18n.language,
+    product.id,
+    product.title,
+    product.price,
+    product.currency,
+    requireAuth,
+    shareMutation,
+  ]);
 
   const shareLabel =
     product.engagement.shares > 0

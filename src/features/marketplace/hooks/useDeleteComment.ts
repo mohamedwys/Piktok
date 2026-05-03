@@ -52,7 +52,10 @@ export function useDeleteComment(
 
     onSuccess: () => {
       // Refresh action-rail counter — trigger decremented `comments_count`.
-      qc.invalidateQueries({ queryKey: ['product', 'byId', productId] });
+      // Keys mirror useProduct / useProducts.
+      qc.invalidateQueries({
+        queryKey: ['marketplace', 'products', 'byId', productId],
+      });
       qc.invalidateQueries({ queryKey: ['marketplace', 'products', 'list'] });
     },
 

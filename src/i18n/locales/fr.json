@@ -318,6 +318,23 @@
     "activatePromptTitle": "Activez la géolocalisation",
     "activatePromptBody": "Voir les produits près de chez vous"
   },
+  "comments": {
+    "title": "Commentaires",
+    "inputPlaceholder": "Ajouter un commentaire…",
+    "emptyTitle": "Soyez le premier à commenter",
+    "editedSuffix": "modifié",
+    "editingIndicator": "Modification d'un commentaire",
+    "deleteConfirmTitle": "Supprimer le commentaire",
+    "deleteConfirmBody": "Cette action est irréversible.",
+    "deleteConfirmAction": "Supprimer",
+    "actionsTitle": "Commentaire",
+    "actionEdit": "Modifier",
+    "actionDelete": "Supprimer",
+    "openActionsAriaLabel": "Options du commentaire",
+    "submitCreateAriaLabel": "Publier le commentaire",
+    "submitEditAriaLabel": "Enregistrer la modification",
+    "unknownAuthor": "Utilisateur"
+  },
   "social": {
     "follow": "Suivre",
     "following": "Suivi(e)",

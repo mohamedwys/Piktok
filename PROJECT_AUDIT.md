@@ -4330,3 +4330,436 @@ git revert <d-3-commit-sha>
 ```
 
 Removes the five new source files, the barrel-export additions, and this changelog. No database state to undo. No type changes to undo (D.2's regen stays — independent of D.3).
+
+---
+
+## Step D.4 Changelog (2026-05-03) — CommentsSheet UI + Action Rail Wire-up
+
+Builds the comment surface end-to-end: a Zustand `useCommentsSheetStore` (mirrors `useLocationSheetStore` shape with a `productId` payload), three new feed primitives (`CommentItem`, `CommentInput`, `CommentsSheet`), the sheet mounted in the marketplace home screen as a sibling of `LocationSheet`, and the action-rail comment button wired up to open the sheet for the tapped product. Folds the action-rail wiring originally specced as D.6 into D.4 per the updated plan. After this step, tapping the comment button on any feed item opens a working sheet where the user can read, post, edit, and delete comments. D.5 will layer realtime echoes on top without changing the UI.
+
+### Reconnaissance
+
+**Sheet idiom — `LocationSheet` (G.6) verbatim.**
+
+- Store: [src/stores/useLocationSheetStore.ts](src/stores/useLocationSheetStore.ts) — `{ isOpen, open, close }` shape. CommentsSheet's store extends this with `productId` (the carrier between action rail tap and sheet open).
+- Component: [src/components/feed/LocationSheet.tsx:124-138](src/components/feed/LocationSheet.tsx#L124) — base `BottomSheet` from `@gorhom/bottom-sheet` (NOT `BottomSheetModal`), `enablePanDownToClose`, `BottomSheetBackdrop` with opacity 0.6, `keyboardBehavior="interactive"`, `keyboardBlurBehavior="restore"`, `topInset={insets.top}`, the imperative `sheetRef.snapToIndex(0) / .close()` driven by a `useEffect(() => { if (isOpen) … })` watcher. `onChange((idx) => idx === -1 && close())` for swipe-to-close.
+- Mount: [src/app/(protected)/(tabs)/index.tsx:107](src/app/(protected)/(tabs)/index.tsx#L107) — `<LocationSheet />` is a sibling of `<MarketplaceFilterSheet />` at the bottom of the screen tree. `<CommentsSheet />` lands as a third sibling at the same depth.
+
+**Action rail shape.** [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) takes `{ product: Product, tabBarHeight?: number }` (full Product, not `productId`). The comment Pressable was at line 79-87, with `onPressComment = () => {}` at line 41. D.4 replaces the empty handler with `lightHaptic()` + `useCommentsSheetStore.getState().open(product.id)` — matches the existing like / buy-button haptic pattern at [ProductActionRail.tsx:31-39](src/features/marketplace/components/ProductActionRail.tsx#L31).
+
+**Date helper choice.** No `date-fns` / `dayjs` in `package.json`. The project already ships [src/features/marketplace/utils/timeAgo.ts](src/features/marketplace/utils/timeAgo.ts:1) — a small `timeAgo(iso, lang)` helper supporting "à l'instant" / "just now", `Xm`, `Xh`, `Xd`, and falling back to `toLocaleDateString` past 7 days. **D.4 reuses it** — no new helper, no new dependency.
+
+**`useMySeller` shape.** [src/features/marketplace/hooks/useMySeller.ts:6](src/features/marketplace/hooks/useMySeller.ts#L6) takes an `enabled: boolean` and returns `UseQueryResult<SellerProfile | null, Error>`. CommentsSheet calls `useMySeller(true)` and uses `mySeller.id === comment.author_id` to gate the `...` menu on each row.
+
+**`useRequireAuth`.** [src/stores/useRequireAuth.ts:18](src/stores/useRequireAuth.ts#L18) — returns `{ isAuthenticated, user, requireAuth }`. The sheet calls `requireAuth()` inside `handleSubmit` per the Phase C convention (gating at the call site, not inside the mutation hook).
+
+**D.3 invalidation-key typo — corrected.** While reading `useProduct` ([hooks/useProduct.ts:11](src/features/marketplace/hooks/useProduct.ts#L11)) for the sheet's title-counter source, the correct cache key was confirmed as `['marketplace', 'products', 'byId', productId]`. D.3's `usePostComment` and `useDeleteComment` had typoed `['product', 'byId', productId]` invalidations — the action-rail counter would not refresh. Patched in both hooks; the optimistic-prepend / id-swap / rollback logic is unchanged. Documented for transparency rather than left for D.5 because D.4's UX explicitly depends on the counter incrementing visibly after a post / delete.
+
+### Files created
+
+| File | Lines | Role |
+| --- | --- | --- |
+| [src/stores/useCommentsSheetStore.ts](src/stores/useCommentsSheetStore.ts) | ~15 | `{ isOpen, productId, open(productId), close }` Zustand store. |
+| [src/components/feed/CommentItem.tsx](src/components/feed/CommentItem.tsx) | ~115 | Avatar + author header (name, verified, pro badge, relative time, edited suffix) + body + own-comment `...` actions menu (Alert.alert). Pending rows render at 0.55 opacity. |
+| [src/components/feed/CommentInput.tsx](src/components/feed/CommentInput.tsx) | ~140 | Sticky compose row using `BottomSheetTextInput` (gorhom v5 keyboard-aware). create / edit modes, character counter past 80% threshold, send button transitions to `checkmark` icon in edit mode, `ActivityIndicator` while submitting. |
+| [src/components/feed/CommentsSheet.tsx](src/components/feed/CommentsSheet.tsx) | ~360 | Main sheet at 90% snap. `BottomSheetFlatList` + `BottomSheetFooter` with `CommentInput`. Inline `CommentsSkeletons` (5 placeholders) and `CommentsEmpty` (centered icon + copy). Local state `bodyDraft` + `editingId`; clears when sheet closes or productId changes. Auth-gated `handleSubmit`, confirm Alert before delete, navigates to seller profile on author tap (also closes the sheet). |
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [src/app/(protected)/(tabs)/index.tsx](src/app/(protected)/(tabs)/index.tsx) | Imported and mounted `<CommentsSheet />` as a sibling of `<LocationSheet />` at the bottom of the screen tree. |
+| [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) | Imported `useCommentsSheetStore`. Replaced `onPressComment = () => {}` with `lightHaptic() + useCommentsSheetStore.getState().open(product.id)` — folds D.6 into D.4 per the updated plan. |
+| [src/features/marketplace/hooks/usePostComment.ts](src/features/marketplace/hooks/usePostComment.ts) | Fixed product-cache invalidation key: `['product', 'byId', productId]` → `['marketplace', 'products', 'byId', productId]` to match `useProduct` at [hooks/useProduct.ts:11](src/features/marketplace/hooks/useProduct.ts#L11). |
+| [src/features/marketplace/hooks/useDeleteComment.ts](src/features/marketplace/hooks/useDeleteComment.ts) | Same key correction as above. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Added `comments.*` namespace (16 keys: title / inputPlaceholder / emptyTitle / editedSuffix / editingIndicator / deleteConfirmTitle / deleteConfirmBody / deleteConfirmAction / actionsTitle / actionEdit / actionDelete / openActionsAriaLabel / submitCreateAriaLabel / submitEditAriaLabel / unknownAuthor). |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | English mirror of the same namespace. |
+| [PROJECT_AUDIT.md](PROJECT_AUDIT.md) | This D.4 changelog. |
+
+### Pending-row visual treatment
+
+Per the D.3 handoff: temp rows are detected by id prefix. The sheet's `renderItem` callback computes `isPending = item.id.startsWith('temp-')` and forwards it to `CommentItem`, which renders the row at `opacity: 0.55` and the body text at `color="tertiary"`. The own-comment `...` actions menu is also hidden while pending — editing / deleting an unconfirmed row would race the mutation. Once `usePostComment.onSuccess` swaps the temp row with the server row (real UUID), `startsWith('temp-')` becomes false and the row renders at full opacity with the menu enabled.
+
+### Action-rail wiring (D.6 fold)
+
+Originally D.6 was specced separately as the wire-up step. Folding it into D.4 is the natural shape: building the sheet without wiring its trigger leaves a dead UI for two steps. The change is a four-line diff in [ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx):
+
+```ts
+import { useCommentsSheetStore } from '@/stores/useCommentsSheetStore';
+
+const onPressComment = (): void => {
+  void lightHaptic();
+  useCommentsSheetStore.getState().open(product.id);
+};
+```
+
+When Step 5 (action-rail redesign) eventually ships, the same store call works in the new rail without changes — the store API is independent of which rail triggers it.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (resolved two type frictions: `Text`'s `color` prop only accepts `primary \| secondary \| tertiary \| inverse`, so the brand-colored "Modification d'un commentaire" hint and "Annuler" link in `CommentInput` use a `style={{ color: colors.brand }}` override on top of `color="primary"`; gorhom's `snapPoints` prop expects a mutable array, so `SNAP_POINTS` is typed as `(string \| number)[]` instead of `as const`). |
+| `expo export --platform ios` | Not run automatically. The user can verify a clean bundle with `npx expo export --platform ios` after pulling the changes. |
+| New deps | Zero. `timeAgo` reused from `src/features/marketplace/utils/timeAgo.ts`; no `date-fns`. |
+| Strict TS | `any`: zero in D.4. The single documented escape hatch is the `as unknown as CommentWithAuthor[]` from D.3 (still in `services/comments.ts`); D.4 introduces no new ones. |
+| Stale `Comment` type | [src/types/types.ts:23-35](src/types/types.ts#L23) untouched. The new code uses the `CommentWithAuthor` type from `services/comments.ts`. Phase F still owns the cleanup. |
+| Auth gating | Inside the sheet (`handleSubmit` calls `requireAuth()` before posting / editing). The hooks themselves remain auth-agnostic per D.3 / Phase C convention. |
+| i18n coverage | All user-facing strings go through `t(...)`. Both `fr.json` and `en.json` have parallel `comments.*` keys. |
+| Realtime | Not in this step. D.5 owns the JS subscription that consumes the comments cache. |
+
+**Manual sanity checks (deferred to user, requires the dev build):**
+- Tap any product's comment button → sheet opens to 90% snap.
+- Empty product: "Soyez le premier à commenter" centered with chat-bubble icon.
+- Type a comment + send → optimistic prepend (low opacity) → server response replaces with full opacity; counter on the action rail increments.
+- Tap "..." on own comment → Modifier / Supprimer alert.
+- Modifier → input pre-fills, send button changes to checkmark, "Modification d'un commentaire" hint + Annuler link appear.
+- Supprimer → confirm alert → row vanishes optimistically; counter decrements.
+- Tap an author avatar → sheet closes, navigates to their seller profile.
+- Pull-to-refresh refetches.
+- Scroll past first 20 comments → cursor pagination loads next page.
+- Body > 800 chars → "X/1000" indicator appears bottom-right of input.
+- Body > 1000 chars → input rejects via `maxLength`.
+
+### D.5 handoff
+
+D.5 (realtime subscription) ships purely additively against the D.4 surface — no UI changes, no new mutations, no new hooks. The realtime layer plugs into the existing `['marketplace', 'comments', productId]` cache.
+
+**Subscription pattern** (mirror [src/features/marketplace/services/messaging.ts:233-272](src/features/marketplace/services/messaging.ts#L233) and [src/features/marketplace/hooks/useMessages.ts:20-31](src/features/marketplace/hooks/useMessages.ts#L20)):
+
+```ts
+// services/comments.ts (or a sibling realtime file)
+export function subscribeToComments(
+  productId: string,
+  onChange: (payload: RealtimePostgresChangesPayload<CommentRow>) => void,
+) {
+  const channel = supabase
+    .channel(`comments:${productId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'comments',
+        filter: `product_id=eq.${productId}`,
+      },
+      onChange,
+    )
+    .subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}
+```
+
+**Hook integration.** D.5 should add a `useEffect` either inside `useComments` (most ergonomic — co-located with the query) or in a new `useCommentsRealtime(productId)` companion hook the sheet calls separately. Each event handler:
+
+| Event | Handler |
+| --- | --- |
+| INSERT | If `payload.new.id` matches an existing row in any page, ignore (self-echo of D.3's id-swap). Else fetch the joined author (or accept that the row renders without joined author until refetch) and prepend to page 0. |
+| UPDATE | Find row by `payload.new.id` in any page; replace `body` and `updated_at`. |
+| DELETE | Filter out by `payload.old.id` in all pages. |
+
+**Self-echo dedupe**. D.3's `temp-` prefix + `onSuccess` id-swap give D.5 a clean dedupe target. By the time the realtime INSERT echo arrives, the cache row already has the server id, so `pages.some(p => p.items.some(c => c.id === payload.new.id))` correctly skips the duplicate.
+
+**Author-join gap on realtime INSERT**. The INSERT payload carries the raw row from `postgres_changes`, which does NOT include the embedded `author:sellers!author_id(...)`. D.5 either (a) issues a one-row fetch on INSERT to hydrate the author, or (b) renders a placeholder `unknownAuthor` until the next refetch, or (c) hydrates from a `seller-by-id` cache if one exists. Recommendation: (a) — single round-trip per incoming INSERT, scoped to `comments` rows the user did not author themselves (own posts are already hydrated via the optimistic temp row that gets id-swapped).
+
+**Subscription lifecycle.** Mount: when the sheet opens (productId becomes non-null) — subscribe. Unmount / productId change: unsubscribe. The closure capture is straightforward in a hook with `useEffect([productId])`.
+
+### Reversion
+
+```bash
+git revert <d-4-commit-sha>
+```
+
+Removes the four new component / store files, the action-rail wiring, the marketplace home mount, the i18n additions, the D.3 invalidation-key fix, and this changelog. No database changes to undo. The user is back to D.3's hooks layer with no UI surface.
+
+---
+
+## Step D.5 Changelog (2026-05-03) — Comments Realtime Subscription
+
+Subscribes the open `CommentsSheet` to `postgres_changes` events on `public.comments` filtered by `product_id`, merging remote INSERT / UPDATE / DELETE events into the same React Query cache that D.3's mutations write to. Self-echoes deduplicate by id (the `temp-` prefix was already swapped to a real UUID by `usePostComment.onSuccess` before the realtime echo arrives, so a presence check on the real id is sufficient). The sheet UI from D.4 is unchanged — D.5 is a pure additive layer. Phase D is complete after this step.
+
+### Reconnaissance
+
+**Messaging realtime pattern — verbatim (D.5 mirrors).**
+
+[src/features/marketplace/services/messaging.ts:252-272](src/features/marketplace/services/messaging.ts#L252):
+
+```ts
+export function subscribeToMessages(
+  conversationId: string,
+  onInsert: (m: ChatMessage) => void,
+) {
+  const channel = supabase
+    .channel(`messages:${conversationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => onInsert(rowToMessage(payload.new as MessageRow)),
+    )
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+```
+
+[src/features/marketplace/hooks/useMessages.ts:20-31](src/features/marketplace/hooks/useMessages.ts#L20):
+
+```ts
+useEffect(() => {
+  if (!conversationId) return;
+  const unsub = subscribeToMessages(conversationId, (msg) => {
+    qc.setQueryData<ChatMessage[]>(key, (prev) => {
+      if (!prev) return [msg];
+      if (prev.find((m) => m.id === msg.id)) return prev; // dedupe
+      return [...prev, msg];
+    });
+  });
+  return unsub;
+}, [conversationId, qc]);
+```
+
+**Idioms D.5 inherits exactly:**
+
+- **Channel name = `${entity}:${scopeId}`** — `messages:${conversationId}` becomes `comments:${productId}`. Each subscription is product-scoped; two users on different sheets never share a channel.
+- **Service returns `() => void`** — the unsubscribe closure, not the `RealtimeChannel`. Callers wire it directly to `useEffect`'s cleanup return slot. Returning the channel itself would force every caller to remember the `void supabase.removeChannel(channel)` invocation, which is the leak vector the messaging codebase deliberately closed.
+- **Payload row cast** — `payload.new as CommentRow` mirrors `payload.new as MessageRow`. The `postgres_changes` typing in supabase-js v2 is `RealtimePostgresChangesPayload<{ [key: string]: any }>` from a literal table name, so an explicit cast is the project convention.
+- **Dedupe by id presence in cache** — `prev.find(m => m.id === msg.id)` becomes `cache.pages.some(p => p.items.some(c => c.id === id))` for the InfiniteData shape D.3 uses.
+- **No retry / polling fallback** — if realtime drops, pull-to-refresh from D.4 is the escape hatch.
+
+**Publication membership confirmed.** D.2's [migration](supabase/migrations/20260520_comments_schema.sql:262-274) added `public.comments` to `supabase_realtime` via the `pg_publication_tables`-guarded `do $$ … end $$` block. Verified at [src/features/marketplace/services/messaging.ts:233-272](src/features/marketplace/services/messaging.ts#L233) that the publication is the same one messaging uses (`supabase_realtime`).
+
+**Cache key shape.** D.3 keyed comments queries on `['marketplace', 'comments', productId]` and exposed the helper `COMMENTS_QUERY_KEY(productId)` from [hooks/useComments.ts:8](src/features/marketplace/hooks/useComments.ts#L8). D.5 imports and uses it directly — no key duplication.
+
+**Sheet → hook contract.** [src/stores/useCommentsSheetStore.ts](src/stores/useCommentsSheetStore.ts) exposes `productId: string | null` (D.4). When the sheet closes, `productId` is set to `null` by the store's `close()` action. The realtime hook's `useEffect` checks `if (!productId) return;` and skips subscribing — the same idempotent guard as `useMessages`.
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [src/features/marketplace/services/comments.ts](src/features/marketplace/services/comments.ts) | Added `getCommentWithAuthor(commentId)` (one-row select with the same `author:sellers!author_id(...)` join as `listComments`, used by realtime to enrich INSERT payloads); `subscribeToProductComments(productId, handlers)` returning `() => void` (mirrors `subscribeToMessages`); exported `CommentRealtimeHandlers` type. |
+| [src/components/feed/CommentsSheet.tsx](src/components/feed/CommentsSheet.tsx) | Imported and called `useCommentsRealtime(productId)` alongside the other hooks. The hook short-circuits when `productId` is `null` (sheet closed). |
+| [src/features/marketplace/index.ts](src/features/marketplace/index.ts) | Re-exported `useCommentsRealtime`, `getCommentWithAuthor`, `subscribeToProductComments`, `CommentRealtimeHandlers` from the barrel. |
+| [PROJECT_AUDIT.md](PROJECT_AUDIT.md) | This D.5 changelog. |
+
+### Files created
+
+| File | Lines | Role |
+| --- | --- | --- |
+| [src/features/marketplace/hooks/useCommentsRealtime.ts](src/features/marketplace/hooks/useCommentsRealtime.ts) | ~110 | Side-effect hook. Subscribes on `productId` change, unsubscribes on close / change. INSERT enriches via one-row select then prepends; UPDATE patches `body` + `updated_at`; DELETE filters out. INSERT and DELETE invalidate the product / list caches so the action-rail counter refreshes. |
+
+### Self-echo dedupe pattern
+
+Two layers ensure no duplicates and no flicker:
+
+1. **Synchronous presence check** at the top of `onInsert`. By the time the realtime echo arrives for our own post, `usePostComment.onSuccess` has already swapped the `temp-…` row with the server row (real UUID). The cache contains a row with `id === payload.new.id`, so `hasComment(cache, row.id)` returns true and we no-op. Same shape as `useMessages.ts:25` (`prev.find((m) => m.id === msg.id)`).
+2. **Async re-check** inside `qc.setQueryData`. After awaiting `getCommentWithAuthor`, another realtime event or our own optimistic insert may have populated the row. The second `hasComment(old, enrichedRow.id)` inside the writer closes that window. Without it, two near-simultaneous INSERT events for the same id (rare but possible on reconnect storms) could double-prepend.
+
+`onUpdate` and `onDelete` are naturally idempotent — `map`-then-replace is a no-op when the body is unchanged, and `filter` is a no-op when the row isn't in the cache.
+
+### Author-enrichment pattern
+
+`postgres_changes` payloads carry only the raw `comments` row — no embedded `author:sellers!author_id(...)` because the realtime broker reads the table directly (no PostgREST select string). Without enrichment, every remote INSERT would render with empty author fields until the next refetch.
+
+D.5 issues a one-row select via `getCommentWithAuthor(row.id)` after each INSERT echo. The select reuses the `SELECT_WITH_AUTHOR` constant from D.3's service, so the embedded join is byte-for-byte identical to the initial page load.
+
+UPDATE and DELETE skip enrichment — UPDATE patches only `body` + `updated_at` (the cached row already has the author), and DELETE only needs the `id` from `payload.old`.
+
+If the enrichment fetch fails (network blip, RLS denial, etc.), the handler returns silently. The next pull-to-refresh / `staleTime` expiry picks up the row. No retry loop, no error toast — same deliberate "fail quiet, refresh later" stance as the messaging hook.
+
+### Counter invalidation triggers
+
+| Event | Counter handling |
+| --- | --- |
+| INSERT | After enrichment + prepend, invalidate `['marketplace', 'products', 'byId', productId]` and `['marketplace', 'products', 'list']`. The action-rail badge re-reads the trigger-incremented `comments_count`. |
+| UPDATE | No counter invalidation — edit doesn't change `comments_count`. |
+| DELETE | Invalidate the same two product caches. The badge re-reads the trigger-decremented count. |
+
+### Edge cases
+
+- **Stale productId.** The `useEffect([productId, qc])` dep array ensures the subscription always tracks the current store value. Switching products closes the old channel before opening the new one — no leaks.
+- **Sheet close → reopen same product.** The closed effect's cleanup runs first, then the new effect re-subscribes. The cached pages from the previous open may still be valid (60s `staleTime`); any drift since close is filled in by the realtime echoes that arrive on resubscribe.
+- **Author cascade-deletion mid-subscription.** `auth.users` deletion cascades to `sellers` (via `sellers.user_id`) and on to `comments` (via `comments.author_id`). DELETE events fire for every cascaded comment row; UI filters them out. The action-rail counter is decremented by the trigger and refreshed by the per-DELETE invalidation.
+- **Multiple inserts within ms.** The async `getCommentWithAuthor` call is unawaited from the realtime callback's perspective (the callback returns immediately; the async work runs in the microtask queue). Two near-simultaneous INSERTs for different ids race only inside `qc.setQueryData`, where React Query's writer is synchronous — the second writer sees the result of the first. The async re-check in the writer also catches the rare same-id duplicate from reconnect storms.
+- **Subscription failure.** If `supabase.channel(...).subscribe()` reports an error or the websocket drops, the messaging codebase's stance is "no retry; user pulls to refresh." D.5 inherits the same posture — no fallback polling, no error toast, no exponential backoff.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0. |
+| `expo export --platform ios` | Not run automatically. No structural changes to the bundler graph (one new hook, one extended service, one wired component). |
+| New deps | Zero. `getCommentWithAuthor` reuses `supabase` + `SELECT_WITH_AUTHOR`; `subscribeToProductComments` reuses `supabase.channel(...).on('postgres_changes', ...)`. |
+| Strict TS | `any`: zero in D.5. The single documented escape hatch (`as unknown as CommentWithAuthor` for embedded selects, `payload.new as CommentRow` for realtime payloads) follows the existing convention. |
+| Cleanup idiom | Identical to `subscribeToMessages` — service returns `() => void`; hook returns it from `useEffect`. |
+| RLS posture | Unchanged. The realtime broker enforces RLS the same way as the REST endpoint (per Supabase docs); only authenticated users with SELECT access on `public.comments` receive events. D.2's `comments authenticated read` policy already grants this. |
+
+**Manual sanity (deferred to user; requires two test users / devices):**
+
+- Open product comments sheet on Device A. Post a comment from Device B → appears on A within ~1–2s. Action-rail counter on A increments.
+- Device B edits its comment → body updates on A, `· modifié` suffix appears.
+- Device B deletes its comment → row vanishes on A.
+- On Device B (the poster): no flicker, no duplicate (self-echo deduped via id presence).
+- Close the sheet on A → no further updates from B's posts (subscription disposed).
+- Switch to a different product on A → events for the previous product stop, events for the new product start.
+
+### Phase D summary — end-to-end
+
+| Step | Output |
+| --- | --- |
+| **D.1** | [COMMENTS_AUDIT.md](COMMENTS_AUDIT.md) — read-only audit, S1 schema + U1 sheet recommendation, identified self-elevation hole on `products` grants. |
+| **D.1.5** | [supabase/migrations/20260519_tighten_products_update_grants.sql](supabase/migrations/20260519_tighten_products_update_grants.sql) — REVOKE table-wide UPDATE on `products` from `authenticated`, GRANT UPDATE on the user-controlled column allowlist. Closed the self-elevation hole; made D.2's SECURITY DEFINER trigger load-bearing. |
+| **D.2** | [supabase/migrations/20260520_comments_schema.sql](supabase/migrations/20260520_comments_schema.sql) — `public.comments` table, two indexes, counter trigger (SECURITY DEFINER + pinned `search_path`, mirrors C.2), `updated_at` BEFORE UPDATE OF body trigger, four RLS policies, table + column-level grants, realtime publication membership. Type regen included `Database['public']['Tables']['comments']`. |
+| **D.3** | Service module + four hooks (`listComments` / `postComment` / `deleteComment` / `editComment` + `useComments` / `usePostComment` / `useDeleteComment` / `useEditComment`). Cursor-based pagination, optimistic prepend with id-swap, optimistic patch / remove with rollback. Pure-JS `temp-…` id generator. |
+| **D.4** | `useCommentsSheetStore` + `CommentItem` + `CommentInput` + `CommentsSheet` (90% snap, BottomSheetFlatList + BottomSheetFooter, inline skeletons + empty state). Mounted in marketplace home. Action-rail comment button wired (D.6 fold). Patched D.3 invalidation-key typo. i18n keys (FR + EN). |
+| **D.5** | This step. `subscribeToProductComments` + `getCommentWithAuthor` in the service; `useCommentsRealtime` hook; mounted in `CommentsSheet`. Self-echo dedupe by id; one-off author enrichment on INSERT. Counter invalidation on INSERT / DELETE. |
+
+After D.5, the comments surface is fully live: a buyer reading a listing sees comments from other buyers / the seller in real time, posts / edits / deletes their own comments with optimistic UI, and the action-rail counter stays in sync. No new dependencies. No new infrastructure. All changes reversible via `git revert`.
+
+### Known follow-ups (out of Phase D)
+
+| Follow-up | Notes |
+| --- | --- |
+| "X commented on your listing" push notification | Infra ready per [COMMENTS_AUDIT.md §5](COMMENTS_AUDIT.md). Land as a post-success call inside `usePostComment` (similar to [useSendMessage.ts:36-49](src/features/marketplace/hooks/useSendMessage.ts#L36)) that resolves the listing owner's `auth.users.id` via `products.seller_id → sellers.user_id` and invokes `sendPushNotification` with a 80-char body preview. Skip when the commenter is the listing owner. |
+| Realtime presence ("12 viewing this thread") | Use Supabase Realtime presence on the same `comments:${productId}` channel. Render a small badge near the sheet title. |
+| Nested replies | Additive migration: `alter table public.comments add column parent_id uuid null references public.comments(id) on delete cascade`. App-side max-depth = 1. UI shows indented reply rows under their parent. |
+| Comment moderation / report flow | New `report` action in the own-comment menu (when `!isOwn`) that opens a sheet asking for a reason and writes to a new `comment_reports` table. Out of scope for v1 marketplace. |
+| Mention support (`@username`) | New `mentions jsonb` column on `comments` (additive migration). Parse mentions client-side; render with linked seller pill. Notification fan-out via the existing push infra. |
+| Unread-comments badge | Track per-user `last_seen_at` per product (new lightweight table or jsonb on a user-prefs row). Decorate the action-rail comment icon with an unread-dot when count increased since last seen. |
+| Soft-delete + thread placeholders | If a moderation feature lands or comment context preservation matters, the additive shape is `add column deleted_at timestamptz null` + a SELECT policy that filters or projects placeholder text. Per [COMMENTS_AUDIT.md §9](COMMENTS_AUDIT.md), this is forward-compatible from S1. |
+
+### Reversion
+
+```bash
+git revert <d-5-commit-sha>
+```
+
+Removes the new realtime hook, the two service additions, the sheet wiring, the barrel re-exports, and this changelog. No database state to undo. The user is back to D.4's UI with no realtime layer — the sheet still works, just only refreshes via pull-to-refresh / `staleTime` expiry / mutation invalidations.
+
+---
+
+## Step E.2 Changelog (2026-05-03) — Share Implementation
+
+Phase E completes. The action-rail share button is now real: tapping it opens the system share sheet with a localized message + a deep link, optimistically increments `products.shares_count`, and shared links deep-link recipients onto the marketplace home with the product sheet open.
+
+Companion read-only audit: [SHARE_AUDIT.md](SHARE_AUDIT.md). The decisions this step implements (T1, S1, U1, routing-a) come from that audit.
+
+### Pre-edit reconnaissance
+
+| Question | Answer |
+| --- | --- |
+| `useProductSheetStore` mount | [src/app/(protected)/_layout.tsx:10](src/app/(protected)/_layout.tsx) — `<ProductDetailSheet />` mounted at the protected layout level, so any descendant route (including the new `(protected)/product/[id].tsx`) can `open()` it without remounting. |
+| `useProduct` cache key | `['marketplace', 'products', 'byId', productId]` per [src/features/marketplace/hooks/useProduct.ts:11](src/features/marketplace/hooks/useProduct.ts). The cache holds **transformed `Product`** (not `ProductRow`) — the optimistic patch must touch `product.engagement.shares`, NOT `shares_count`. |
+| List cache key | `['marketplace', 'products', 'list']` (prefix-matched by `useFilteredProducts` via `['marketplace', 'products', 'list', filters]`). Mirrors usePostComment.ts:139 invalidation. |
+| Localized title helper | `getLocalized(value, lang?)` already exists at [src/i18n/getLocalized.ts:5](src/i18n/getLocalized.ts) — no new helper needed. |
+| Price helper | `formatPrice(amount, currency, locale)` at [src/lib/format.ts:19](src/lib/format.ts). Already locale-aware. |
+| Haptic | `lightHaptic()` from [src/features/marketplace/utils/haptics.ts:3](src/features/marketplace/utils/haptics.ts). |
+| Auth gate | `useRequireAuth().requireAuth()` at [src/stores/useRequireAuth.ts:18](src/stores/useRequireAuth.ts) — boolean return; `if (!requireAuth()) return;` is the established gate idiom. |
+| `expo-linking` install | Confirmed `~8.0.12` at [package.json:41](package.json). `Linking.createURL('product/<id>')` resolves the `client` scheme from [app.json:8](app.json) automatically. |
+| `Share` API | RN core, no install. Used here for the first time in the codebase per SHARE_AUDIT.md §1.2. |
+| Share message location | Inline in the service (locale-branched literals). Phase F will i18n-ize alongside the brand-name decision. |
+
+### Files created
+
+| Path | Purpose |
+| --- | --- |
+| [supabase/migrations/20260521_increment_share_count_rpc.sql](supabase/migrations/20260521_increment_share_count_rpc.sql) | `public.increment_share_count(p_product_id uuid)` SECURITY DEFINER RPC, pinned `search_path`, `auth.uid() IS NULL` guard, `COALESCE(...,0) + 1` defensive bump, GRANT EXECUTE to `authenticated` (REVOKE from `public` first). Mirrors D.2's `handle_comment_change()` security shape. |
+| [src/features/marketplace/hooks/useShareProduct.ts](src/features/marketplace/hooks/useShareProduct.ts) | TanStack mutation. `onMutate` patches `byId` cache → `engagement.shares + 1`; `mutationFn` runs `incrementShareCount` then `shareProduct` (share-sheet errors swallowed per T1); `onError` rolls back the cache; `onSettled` invalidates `byId` + `list`. |
+| [src/app/(protected)/product/\[id\].tsx](src/app/(protected)/product/%5Bid%5D.tsx) | Thin deep-link route. `router.replace('/(protected)/(tabs)')` then `setTimeout(0)` → `useProductSheetStore.open(id)` so the global sheet mounted in [(protected)/_layout.tsx](src/app/(protected)/_layout.tsx) sits over the home tab. Renders a brief black backdrop. |
+
+### Files modified
+
+| Path | Change |
+| --- | --- |
+| [src/features/marketplace/services/products.ts](src/features/marketplace/services/products.ts) | Added imports for `Share` (RN core) + `Linking` (expo-linking). Added `incrementShareCount(productId)` that casts `supabase.rpc` to a typed signature (the RPC isn't yet in `Database['public']['Functions']` until `npm run gen:types` runs against the applied DB). Added `ShareProductInput` type and `shareProduct(input)` that builds the deep-link URL, picks a fr/en message template, and calls `Share.share({ message, url })`. The "Marqe" brand name is hardcoded pending Phase F. |
+| [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) | Replaced the no-op `onPressShare = () => {}` (was line 46) with a `useCallback` handler: `requireAuth()` gate → `lightHaptic()` → resolve locale from `i18n.language` → `shareMutation.mutate({ productId, title: getLocalized(...), priceLabel: formatPrice(...), locale })`. Added imports for `useShareProduct`, `getLocalized`, `formatPrice`, `useCallback`. The action rail now matches the like / buy / comment buttons in firing both `requireAuth` and a haptic. |
+
+### Files NOT modified (deliberately)
+
+- `app.json` — scheme stays `client`. Rebrand is a Phase F concern.
+- `src/features/marketplace/index.ts` — `useShareProduct` is consumed only by the action rail (single call site); no barrel re-export needed. Other hooks like `useToggleLike` (also single-site) follow the same pattern.
+- `src/i18n/locales/{en,fr}.json` — share message stays inline in the service per SHARE_AUDIT.md §11 Q1 default. Phase F can move it to `share.message` if more variants land.
+- `src/types/supabase.ts` — generated. Type regen is OPTIONAL per the migration header; the cast in `incrementShareCount` works without it.
+- `useProductSheetStore` — consumed as-is by the new route.
+
+### Optimistic-update lifecycle
+
+```
+tap share
+  └─ onMutate: setQueryData(['marketplace','products','byId',id], p =>
+        ({ ...p, engagement: { ...p.engagement, shares: shares + 1 } }))
+  └─ mutationFn:
+        await incrementShareCount(id)            // RPC; throws → onError rollback
+        try { await shareProduct(input) } catch {} // T1: swallow
+  └─ onError: setQueryData(byId, ctx.previous)   // rollback
+  └─ onSettled: invalidate byId + list
+```
+
+The optimistic patch is visible immediately in the `ProductDetailSheet` (which subscribes via `useProduct`). The action-rail count in the feed reads from a list-cache prop, so it pops only after the `onSettled` invalidation refetches the list — same staleness window as Phase D's comment-counter wiring at [usePostComment.ts:132-139](src/features/marketplace/hooks/usePostComment.ts).
+
+### SECURITY DEFINER rationale
+
+[D.1.5](supabase/migrations/20260519_tighten_products_update_grants.sql) revoked the broad UPDATE grant on `public.products` from `authenticated` and re-granted UPDATE only on the user-controlled allowlist. `shares_count` was deliberately excluded — see [SHARE_AUDIT.md §2.3](SHARE_AUDIT.md). For the JS client to bump the counter without a service-role round-trip, the RPC must run as the migration owner (SECURITY DEFINER). The `set search_path = public, pg_catalog` clause defeats the classic SECURITY DEFINER hijack (a malicious user creating a `public.products` shadow object in a writable schema and tricking the function into resolving it), matching the shape of [`handle_comment_change()`](supabase/migrations/20260520_comments_schema.sql) and [`handle_follow_change()`](supabase/migrations/20260518_follows_schema_and_counters.sql).
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0. |
+| `expo export --platform ios` | Not run automatically. No new bundler entry-points; one new hook, one extended service, one wired component, one new route file. |
+| New deps | Zero. `Share` ships with React Native core; `expo-linking ~8.0.12` was already installed. |
+| Strict TS | No `any`. The single typed cast in `incrementShareCount` is `supabase.rpc as unknown as IncrementShareCountRpc` — a documented escape hatch that disappears after `npm run gen:types`. |
+
+**Manual sanity (deferred to user; requires migration applied):**
+
+- Tap share button on a product → system share sheet opens with `Découvrez {title} à {price} sur Marqe` (FR) / `Check out {title} for {price} on Marqe` (EN) plus the `client://product/<id>` URL.
+- Counter on the rail bumps after the next list refetch (~immediately in the sheet via the byId cache patch).
+- Cancel the share sheet → counter STAYS incremented (T1: intent counts).
+- Share via any channel → counter persists; the DB row's `shares_count` matches.
+- Force an RPC failure (e.g., temporarily revoke EXECUTE in the DB) → optimistic patch rolls back; counter returns to prior value.
+- On a second device: paste the shared URL into Messages → tap → app opens at marketplace home with the product sheet on top.
+
+### Production apply
+
+```bash
+npm run db:push        # applies 20260521_increment_share_count_rpc.sql
+npm run gen:types      # OPTIONAL — registers the function in
+                       # Database['public']['Functions'] so the cast in
+                       # incrementShareCount can be removed in a follow-on
+                       # commit. Runtime works without regen.
+```
+
+### Phase E summary — end-to-end
+
+| Step | Output |
+| --- | --- |
+| **E.1** | [SHARE_AUDIT.md](SHARE_AUDIT.md) — read-only audit, 11 sections. Confirmed share button is a no-op (`() => {}`), `shares_count` is system-managed (D.1.5 allowlist exclusion), no existing `share_events` table, no `Share.share` usage anywhere, no `expo-sharing` install. App scheme is `client` (Expo template default); no iOS associatedDomains, no Android intentFilters. Recommended T1 / S1 / U1 / routing-a. |
+| **E.2** | This step. RPC migration + service helpers + optimistic mutation hook + action-rail wiring + thin deep-link route. Tapping share now opens the OS share sheet with a localized message and a working deep link; counter increments via SECURITY DEFINER RPC; recipients land on the marketplace with the product sheet open. |
+
+After E.2, the Phase E share surface is functional end-to-end. No new dependencies. All changes reversible via `git revert` plus the rollback SQL in the migration header.
+
+### Known follow-ups (out of Phase E)
+
+| Follow-up | Notes / source |
+| --- | --- |
+| Scheme rebrand `client` → final brand name | Phase F. One-line change in [app.json:8](app.json) plus a coordinated rebuild. Invalidates any previously-shared links — currently zero exist, so the cost is paid up front. |
+| Universal / web links | Out of scope until a public web app exists at a known host (per [SHARE_AUDIT.md §4.2](SHARE_AUDIT.md)). Add `ios.associatedDomains` + `android.intentFilters` then. |
+| Share-as-engagement attribution | Track which share opened a deep link → conversion funnel. Requires the [SHARE_AUDIT.md §8 S2/S3](SHARE_AUDIT.md) extension (`share_events` table + referrer column on the deep-link route's mount effect). |
+| Custom in-app share sheet (U2) | Polish-phase: project-styled bottom sheet with Share-via / Copy-link / Send-to-friend. Per [SHARE_AUDIT.md §9](SHARE_AUDIT.md), the OS sheet is the right v1 surface. |
+| Share counter rate-limiting | Only if abuse emerges. v1 is "each tap = +1" with no dedup per [SHARE_AUDIT.md §7](SHARE_AUDIT.md). Mitigation would be a per-user-per-product cooldown inside the RPC. |
+| `npm run gen:types` after deploy | Removes the `IncrementShareCountRpc` cast in `incrementShareCount`. Cosmetic; runtime is unaffected. |
+| iPad simulator / share-unavailable fallback | Currently swallowed (counter still increments per T1). Could land a `Clipboard.setStringAsync(url)` + toast as a polish item; requires a toast component the app does not have yet. |
+| i18n the share message | Move `Découvrez ... sur Marqe` / `Check out ... on Marqe` from the service to `share.message` interpolations in the locale bundles when the brand name lands. |
+
+### Reversion
+
+```bash
+git revert <e-2-commit-sha>
+```
+
+Removes the migration file, the service additions, the new hook, the new route, the action-rail wiring, and this changelog. After reversion, run the documented rollback SQL in [supabase/migrations/20260521_increment_share_count_rpc.sql](supabase/migrations/20260521_increment_share_count_rpc.sql) against the deployed database to drop the function. Once dropped, the share button returns to a no-op and `products.shares_count` is once again unwritable from the JS client.

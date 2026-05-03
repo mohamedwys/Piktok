@@ -7,7 +7,9 @@
     "errorGeneric": "Une erreur est survenue.",
     "cancel": "Annuler",
     "search": "Rechercher",
-    "openSettings": "Ouvrir les Réglages"
+    "openSettings": "Ouvrir les Réglages",
+    "comingSoonTitle": "Bientôt disponible",
+    "comingSoonBody": "Cette fonctionnalité arrive bientôt."
   },
   "auth": {
     "signInRequired": {
@@ -213,7 +215,11 @@
     "empty": "Aucun article publié pour l'instant.",
     "memberSince": "Membre depuis {{date}}",
     "loadError": "Impossible de charger ce profil.",
-    "viewShop": "Voir la boutique {{name}}"
+    "viewShop": "Voir la boutique {{name}}",
+    "viewProfile": "Voir le profil",
+    "viewProfileAriaLabel": "Voir le profil de {{name}}",
+    "professional": "Vendeur professionnel",
+    "individual": "Vendeur particulier"
   },
   "sellerProfile": {
     "bio": "Bio",
@@ -356,5 +362,27 @@
     "viewProfileAriaLabel": "Voir le profil de {{name}}",
     "viewFollowersAriaLabel": "Voir les abonnés ({{count}})",
     "viewFollowingAriaLabel": "Voir les abonnements ({{count}})"
+  },
+  "actionRail": {
+    "buy": "Acheter",
+    "buyAriaLabel": "Acheter ce produit",
+    "share": "Partager",
+    "shareAriaLabel": "Partager ce produit",
+    "more": "Plus",
+    "moreAriaLabel": "Plus d'options",
+    "commentAriaLabel": "{{count}} commentaires",
+    "likeAriaLabel": "{{count}} j'aime",
+    "unlikeAriaLabel": "Retirer le j'aime"
+  },
+  "more": {
+    "title": "Plus d'options",
+    "copyLink": "Copier le lien",
+    "linkCopiedTitle": "Lien copié",
+    "report": "Signaler",
+    "hide": "Masquer"
+  },
+  "feedItem": {
+    "showMore": "Voir plus",
+    "showLess": "Voir moins"
   }
 }

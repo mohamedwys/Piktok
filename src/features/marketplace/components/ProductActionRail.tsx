@@ -2,18 +2,20 @@ import { useShareProduct } from '@/features/marketplace/hooks/useShareProduct';
 import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import type { Product } from '@/features/marketplace/types/product';
-import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { getLocalized } from '@/i18n/getLocalized';
-import { formatPrice } from '@/lib/format';
+import { formatActionCount, formatPrice } from '@/lib/format';
 import { useCommentsSheetStore } from '@/stores/useCommentsSheetStore';
+import { useMoreActionsSheetStore } from '@/stores/useMoreActionsSheetStore';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '@/theme';
+import { StyleSheet, View } from 'react-native';
+import { IconButton } from '@/components/ui';
+import { colors, spacing } from '@/theme';
+import LikeButton from '@/components/feed/LikeButton';
 
 type ProductActionRailProps = {
   product: Product;
@@ -33,20 +35,22 @@ export default function ProductActionRail({
   const { requireAuth } = useRequireAuth();
   const isPro = product.seller.isPro;
 
-  const onPressLike = (): void => {
+  const onPressLike = useCallback((): void => {
     if (!requireAuth()) return;
-    void lightHaptic();
     toggleLike.mutate(isLiked);
-  };
+  }, [isLiked, requireAuth, toggleLike]);
 
-  const onPressBuy = (): void => {
+  const onPressBuy = useCallback((): void => {
+    if (!requireAuth()) return;
     void mediumHaptic();
     useProductSheetStore.getState().open(product.id);
-  };
-  const onPressComment = (): void => {
+  }, [product.id, requireAuth]);
+
+  const onPressComment = useCallback((): void => {
     void lightHaptic();
     useCommentsSheetStore.getState().open(product.id);
-  };
+  }, [product.id]);
+
   const onPressShare = useCallback((): void => {
     if (!requireAuth()) return;
     void lightHaptic();
@@ -71,58 +75,83 @@ export default function ProductActionRail({
     shareMutation,
   ]);
 
-  const shareLabel =
-    product.engagement.shares > 0
-      ? formatCount(product.engagement.shares)
-      : t('marketplace.share');
+  const onPressMore = useCallback((): void => {
+    void lightHaptic();
+    useMoreActionsSheetStore.getState().open(product.id);
+  }, [product.id]);
+
+  const buyLabel = isPro ? t('actionRail.buy') : t('marketplace.contactSeller');
+  const buyIconName = isPro ? 'bag-handle' : 'chatbubble-ellipses';
 
   return (
     <View style={[styles.container, { bottom: tabBarHeight + 16 }]}>
-      <Pressable
+      <IconButton
+        variant="filled"
+        size="lg"
+        icon={
+          <Ionicons name={buyIconName} size={26} color={colors.brandText} />
+        }
+        label={buyLabel}
+        haptic="medium"
         onPress={onPressBuy}
-        style={({ pressed }) => [styles.buyButton, pressed && styles.pressed]}
-      >
-        <View style={styles.buyCircle}>
+        accessibilityLabel={t('actionRail.buyAriaLabel')}
+      />
+
+      <LikeButton
+        isLiked={isLiked}
+        count={likeCount}
+        onToggle={onPressLike}
+      />
+
+      <IconButton
+        variant="glass"
+        size="md"
+        icon={
           <Ionicons
-            name={isPro ? 'bag-handle' : 'chatbubble-ellipses'}
-            size={26}
-            color="#fff"
+            name="chatbubble-outline"
+            size={20}
+            color={colors.text.primary}
           />
-        </View>
-        <Text style={styles.buyLabel}>
-          {isPro ? t('marketplace.buy') : t('marketplace.contactSeller')}
-        </Text>
-      </Pressable>
-
-      <Pressable
-        onPress={onPressLike}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-      >
-        <Ionicons
-          name={isLiked ? 'heart' : 'heart-outline'}
-          size={33}
-          color={isLiked ? colors.brand : '#fff'}
-        />
-        <Text style={styles.label}>{formatCount(likeCount)}</Text>
-      </Pressable>
-
-      <Pressable
+        }
+        label={formatActionCount(product.engagement.comments)}
+        haptic="light"
         onPress={onPressComment}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-      >
-        <Ionicons name="chatbubble" size={30} color="#fff" />
-        <Text style={styles.label}>
-          {formatCount(product.engagement.comments)}
-        </Text>
-      </Pressable>
+        accessibilityLabel={t('actionRail.commentAriaLabel', {
+          count: product.engagement.comments,
+        })}
+      />
 
-      <Pressable
+      <IconButton
+        variant="glass"
+        size="md"
+        icon={
+          <Ionicons
+            name="paper-plane-outline"
+            size={20}
+            color={colors.text.primary}
+          />
+        }
+        label={t('actionRail.share')}
+        haptic="light"
         onPress={onPressShare}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-      >
-        <Ionicons name="paper-plane" size={30} color="#fff" />
-        <Text style={styles.label}>{shareLabel}</Text>
-      </Pressable>
+        accessibilityLabel={t('actionRail.shareAriaLabel')}
+      />
+
+      <IconButton
+        variant="glass"
+        size="md"
+        icon={
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={20}
+            color={colors.text.primary}
+          />
+        }
+        label={t('actionRail.more')}
+        haptic="light"
+        onPress={onPressMore}
+        accessibilityLabel={t('actionRail.moreAriaLabel')}
+      />
     </View>
   );
 }
@@ -131,42 +160,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 14,
-    alignItems: 'flex-end',
-    gap: 25,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  buyButton: {
     alignItems: 'center',
-    gap: 6,
-  },
-  buyCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  buyLabel: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 6,
-  },
-  button: {
-    alignItems: 'center',
-    gap: 5,
-  },
-  label: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    gap: spacing.lg,
   },
 });

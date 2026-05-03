@@ -6,6 +6,7 @@ import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen'
 import MarketplaceFilterSheet from '@/features/marketplace/components/MarketplaceFilterSheet';
 import LocationSheet from '@/components/feed/LocationSheet';
 import CommentsSheet from '@/components/feed/CommentsSheet';
+import MoreActionsSheet from '@/components/feed/MoreActionsSheet';
 import { useFilterSheetStore } from '@/stores/useFilterSheetStore';
 import { useLocationSheetStore } from '@/stores/useLocationSheetStore';
 import {
@@ -107,6 +108,7 @@ export default function HomeScreen() {
       <MarketplaceFilterSheet />
       <LocationSheet />
       <CommentsSheet />
+      <MoreActionsSheet />
     </View>
   )
 }

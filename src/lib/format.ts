@@ -10,8 +10,13 @@
  * cleanup pass once all consumers have migrated.
  *
  * Helpers exposed:
- *   - formatPrice(amount, currency, locale)
- *   - formatCount(n, locale)
+ *   - formatPrice(amount, currency, locale) — currency formatting
+ *     ("299,00 €").
+ *   - formatCount(n, locale) — abbreviated count for tight chips and
+ *     headers ("1,2k", "12,3k", "1,2M").
+ *   - formatActionCount(n, locale) — full Intl-formatted count for
+ *     action-rail counters where the reference design shows full
+ *     numbers ("2 453", "128"). Added in Step 5.
  *   - formatDistance(km, locale) — added in Phase G.7 for the Près de
  *     toi rail and any future per-card distance UI.
  */
@@ -44,6 +49,16 @@ function formatAbbreviated(value: number, suffix: 'k' | 'M', locale: string): st
     maximumFractionDigits: 1,
   }).format(value)
   return `${formatted}${suffix}`
+}
+
+/**
+ * Full-number action counts ("2 453", "128") for the action rail and
+ * other surfaces where abbreviation would obscure intent. Distinct
+ * from `formatCount`, which abbreviates to "1,2k" / "12,3k" / "1,2M".
+ */
+export function formatActionCount(n: number, locale = 'fr-FR'): string {
+  if (!Number.isFinite(n) || n < 0) return '0'
+  return new Intl.NumberFormat(locale).format(Math.trunc(n))
 }
 
 export function formatDistance(km: number, locale = 'fr-FR'): string {

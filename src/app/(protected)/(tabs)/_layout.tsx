@@ -1,7 +1,10 @@
 import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CustomTabBar, { TAB_BAR_HEIGHT } from '@/components/navigation/CustomTabBar';
+import CustomTabBar, {
+  BAR_BOTTOM_MARGIN,
+  TAB_BAR_HEIGHT,
+} from '@/components/navigation/CustomTabBar';
 
 export default function TabsLayout() {
   const { t } = useTranslation();
@@ -12,16 +15,16 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         // RN reserves `tabBarStyle.height` worth of screen-content space.
-        // We reserve only the SOLID bar height (TAB_BAR_HEIGHT + inset) —
-        // not the FAB's protrusion zone. That zone sits ABOVE the reserved
-        // slot and overlaps the screen content. The bar's curves and
-        // rounded corners read against the lighter feed showing through
-        // the transparent zones; reserving the protrusion height too
-        // would push the feed up and produce a flat-rectangle look.
-        // `useBottomTabBarHeight()` returns this value, so the home feed
-        // sizes its items to fit above the solid bar.
+        // We reserve the visible bar height + the floating bottom margin
+        // + the bottom safe-area inset. The FAB's protrusion zone above
+        // the bar is overlap, NOT reserved space (otherwise it would
+        // push the feed up and produce a flat-rectangle look).
+        // `useBottomTabBarHeight()` returns this value, so callers
+        // anchored to the bar's top edge (e.g. ProductActionRail's
+        // `bottom: tabBarHeight + 16`) sit at the right vertical
+        // position above the floating pill.
         tabBarStyle: {
-          height: TAB_BAR_HEIGHT + insets.bottom,
+          height: TAB_BAR_HEIGHT + BAR_BOTTOM_MARGIN + insets.bottom,
           borderTopWidth: 0,
           backgroundColor: 'transparent',
         },

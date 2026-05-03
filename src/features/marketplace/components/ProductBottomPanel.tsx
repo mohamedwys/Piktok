@@ -1,141 +1,126 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import type { Product, ProductAttribute } from '@/features/marketplace/types/product';
-import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
+import { useRouter, type Href } from 'expo-router';
+import type { Product } from '@/features/marketplace/types/product';
 import { getLocalized } from '@/i18n/getLocalized';
+import { useMarketplaceFilters } from '@/stores/useMarketplaceFilters';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { Pressable, Text } from '@/components/ui';
+import { colors, spacing, zIndex as zIndexTokens } from '@/theme';
+import CategoryBreadcrumbChip from '@/components/feed/CategoryBreadcrumbChip';
+import ProductTitle from '@/components/feed/ProductTitle';
+import ProductTagChipRow from '@/components/feed/ProductTagChipRow';
+import SellerMiniCard, {
+  type SellerMiniCardSeller,
+} from '@/components/feed/SellerMiniCard';
 
 type ProductBottomPanelProps = {
   product: Product;
-  expanded: boolean;
-  onToggleExpanded: () => void;
   tabBarHeight?: number;
 };
 
-function ChipIcon({ iconKey }: { iconKey?: string }): React.ReactElement {
-  const icon = attributeIcon(iconKey);
-  if (icon.family === 'ionicons') {
-    return <Ionicons name={icon.name as React.ComponentProps<typeof Ionicons>['name']} size={11} color="#fff" />;
-  }
-  if (icon.family === 'material') {
-    return <MaterialIcons name={icon.name as React.ComponentProps<typeof MaterialIcons>['name']} size={11} color="#fff" />;
-  }
-  return <View style={styles.dot} />;
-}
+const ACTION_RAIL_RESERVE = 72;
 
-function AttributeChip({
-  attribute,
-  lang,
-}: {
-  attribute: ProductAttribute;
-  lang: string;
-}): React.ReactElement {
-  return (
-    <View style={styles.chip}>
-      <ChipIcon iconKey={attribute.iconKey} />
-      <Text style={styles.chipText}>{` ${getLocalized(attribute.label, lang)}`}</Text>
-    </View>
-  );
+function toMiniCardSeller(seller: Product['seller']): SellerMiniCardSeller {
+  return {
+    id: seller.id,
+    name: seller.name,
+    avatarUrl: seller.avatarUrl,
+    verified: seller.verified,
+    isPro: seller.isPro,
+  };
 }
 
 export default function ProductBottomPanel({
   product,
-  expanded,
-  onToggleExpanded,
   tabBarHeight = 0,
 }: ProductBottomPanelProps): React.ReactElement {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const router = useRouter();
+  const setFilters = useMarketplaceFilters((s) => s.setFilters);
   const lang = i18n.language;
   const title = getLocalized(product.title, lang);
   const description = getLocalized(product.description, lang);
   const categoryPrimary = getLocalized(product.category.primary, lang);
   const categorySecondary = getLocalized(product.category.secondary, lang);
 
-  const rotation = useSharedValue(0);
-  useEffect(() => {
-    rotation.value = withTiming(expanded ? 180 : 0, { duration: 250 });
-  }, [expanded, rotation]);
+  const [expanded, setExpanded] = useState<boolean>(false);
 
-  const chevronAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
+  const trimmedDescription = description?.trim() ?? '';
+  const hasDescription = trimmedDescription.length > 0;
+
+  const onPressBreadcrumb = useCallback(() => {
+    if (!product.categoryId) return;
+    void lightHaptic();
+    setFilters({
+      categoryId: product.categoryId,
+      subcategoryId: product.subcategoryId ?? null,
+    });
+  }, [product.categoryId, product.subcategoryId, setFilters]);
+
+  const onPressViewProfile = useCallback(() => {
+    void lightHaptic();
+    router.push(`/(protected)/seller/${product.seller.id}` as Href);
+  }, [product.seller.id, router]);
+
+  const onToggleExpanded = useCallback(() => {
+    setExpanded((v) => !v);
+  }, []);
 
   return (
-    <View style={[styles.panel, { bottom: tabBarHeight + 16 }]} pointerEvents="box-none">
-      <Pressable
-        onPress={() => {
-          void lightHaptic();
-          onToggleExpanded();
-        }}
-        hitSlop={12}
-        style={styles.handleArea}
-      >
-        <Animated.View style={chevronAnimStyle}>
-          <Ionicons
-            name="chevron-up"
-            size={22}
-            color="rgba(255,255,255,0.9)"
-          />
-        </Animated.View>
-      </Pressable>
+    <View
+      style={[styles.panel, { bottom: tabBarHeight + spacing.lg }]}
+      pointerEvents="box-none"
+    >
+      <View style={styles.upperContent}>
+        <CategoryBreadcrumbChip
+          category={categoryPrimary}
+          subcategory={categorySecondary}
+          onPress={product.categoryId ? onPressBreadcrumb : undefined}
+        />
 
-      {expanded ? (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
-          style={styles.breadcrumb}
-          pointerEvents="none"
-        >
-          <Ionicons name="home" size={11} color="#fff" />
-          <Text style={styles.breadcrumbText}>
-            {` ${categoryPrimary} > ${categorySecondary}`}
+        <ProductTitle title={title} />
+
+        {expanded && hasDescription ? (
+          <Text variant="body" color="primary">
+            {trimmedDescription}
           </Text>
-        </Animated.View>
-      ) : null}
+        ) : null}
 
-      <View pointerEvents="none">
-        <Text style={[styles.title, styles.titleShadow]} numberOfLines={2}>
-          {title}
-        </Text>
+        <ProductTagChipRow
+          attributes={product.attributes}
+          dimensions={product.dimensions}
+          distanceKm={product.distanceKm}
+        />
+
+        <Pressable
+          haptic="light"
+          onPress={onToggleExpanded}
+          accessibilityRole="button"
+          accessibilityLabel={
+            expanded ? t('feedItem.showLess') : t('feedItem.showMore')
+          }
+          accessibilityState={{ expanded }}
+          style={styles.toggleRow}
+        >
+          <Text variant="body" color="primary">
+            {expanded ? t('feedItem.showLess') : t('feedItem.showMore')}
+          </Text>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={colors.text.primary}
+          />
+        </Pressable>
       </View>
 
       {expanded ? (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
-          pointerEvents="none"
-        >
-          <Text style={styles.description}>{description}</Text>
-        </Animated.View>
-      ) : null}
-
-      {product.attributes.length > 0 ? (
-        <View style={styles.chipsRow} pointerEvents="none">
-          {product.attributes.map((attr) => (
-            <AttributeChip key={attr.id} attribute={attr} lang={lang} />
-          ))}
-        </View>
-      ) : null}
-
-      {expanded && product.dimensions && product.dimensions.length > 0 ? (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
-          style={styles.dimensionsChip}
-          pointerEvents="none"
-        >
-          <MaterialIcons name="straighten" size={11} color="#fff" />
-          <Text style={styles.chipText}>{` ${product.dimensions}`}</Text>
-        </Animated.View>
+        <SellerMiniCard
+          seller={toMiniCardSeller(product.seller)}
+          onPressViewProfile={onPressViewProfile}
+        />
       ) : null}
     </View>
   );
@@ -144,76 +129,20 @@ export default function ProductBottomPanel({
 const styles = StyleSheet.create({
   panel: {
     position: 'absolute',
-    left: 12,
-    right: '30%',
-    gap: 8,
+    left: spacing.lg,
+    right: spacing.lg,
+    gap: spacing.md,
+    zIndex: zIndexTokens.overlay,
   },
-  breadcrumb: {
+  upperContent: {
+    gap: spacing.sm,
+    paddingRight: ACTION_RAIL_RESERVE,
+  },
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  breadcrumbText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  handleArea: {
-    alignSelf: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-    flexShrink: 1,
-  },
-  titleShadow: {
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  description: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  chipText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#fff',
-  },
-  dimensionsChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: spacing.xs,
   },
 });

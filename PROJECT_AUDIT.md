@@ -4763,3 +4763,263 @@ git revert <e-2-commit-sha>
 ```
 
 Removes the migration file, the service additions, the new hook, the new route, the action-rail wiring, and this changelog. After reversion, run the documented rollback SQL in [supabase/migrations/20260521_increment_share_count_rpc.sql](supabase/migrations/20260521_increment_share_count_rpc.sql) against the deployed database to drop the function. Once dropped, the share button returns to a no-op and `products.shares_count` is once again unwritable from the JS client.
+
+
+---
+
+## Step 5 Changelog (2026-05-03) — Action Rail Redesign + Like Burst
+
+Step 5 is presentation-only. The action rail's wirings (toggle-like, share, comment, buy) are unchanged; the rail is rebuilt on top of the Step 3 primitives, gains a More button + bottom sheet, and acquires a Reanimated 4 burst micro-interaction on the like-flip transition.
+
+### Reconnaissance findings
+
+| Surface | State at start of Step 5 |
+| --- | --- |
+| `src/features/marketplace/components/ProductActionRail.tsx` | Four buttons (Buy / Like / Comment / Share). Visual: Ionicons over a caption, no glass treatment except the 56-pt coral `buyCircle`. No "More" button. Counts via the abbreviated `formatCount` ("1,2k"). Container: `position: 'absolute', right: 14, bottom: tabBarHeight + 16, gap: 25`. |
+| `useToggleLike` ([useToggleLike.ts:15](src/features/marketplace/hooks/useToggleLike.ts:15)) | Optimistic mutation in place since pre-Phase D. Toggles `likedIds` Set in the user-engagement cache; invalidates the products list on settle. Reused as-is. |
+| `useShareProduct` ([useShareProduct.ts:28](src/features/marketplace/hooks/useShareProduct.ts:28)) | Phase E.2 hook. Reused as-is. |
+| `useCommentsSheetStore.open(productId)` ([useCommentsSheetStore.ts:13](src/stores/useCommentsSheetStore.ts:13)) | Phase D.4 trigger. Reused as-is. |
+| Buy entry point | `useProductSheetStore.getState().open(product.id)` — the existing product sheet handles the buy/contact flow downstream. Reused as-is. |
+| Legacy "more" / "options" sheet | None. Clean slate for `MoreActionsSheet`. |
+| `expo-clipboard` install status | Not installed. Resolved via `npx expo install expo-clipboard` → `~8.0.8` (SDK 54 aligned). |
+| `formatActionCount` in [src/lib/format.ts](src/lib/format.ts) | Missing. Added. |
+| Marketplace home mount point for new sheet | [src/app/(protected)/(tabs)/index.tsx](src/app/(protected)/(tabs)/index.tsx) — beside the existing `MarketplaceFilterSheet`, `LocationSheet`, and `CommentsSheet`. |
+| `common.comingSoonTitle` / `common.comingSoonBody` | Existed only under `profile.*`. Promoted to `common.*` for Step 5 placeholders. |
+
+### Files created
+
+| File | Purpose |
+| --- | --- |
+| [src/stores/useMoreActionsSheetStore.ts](src/stores/useMoreActionsSheetStore.ts) | Zustand store mirroring [useCommentsSheetStore.ts](src/stores/useCommentsSheetStore.ts) — `{ isOpen, productId, open(id), close() }`. |
+| [src/components/feed/LikeButton.tsx](src/components/feed/LikeButton.tsx) | Specialized like control with burst animation. Composes `Pressable` (haptic="medium") → glass-pill → `Animated.View` heart wrapper + sibling `Animated.View` ring. Renders `formatActionCount(count)` beneath. |
+| [src/components/feed/MoreActionsSheet.tsx](src/components/feed/MoreActionsSheet.tsx) | Bottom sheet (`gorhom/bottom-sheet`) with snap point `['35%']`. Three rows: Copier le lien (real, via `expo-clipboard` + `Linking.createURL`), Signaler (placeholder Alert), Masquer (placeholder Alert). |
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [src/lib/format.ts](src/lib/format.ts) | Added `formatActionCount(n, locale = 'fr-FR')` — full Intl-formatted count for action-rail counters. Header doc block updated to enumerate all four formatters. |
+| [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) | Full visual rewrite atop the Step 3 primitives. Buy = `IconButton variant="filled" size="lg"`; Comment / Share / More = `IconButton variant="glass" size="md"`; Like = the new `LikeButton`. All counts now go through `formatActionCount` ("2 453", "128") instead of the abbreviated `formatCount`. All wirings preserved verbatim (`useToggleLike`, `useShareProduct`, `useCommentsSheetStore.open`, `useProductSheetStore.open`). New: `useMoreActionsSheetStore.open` for the More button. |
+| [src/app/(protected)/(tabs)/index.tsx](src/app/(protected)/(tabs)/index.tsx) | Mounted `<MoreActionsSheet/>` as a sibling of `<CommentsSheet/>`. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) + [src/i18n/locales/en.json](src/i18n/locales/en.json) | Added `actionRail.*` (buy / buyAriaLabel / share / shareAriaLabel / more / moreAriaLabel / commentAriaLabel / likeAriaLabel / unlikeAriaLabel) and `more.*` (title / copyLink / linkCopiedTitle / report / hide). Promoted `comingSoonTitle` / `comingSoonBody` from `profile.*` to `common.*` since the More-sheet placeholders live outside the profile namespace. |
+| [package.json](package.json) + lockfile | Added `expo-clipboard@~8.0.8` (SDK 54 aligned). |
+
+### Burst animation spec
+
+Wired in [LikeButton.tsx](src/components/feed/LikeButton.tsx) using Reanimated 4 only.
+
+| Channel | Behavior on **not-liked → liked** | Behavior on **liked → not-liked** |
+| --- | --- | --- |
+| Heart scale | `withSequence(withSpring(1.35, motion.spring.snappy), withSpring(1.0, motion.spring.gentle))` | No animation. Silent flip to outlined. |
+| Ring scale | Reset to `0`, then `withTiming(1, { duration: 380 })` | n/a |
+| Ring opacity | Reset to `0.6`, then `withTiming(0, { duration: 380 })` | n/a |
+| Ring color / geometry | `borderColor: colors.brand`, `borderWidth: 2`, `borderRadius: diameter / 2`, absolutely positioned with all-zero insets, `pointerEvents: 'none'`. Sibling of the `GlassCard` (NOT a child — the card has `overflow: hidden` and would clip the expanding ring). | n/a |
+| Haptic | `medium` (via `Pressable`'s `haptic` prop) | `medium` |
+| Icon swap | Outlined Ionicons `heart-outline` → filled `heart` colored `colors.brand`. Driven by the `isLiked` prop. | Reverse; instant. |
+
+The animation runs synchronously at tap; the toggle mutation runs asynchronously. A failed mutation rolls back the optimistic count via `useToggleLike`'s `onError`, but the burst the user already saw is not retracted — visual continuity is preserved.
+
+### Sizing decision
+
+Legacy rail used a 56-pt filled coral circle for Buy and naked 30-33pt icons for Like/Comment/Share. The reference image shows all four secondary actions inside glass pills slightly smaller than Buy. Adopted:
+
+| Button | Size | Diameter | Icon |
+| --- | --- | --- | --- |
+| Buy (Acheter / Contacter) | `IconButton size="lg"` | 56 | Ionicons `bag-handle` (Pro) or `chatbubble-ellipses` (non-Pro) at 26pt |
+| Like | `LikeButton size="md"` | 48 | Ionicons `heart` / `heart-outline` at 22pt |
+| Comment | `IconButton size="md"` | 48 | Ionicons `chatbubble-outline` at 20pt |
+| Share | `IconButton size="md"` | 48 | Ionicons `paper-plane-outline` at 20pt |
+| More | `IconButton size="md"` | 48 | Ionicons `ellipsis-horizontal` at 20pt |
+
+Container gap shrunk from `25` to `spacing.lg` (16) since each button now carries its own caption — the visual rhythm matches the reference more tightly. Right offset (`14`) and bottom offset (`tabBarHeight + 16`) are unchanged from legacy.
+
+The Pro / non-Pro Buy distinction (`bag-handle` + "Acheter" vs. `chatbubble-ellipses` + "Contacter") is preserved because labelling Buy as "Acheter" for a non-Pro seller misrepresents the downstream flow — the product sheet already routes those users to a contact path. The aria label uses `actionRail.buyAriaLabel` either way.
+
+### Counter formatting policy
+
+`formatActionCount` is the new home for action-rail counters and any future surface that wants full numbers ("2 453"). `formatCount` (abbreviated, "1,2k") stays in [src/lib/format.ts](src/lib/format.ts) for tight chips and headers. The legacy `src/features/marketplace/utils/formatCount.ts` is unchanged and still consumed elsewhere; consolidation is out of Step 5 scope.
+
+### MoreActionsSheet content
+
+| Row | Behavior |
+| --- | --- |
+| Copier le lien | `Linking.createURL(\`product/\${productId}\`)` → `Clipboard.setStringAsync(url)` → `Alert.alert(t('more.linkCopiedTitle'))` → close. Real, ships now. |
+| Signaler | `Alert.alert(common.comingSoonTitle, common.comingSoonBody)` → close. Phase F wires the real flow. |
+| Masquer | Same placeholder, rendered with `colors.feedback.danger` for icon + label to communicate destructive intent. Phase F wires the real flow. |
+
+No auth gating on the sheet. Copy link is non-destructive; Report and Hide are placeholders.
+
+### Verification results
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (clean). |
+| `npx expo export --platform ios --dev` | bundles clean (13.7 MB iOS bundle, no warnings about the new files). |
+| New deps | `expo-clipboard@~8.0.8` (SDK 54 aligned). No other dependencies added. |
+| JSON locale files | Parse via `JSON.parse` without errors. |
+
+Manual / runtime verification (deferred to user; requires every prior migration applied):
+
+- Open the marketplace feed.
+- Tap **Acheter** → product sheet opens (existing checkout entry, unchanged).
+- Tap heart on a not-liked product → heart pulses 1.0 → 1.35 → 1.0 via spring; coral ring expands from circle and fades over ~380ms; icon flips to filled coral; count increments; haptic medium fires.
+- Tap heart on a liked product → silent flip to outlined; count decrements; no burst.
+- Tap **comment** → CommentsSheet opens (D.4 wiring).
+- Tap **share** → system share sheet (E.2 wiring) + counter increments.
+- Tap **More** → 35% sheet with three rows.
+  - Copy link → URL on clipboard, "Lien copié" alert, sheet dismisses.
+  - Signaler → "Bientôt disponible" alert.
+  - Masquer → "Bientôt disponible" alert.
+- All counts render French-formatted ("2 453", "128", "1 234").
+
+### Step 6 handoff
+
+Step 6 redesigns the **bottom info section** — title, price card, breadcrumb chip, tag chips. Specifically:
+
+- Fraunces (display) typography for the product title.
+- Fraunces typography for the floating price card on the top overlay.
+- Per-card distance surfacing (uses `formatDistance` from Phase G.7 plus the user's resolved location).
+- Tag chip layout matching the reference image (Bois massif / Tissu bouclé / Beige / dimensions ruler chip).
+
+Step 6 is presentation-only; no backend, no new mutations.
+
+### Reversion
+
+```bash
+git revert <step-5-commit-sha>
+```
+
+Removes the new files (`useMoreActionsSheetStore`, `LikeButton`, `MoreActionsSheet`), the rail rewrite, the home-screen mount, the i18n additions, the `formatActionCount` helper, the doc-block update, and this changelog. The `expo-clipboard` install reverts via the package.json + lockfile diff in the same commit. After reversion, the rail returns to its Phase E shape and `formatCount` (abbreviated) once again drives the counters.
+
+
+---
+
+## Step 6 Changelog (2026-05-03) — Bottom Info Redesign + Fraunces Moment
+
+Step 6 closes out the visual reproduction. Every region of the reference image now matches what's on screen: the breadcrumb chip, the title in Fraunces, the expandable description with Voir plus, the wrapping tag chip row (with the G.7-deferred distance chip surfacing for the first time), and the seller mini-card with the outlined Voir le profil chip.
+
+### Reconnaissance findings
+
+| Surface | State at start of Step 6 |
+| --- | --- |
+| `src/features/marketplace/components/ProductBottomPanel.tsx` | Existed. Controlled-`expanded` prop pattern with a chevron handle that toggled scrim height + description visibility. Container: `position: 'absolute', left: 12, right: '30%', bottom: tabBarHeight + 16`. Inline breadcrumb (Ionicons `home` + raw `>`), inline title (`fontSize: 22, fontWeight: '800'`), inline description, inline `AttributeChip` subcomponent for tags, inline dimensions chip. No seller mini-card, no distance, no Fraunces. |
+| `Product` type ([product.ts](src/features/marketplace/types/product.ts)) | Has structured `attributes: ProductAttribute[]` (each `{ id, label: LocalizedString, iconKey? }`) — NOT raw JSONB. Has `dimensions?: string` separate from attributes. Has `category: { primary, secondary }` as `LocalizedString` pair (the legacy display-time breadcrumb path). Carries `categoryId?` / `subcategoryId?` for the normalized link. Did **NOT** carry `distanceKm` — Step 6 adds it as `distanceKm?: number \| null`. |
+| Distance plumbing | `ListNearbyResult.items: NearbyProduct[]` ([products.ts:196](src/features/marketplace/services/products.ts:196)) where `NearbyProduct = Product & { distanceKm: number \| null }`. Marketplace feed already produces `NearbyProduct[]` ([MarketplaceScreen.tsx:28](src/features/marketplace/screens/MarketplaceScreen.tsx:28)) but `ProductFeedItem` widens to `Product`, dropping the field. After adding `distanceKm?` to the base `Product` type, distance flows through structurally with zero service-layer change. |
+| `formatDistance` ([format.ts:49](src/lib/format.ts:49)) | Phase G.7 helper — fr-FR formatting, "950 m" / "1,2 km" / "12 km" tiers. Already consumed by [RailProductCard.tsx](src/components/categories/RailProductCard.tsx). Reused in `ProductTagChipRow`. |
+| Attribute icon mapping | [src/features/marketplace/utils/attributeIcon.ts](src/features/marketplace/utils/attributeIcon.ts) maps `iconKey` → `{ family: 'ionicons' \| 'material' \| 'dot', name }`. Keys: `wood` → `leaf`, `fabric`/`textile` → `sparkles`, `color` → dot, `dimensions` → `straighten`, default → dot. Reused in `ProductTagChipRow` instead of duplicating into the new component. |
+| Seller relation | Already on `Product.seller: Seller` ({ id, name, avatarUrl, verified, isPro, rating, salesCount }). The `SellerMiniCard` consumes a narrowed `{ id, name, avatarUrl, verified, isPro }` slice. |
+| Seller profile route | `(protected)/seller/[id]` — confirmed via existing usages in [CommentsSheet.tsx:203](src/components/feed/CommentsSheet.tsx:203) and [ProductFeedItem.tsx:99](src/features/marketplace/components/ProductFeedItem.tsx:99). |
+| `display` Text variant | [Text.tsx:50](src/components/ui/Text.tsx:50) resolves `variant="display"` → `family.display` (Fraunces_500Medium); with `weight="semibold"` it walks `displayFamilyForWeight` → `Fraunces_600SemiBold`. Verified the resolution path; the variant works as advertised. The new `ExpandableDescription` belt-and-suspenders the choice with an explicit `fontFamily: typography.family.displaySemibold` style override so the Fraunces moment cannot regress if the variant map shifts later. |
+| Existing i18n surfaces | `common.viewProfile: "Voir le profil"` and `marketplace.sellerPro: "Vendeur professionnel"` already existed. Added duplicates under `seller.*` per spec for namespace cleanliness; documented redundancy here. |
+
+### Files created
+
+| File | Purpose |
+| --- | --- |
+| [src/components/feed/CategoryBreadcrumbChip.tsx](src/components/feed/CategoryBreadcrumbChip.tsx) | Glass pill with a 22-pt circular home-icon affordance + caption-weight breadcrumb text. `›` separator rendered in `colors.text.tertiary`. When `onPress` is provided the chip becomes a haptic Pressable; otherwise the body renders inert. |
+| [src/components/feed/ExpandableDescription.tsx](src/components/feed/ExpandableDescription.tsx) | Title in Fraunces (28pt, lineHeight 32, displaySemibold) + 3-line clamped description with a Voir plus / Voir moins toggle. Toggle visibility is detected via a measure-then-clamp pattern: first render is unclamped, `onTextLayout` reads the actual line count, subsequent renders clamp to 3 unless the user has expanded. Robust without animation per spec. |
+| [src/components/feed/ProductTagChipRow.tsx](src/components/feed/ProductTagChipRow.tsx) | Wrap-row of `Chip variant="glass" size="sm"` chips. Order: distance chip (when finite) → attribute chips (iterating `product.attributes`, skipping empty labels, leading icons via the existing `attributeIcon` util) → dimensions chip (when `product.dimensions` is non-empty). Returns `null` if all three sources are empty. |
+| [src/components/feed/SellerMiniCard.tsx](src/components/feed/SellerMiniCard.tsx) | Glass card with avatar (`size="sm"`, 32pt), name + verified-check, ProBadge + "Vendeur professionnel" / "Vendeur particulier" caption, and an `outlined`-variant Chip CTA with a `chevron-forward` trailing icon for "Voir le profil". |
+
+### Files modified
+
+| File | Change |
+| --- | --- |
+| [src/features/marketplace/types/product.ts](src/features/marketplace/types/product.ts) | Added `distanceKm?: number \| null` to the `Product` type with a doc comment that points to `searchNearbyProducts` as the population point. The `NearbyProduct = Product & { distanceKm: number \| null }` intersection still narrows correctly. |
+| [src/features/marketplace/components/ProductBottomPanel.tsx](src/features/marketplace/components/ProductBottomPanel.tsx) | Full content rewrite. Drops the chevron-handle + `expanded` / `onToggleExpanded` props. New composition: `CategoryBreadcrumbChip → ExpandableDescription → ProductTagChipRow → SellerMiniCard`. Outer container changes from `right: '30%'` to `left: spacing.lg, right: spacing.lg`; the upper-content sub-view reserves `paddingRight: 72` (`ACTION_RAIL_RESERVE`) so breadcrumb / title / description / tags don't collide with the action rail's column, while the seller mini-card spans full width below. Breadcrumb tap calls `useMarketplaceFilters.setFilters({ categoryId, subcategoryId })`. View-profile tap routes to `(protected)/seller/[id]`. |
+| [src/features/marketplace/components/ProductFeedItem.tsx](src/features/marketplace/components/ProductFeedItem.tsx) | Removed `useState` for `bottomPanelExpanded`, the `useSharedValue` / `useAnimatedStyle` / `withTiming` / `interpolate` imports, the dynamic-scrim animation, and the `expanded` / `onToggleExpanded` props on `<ProductBottomPanel>`. Scrim is now a static `<View>` with `height: '60%'` (the previously-expanded value) — matches the new always-on bottom info weight. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) + [src/i18n/locales/en.json](src/i18n/locales/en.json) | Added `seller.viewProfile`, `seller.viewProfileAriaLabel`, `seller.professional`, `seller.individual`, plus the new `feedItem.showMore` / `feedItem.showLess` namespace. `seller.viewProfile` is semantically identical to the pre-existing `common.viewProfile`; `seller.professional` is identical to `marketplace.sellerPro`. The duplication is intentional per spec — namespacing keeps the bottom-info copy localized to its surface. |
+
+### Fraunces verification
+
+The display family resolves through three paths, all aligned:
+
+1. The Text primitive's `variant="display"` defaults to `typography.family.display` = `Fraunces_500Medium`.
+2. With `weight="semibold"`, the primitive walks `displayFamilyForWeight` and resolves `Fraunces_600SemiBold`.
+3. `ExpandableDescription` *also* applies `style={{ fontFamily: typography.family.displaySemibold }}` so the Fraunces moment cannot regress if the variant-to-family table is restructured later.
+
+Visually: the title is the only Fraunces text on the entire feed surface — every other label is Inter — so the editorial moment Step 2 was preparing for finally lands.
+
+### Distance display surfacing (G.7 deferral resolved)
+
+`Product.distanceKm` is now part of the typed surface. Population is unchanged: `searchNearbyProducts` writes `distance_km` from the RPC into `NearbyProduct.distanceKm`, which now matches the base `Product` shape structurally. `ProductTagChipRow` checks `Number.isFinite(distanceKm)` before rendering the chip, so products without coords or users without a set location simply omit the chip — no empty / "?" placeholder.
+
+The chip uses an Ionicons `navigate` leading icon and `formatDistance(distanceKm)` for the label ("950 m", "1,2 km", "12 km" per the G.7 tiers). It always renders first in the wrap row when present, so it reads as the primary tag for nearby products.
+
+### Visual reproduction summary
+
+| Reference image region | Status |
+| --- | --- |
+| Top header (Pour toi / Marketplace / search) | Step 4 |
+| Top overlay — seller pill (left) | Step 4.1 |
+| Top overlay — price card (right) | Step 4 |
+| Right action rail (Acheter / heart / comment / share / more) | Step 5 |
+| Like burst micro-interaction | Step 5 |
+| Breadcrumb chip (home dot + path) | **Step 6 ✓** |
+| Title in Fraunces | **Step 6 ✓** |
+| Description + Voir plus | **Step 6 ✓** |
+| Tag chips (material / fabric / color / dimensions / distance) | **Step 6 ✓** |
+| Seller mini-card with outlined Voir le profil | **Step 6 ✓** |
+| Bottom tab bar | Step 7 |
+
+End-to-end visual reproduction is complete. Phase F (cleanup) is now the only remaining track.
+
+### Known follow-ups
+
+| Follow-up | Source / notes |
+| --- | --- |
+| Color attribute swatch | Currently renders as a generic dot via `attributeIcon('color')`. The reference image shows a beige circle for "Beige". To do this correctly we need a `colorValue?: string` on `ProductAttribute` (CSS color or hex). Phase F. Sniffing the localized label for a CSS color name was rejected as fragile. |
+| Legacy `category` JSONB → `category_id` migration at the data layer | Phase F per A.2 reconnaissance. The breadcrumb still reads `product.category.primary/secondary` for display continuity; the tap handler reads the normalized `categoryId` for filtering. Both paths coexist until Phase F retires the JSONB. |
+| Description expand animation | State toggle is final per spec. If polish wants a height animation, Phase F. |
+| `seller.viewProfile` / `seller.professional` duplication | `common.viewProfile` and `marketplace.sellerPro` carry identical values. Spec called for surface-local namespacing; if a flatter i18n surface is preferred later, consolidate in Phase F. |
+| Attribute icon expansion | Adding new attribute kinds (e.g. weight, finish, era) means extending the `attributeIcon` switch in [src/features/marketplace/utils/attributeIcon.ts](src/features/marketplace/utils/attributeIcon.ts). One-line edits per kind. |
+
+### Verification results
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | exit 0 (clean). |
+| `npx expo export --platform ios --dev` | bundles clean (13.7 MB iOS bundle, no warnings about the new files). |
+| New deps | None. Step 6 ships entirely on existing primitives + `formatDistance` + `attributeIcon`. |
+| JSON locale files | Parse via `JSON.parse` without errors. |
+
+Manual / runtime verification (deferred to user; requires every prior migration applied):
+
+- Open the marketplace feed.
+- Bottom of every feed item:
+  - Glass breadcrumb chip with home icon + "Maison & Déco › Fauteuils".
+  - Title in **Fraunces** (visibly different typeface from the rest of the UI — Inter elsewhere).
+  - Description clamps to 3 lines; "Voir plus" appears only when the description actually overflows; tapping it expands; "Voir moins" collapses.
+  - Tag chips wrap; each has a leading icon (leaf for `wood`, sparkles for `fabric/textile`, dot for `color`, ruler for dimensions, navigate for distance).
+  - When the user has a set location AND the product has coords, a distance chip ("1,2 km") leads the row.
+  - Seller mini-card spans full width with avatar + name + (verified) + (PRO) + "Vendeur professionnel" / "Vendeur particulier" + outlined "Voir le profil ›" chip.
+- Tap breadcrumb → marketplace filter applies category + subcategory.
+- Tap "Voir le profil" → routes to `(protected)/seller/[id]`.
+
+### Reversion
+
+```bash
+git revert <step-6-commit-sha>
+```
+
+Removes the four new components ([CategoryBreadcrumbChip.tsx](src/components/feed/CategoryBreadcrumbChip.tsx), [ProductTitle.tsx](src/components/feed/ProductTitle.tsx), [ProductTagChipRow.tsx](src/components/feed/ProductTagChipRow.tsx), [SellerMiniCard.tsx](src/components/feed/SellerMiniCard.tsx)), restores the legacy [ProductBottomPanel.tsx](src/features/marketplace/components/ProductBottomPanel.tsx) content, restores `bottomPanelExpanded` state + dynamic scrim animation in [ProductFeedItem.tsx](src/features/marketplace/components/ProductFeedItem.tsx), removes the `distanceKm` field from `Product`, removes the new i18n keys, and removes this changelog. No backend or migration impact.
+
+### Step 6 amendment (same day) — Panel-level Voir plus / Voir moins
+
+User feedback: a single panel-wide expand toggle is cleaner than burying the toggle inside the description. The bottom info panel now opens compact and reveals heavier content on demand.
+
+**Compact (default):** breadcrumb chip → title (Fraunces) → tag chips → "Voir plus ⌄"
+
+**Expanded:** breadcrumb chip → title (Fraunces) → description (full, no clamp) → tag chips → "Voir moins ⌃" → seller mini-card
+
+Changes:
+
+| File | Change |
+| --- | --- |
+| `src/components/feed/ExpandableDescription.tsx` | **Deleted.** The measure-then-clamp pattern is gone — description is either fully shown (expanded) or fully hidden (compact). |
+| [src/components/feed/ProductTitle.tsx](src/components/feed/ProductTitle.tsx) | **New.** Focused Fraunces title component. Belt-and-suspenders the variant resolution with explicit `fontFamily: typography.family.displaySemibold` so the editorial moment cannot regress. |
+| [src/features/marketplace/components/ProductBottomPanel.tsx](src/features/marketplace/components/ProductBottomPanel.tsx) | Adds local `expanded` state (default `false`). Description and seller mini-card are conditionally rendered on `expanded`; tag chips and breadcrumb stay visible in both modes (they're identity info — material, color, dimensions, distance — and short). The "Voir plus / Voir moins" toggle sits below the tag chips inside the action-rail-reserved upper-content column with a chevron that flips on state. No animation per spec — instant flip. |
+
+Trade-off: tag chips render even when compact rather than getting hidden along with the description. They carry identity (material, color, dimensions, distance) at near-zero visual cost, so demoting them to expanded-only would over-prune. Description and seller mini-card are the bulky bits and stay gated.
+
+Verification: `npx tsc --noEmit` exits 0; `npx expo export --platform ios --dev` bundles clean.

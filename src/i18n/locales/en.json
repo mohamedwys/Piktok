@@ -7,7 +7,9 @@
     "errorGeneric": "Something went wrong.",
     "cancel": "Cancel",
     "search": "Search",
-    "openSettings": "Open Settings"
+    "openSettings": "Open Settings",
+    "comingSoonTitle": "Coming soon",
+    "comingSoonBody": "This feature is coming soon."
   },
   "auth": {
     "signInRequired": {
@@ -213,7 +215,11 @@
     "empty": "No listings yet.",
     "memberSince": "Member since {{date}}",
     "loadError": "Couldn't load this profile.",
-    "viewShop": "View {{name}}'s shop"
+    "viewShop": "View {{name}}'s shop",
+    "viewProfile": "View profile",
+    "viewProfileAriaLabel": "View {{name}}'s profile",
+    "professional": "Professional seller",
+    "individual": "Individual seller"
   },
   "sellerProfile": {
     "bio": "Bio",
@@ -356,5 +362,27 @@
     "viewProfileAriaLabel": "View {{name}}'s profile",
     "viewFollowersAriaLabel": "View followers ({{count}})",
     "viewFollowingAriaLabel": "View following ({{count}})"
+  },
+  "actionRail": {
+    "buy": "Buy",
+    "buyAriaLabel": "Buy this product",
+    "share": "Share",
+    "shareAriaLabel": "Share this product",
+    "more": "More",
+    "moreAriaLabel": "More options",
+    "commentAriaLabel": "{{count}} comments",
+    "likeAriaLabel": "{{count}} likes",
+    "unlikeAriaLabel": "Remove like"
+  },
+  "more": {
+    "title": "More options",
+    "copyLink": "Copy link",
+    "linkCopiedTitle": "Link copied",
+    "report": "Report",
+    "hide": "Hide"
+  },
+  "feedItem": {
+    "showMore": "Show more",
+    "showLess": "Show less"
   }
 }

@@ -1,21 +1,31 @@
-import { View, useWindowDimensions } from 'react-native'
+import { Platform, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import { colors, spacing } from '@/theme'
-import TabBarBackground from './TabBarBackground'
+import { colors, radii, spacing } from '@/theme'
 import TabBarItem from './TabBarItem'
 import SellFAB from './SellFAB'
 
 export const TAB_BAR_HEIGHT = 64
 export const CUTOUT_PROTRUSION = 28
 /**
+ * Horizontal inset for the floating pill bar (from screen edges).
+ * The reference design shows the bar inset by ~12px on each side.
+ */
+export const BAR_HORIZONTAL_MARGIN = 12
+/**
+ * Vertical gap between the bar's bottom edge and the bottom safe-area
+ * inset. Makes the bar float visibly above the iOS home indicator.
+ */
+export const BAR_BOTTOM_MARGIN = 8
+/**
  * Total slot height excluding the bottom safe-area inset.
  * The slot is taller than the visual bar to make room for the
  * raised FAB at its top — see comment on the outer View below.
  */
-export const TAB_BAR_SLOT_HEIGHT = TAB_BAR_HEIGHT + CUTOUT_PROTRUSION
+export const TAB_BAR_SLOT_HEIGHT =
+  TAB_BAR_HEIGHT + CUTOUT_PROTRUSION + BAR_BOTTOM_MARGIN
 const FAB_COLUMN_WIDTH = 80
 const SELL_ROUTE_NAME = 'newPost'
 const ICON_SIZE = 24
@@ -23,7 +33,7 @@ const ICON_SIZE = 24
  * On wide screens (iPad portrait/landscape) the 5 tab slots get
  * spread very far apart with `flex: 1`. Cluster the items + FAB into
  * a centered max-width region so each tab feels reachable. The dark
- * surface still spans the full screen width.
+ * surface still spans the same visible bar width (also clamped).
  */
 const TAB_BAR_MAX_CONTENT_WIDTH = 640
 
@@ -98,37 +108,37 @@ export function CustomTabBar({
   const { width } = useWindowDimensions()
 
   // Layout strategy: the outer floats absolute over the screen content so
-  // the feed (product image, etc.) extends to the full viewport behind us
-  // — that's the only way the bar's rounded corners and cutout are
-  // visually distinct from a flat rectangle (they read AGAINST the lighter
-  // feed content showing through the transparent zones).
+  // the feed (product image, etc.) extends to the full viewport behind us.
   //
-  // The outer is `slotHeight` tall (= solid bar + protrusion). Anything
-  // visually "above the bar" still sits inside the outer, so we don't
-  // need `overflow: 'visible'` to escape any wrapper.
+  // The bar surface is a floating rounded-pill View — inset
+  // BAR_HORIZONTAL_MARGIN from screen edges, lifted BAR_BOTTOM_MARGIN
+  // above the home-indicator zone, with all four corners rounded. The
+  // FAB protrudes CUTOUT_PROTRUSION above the bar's top edge and casts
+  // its own shadow so the visual separation reads cleanly without an
+  // SVG cutout.
   //
-  // `tabBarStyle.height` (set in _layout.tsx) tells React Navigation to
-  // reserve only the SOLID bar height — `useBottomTabBarHeight()`
-  // consumers (the home feed) treat the protrusion zone as overlap, not
-  // reserved space. The feed's bottom 28 px renders behind the bar's
-  // transparent protrusion zone, with the FAB occluding a small circle
-  // in the middle.
+  // `tabBarStyle.height` (set in _layout.tsx) reserves the SOLID bar +
+  // bottom margin so the home feed sizes its content to stop above the
+  // floating bar. The protrusion zone is overlap, not reserved space.
   const slotHeight = TAB_BAR_SLOT_HEIGHT + insets.bottom
-  const barHeight = TAB_BAR_HEIGHT + insets.bottom
 
-  // Constrain the items + FAB cluster to a centered region. On phones
-  // (width < TAB_BAR_MAX_CONTENT_WIDTH) the cluster fills the screen.
-  // On tablets/landscape it stays comfortably reachable with thumbs.
-  // Horizontal safe-area insets are honored so notched landscape
-  // iPhones don't clip the leading/trailing tabs under the notch.
+  // Constrain the bar AND the inner items + FAB cluster to a centered
+  // max-width region. On phones the bar fills the screen minus the
+  // horizontal margin; on tablets/landscape the bar floats centered at
+  // up to TAB_BAR_MAX_CONTENT_WIDTH wide. Horizontal safe-area insets
+  // are honored so notched landscape iPhones don't clip the bar under
+  // the notch.
   const usableWidth = Math.max(
     0,
-    width - insets.left - insets.right,
+    width - insets.left - insets.right - BAR_HORIZONTAL_MARGIN * 2,
   )
   const contentWidth = Math.min(usableWidth, TAB_BAR_MAX_CONTENT_WIDTH)
-  const contentLeft = insets.left + (usableWidth - contentWidth) / 2
+  const contentLeft =
+    insets.left +
+    BAR_HORIZONTAL_MARGIN +
+    (usableWidth - contentWidth) / 2
   // FAB sits at the center of the content cluster (NOT screen center)
-  // so the cutout in the SVG aligns with it on tablets / landscape too.
+  // so it stays aligned with the bar's center on tablets / landscape.
   const cx = contentLeft + contentWidth / 2
 
   const goToSell = () => {
@@ -146,23 +156,34 @@ export function CustomTabBar({
         height: slotHeight,
       }}
     >
-      {/* SVG bar background — paints from CUTOUT_PROTRUSION downward. */}
+      {/* Floating pill background — rounded rectangle inset from screen
+          edges, lifted above the home-indicator zone. */}
       <View
         pointerEvents="none"
         style={{
           position: 'absolute',
           top: CUTOUT_PROTRUSION,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          left: contentLeft,
+          width: contentWidth,
+          height: TAB_BAR_HEIGHT,
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOpacity: 0.35,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 6 },
+            },
+            android: {
+              elevation: 8,
+            },
+            default: {},
+          }),
         }}
-      >
-        <TabBarBackground
-          width={width}
-          height={barHeight}
-          cutoutCenterX={cx}
-        />
-      </View>
+      />
 
       <View
         style={{
@@ -244,7 +265,7 @@ export function CustomTabBar({
           dependency on overflow:'visible'. With FAB diameter 56 and
           CUTOUT_PROTRUSION 28, the top half of the FAB is in the
           transparent protrusion zone (above the bar) and the bottom half
-          overlaps the bar's cutout. */}
+          overlaps the bar's top edge. */}
       <View
         pointerEvents="box-none"
         style={{

@@ -73,4 +73,11 @@ export type Product = {
   seller: Seller;
   engagement: ProductEngagement;
   createdAt: string;
+  /**
+   * Distance in kilometres from the user's current location, when both
+   * the user and the product have geo coordinates. Populated by
+   * `searchNearbyProducts` (see `services/products.ts` — `NearbyProduct`).
+   * Surfaced on the bottom info panel by Step 6; resolves the G.7 deferral.
+   */
+  distanceKm?: number | null;
 };

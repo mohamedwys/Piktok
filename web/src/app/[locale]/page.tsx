@@ -1,3 +1,4 @@
+import { setRequestLocale } from 'next-intl/server';
 import { Header } from '@/components/landing/Header';
 import { Hero } from '@/components/landing/Hero';
 import { Features } from '@/components/landing/Features';
@@ -6,21 +7,40 @@ import { FAQ } from '@/components/landing/FAQ';
 import { Footer } from '@/components/landing/Footer';
 
 /**
- * Mony public landing — Phase H.7.
+ * Mony public landing — locale-aware (H.7.1) + currency-aware
+ * (H.7.3).
  *
- * Replaces the H.6 "Coming soon" placeholder with the real
- * marketing surface. All composition; the section components
- * carry their own internal layout.
+ * Composition only — the section components carry their own
+ * internal layout AND their own translation calls. Server
+ * Component throughout (the LanguageSwitcher and CurrencyPicker
+ * inside Header are the only client-runtime hops).
  *
- * Server Component — no client-side state at this level. The
- * Button primitive is the only place we cross into client
- * runtime (its forwardRef + interactive attributes hydrate); the
- * sections themselves stream as static HTML for fastest TTFB.
+ * **Dynamic rendering (H.7.3 change).** Pre-H.7.3 the page was
+ * static-prerendered per locale via `setRequestLocale` +
+ * `generateStaticParams`. H.7.3 introduces `getCurrency()` which
+ * reads cookies + headers — Next.js 15's static-rendering path
+ * silently returns empty cookies in that mode, so every visitor
+ * would see the default EUR currency regardless of their
+ * `NEXT_CURRENCY` cookie. `force-dynamic` makes the page render
+ * on every request so the cookie-driven currency resolves
+ * correctly. Cost: ~50ms server overhead per request, mitigated
+ * by Vercel's edge cache for unchanged HTML; benefit: correct
+ * per-visitor currency on first paint without a hydration flicker.
  *
- * Locale: French only for v1 (matches mobile's primary market).
- * EN internationalization is a follow-up (Phase F or H.X).
+ * `setRequestLocale(locale)` still runs — it primes next-intl's
+ * locale resolution for nested Server Components even in dynamic
+ * mode. No-op when the page is dynamic but kept for symmetry
+ * with the locale-aware tree.
  */
-export default function LandingPage() {
+export const dynamic = 'force-dynamic';
+export default async function LandingPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   return (
     <div className="min-h-screen bg-background text-text-primary">
       <Header />

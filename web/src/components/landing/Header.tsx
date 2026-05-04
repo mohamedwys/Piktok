@@ -1,35 +1,42 @@
-import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import { Link } from '@/i18n/routing';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
+import { CurrencyPicker } from '@/components/ui/CurrencyPicker';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
+import { getCurrency } from '@/i18n/getCurrency';
 
 /**
- * Sticky landing header. Logo + anchor nav (Fonctionnalités /
- * Tarifs / FAQ) + a single outline CTA on the trailing edge.
+ * Sticky landing header.
  *
- * `sticky top-0` with `backdrop-blur-md` creates the iOS-style
- * glass surface from BRAND.md §Glass — the header rides above the
- * scrolling content without being a full opaque bar. The
- * background is a 70% black wash so the brand is readable but the
- * page still breathes through.
+ * Locale-aware via next-intl's `getTranslations`. The Logo and
+ * "Sign in" link use the locale-aware `Link` from `@/i18n/routing`
+ * so the current locale is preserved on navigation. Anchor links
+ * (`#features`, `#pricing`, `#faq`) use plain `<a>` because they
+ * scroll within the same page; the locale prefix is irrelevant.
  *
- * Anchor links use plain `<a href="#…">` because the targets are
- * sections on the same page; `next/link` would add unnecessary
- * routing overhead for fragment navigation.
+ * The right-edge cluster carries the visitor's preference axes:
+ *   - LanguageSwitcher (Globe icon, EN/FR/AR)
+ *   - CurrencyPicker (Coins icon, EUR/USD/AED) — H.7.3 addition
+ *   - Sign-in CTA
  *
- * The "Connexion" CTA points to `/upgrade` rather than rendering
- * a sign-in form on the marketing site — the H.6 page redirects
- * unauth'd visitors to `/`, which sends them back here. The
- * primary path to authentication is the mobile app's magic-link
- * flow (H.5), so this CTA is mostly a "you're already in the
- * app, click here from there" nudge.
+ * Both pickers are Client Components owning their own dropdown
+ * state. The Header itself stays a Server Component so it can
+ * resolve the initial currency via `getCurrency()` and seed the
+ * picker's `initial` prop — this avoids a flash of "wrong"
+ * currency on first paint between SSR and hydration.
  */
-export function Header() {
+export async function Header() {
+  const t = await getTranslations('nav');
+  const tBrand = await getTranslations('brand');
+  const currency = await getCurrency();
+
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/70 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center">
           <span className="font-display text-2xl font-semibold text-text-primary">
-            Mony
+            {tBrand('name')}
           </span>
         </Link>
 
@@ -38,27 +45,31 @@ export function Header() {
             href="#features"
             className="text-sm text-text-secondary transition-colors hover:text-text-primary"
           >
-            Fonctionnalités
+            {t('features')}
           </a>
           <a
             href="#pricing"
             className="text-sm text-text-secondary transition-colors hover:text-text-primary"
           >
-            Tarifs
+            {t('pricing')}
           </a>
           <a
             href="#faq"
             className="text-sm text-text-secondary transition-colors hover:text-text-primary"
           >
-            FAQ
+            {t('faq')}
           </a>
         </nav>
 
-        <Link href="/upgrade">
-          <Button variant="outline" size="md">
-            Connexion
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <CurrencyPicker initial={currency} />
+          <Link href="/upgrade" className="ms-2">
+            <Button variant="outline" size="md">
+              {t('signIn')}
+            </Button>
+          </Link>
+        </div>
       </Container>
     </header>
   );

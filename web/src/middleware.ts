@@ -2,41 +2,58 @@ import {
   createServerClient,
   type CookieOptions,
 } from '@supabase/ssr';
+import createIntlMiddleware from 'next-intl/middleware';
 import { NextResponse, type NextRequest } from 'next/server';
+import { routing } from '@/i18n/routing';
 
 /**
- * Session-refresh middleware.
+ * Composed middleware: next-intl locale routing + Supabase
+ * session refresh.
  *
- * Every Supabase + Next.js SSR setup needs this. The client's
- * access token is short-lived (1 hour by default); without
- * proactive refresh, a long-idle session would silently expire
- * mid-request. Calling `supabase.auth.getUser()` inside the
- * middleware does two things at once:
+ * Two responsibilities, run in order:
  *
- *   1. Touches Supabase Auth, which transparently refreshes the
- *      access + refresh tokens if they're near expiry. The
- *      `setAll` adapter writes the rotated cookies to BOTH the
- *      incoming request (so downstream Server Components see the
- *      new values via `cookies().get(...)`) AND the outgoing
- *      response (so the browser persists them).
- *   2. Validates the JWT cryptographically. If the token's been
- *      tampered or revoked, the user shows up as null in
- *      downstream `getUser()` calls — the auth-gate behavior is
- *      consistent.
+ *   1. **Locale routing (next-intl)** — inspects the URL +
+ *      NEXT_LOCALE cookie + Accept-Language header to decide the
+ *      active locale. For paths that need a redirect or rewrite
+ *      (e.g., a fresh visitor with `Accept-Language: fr-FR`
+ *      hitting `/foo` may be redirected to `/fr/foo` depending
+ *      on routing config), it returns a redirect response. We
+ *      use that response as the base for step 2 so the cookie
+ *      writes from Supabase land on the same response object the
+ *      user receives.
  *
- * The matcher excludes static assets and Next.js internals.
- * Everything else — pages, route handlers, server actions — gets
- * a session-refresh attempt. The middleware does NOT redirect
- * unauth'd traffic anywhere; auth-gating decisions stay in the
- * page-level `getUser() ? content : redirect('/')` pattern so
- * the middleware can stay one-job (refresh) and not entangle
- * with route-specific auth requirements.
+ *   2. **Supabase session refresh** — touches `getUser()` to
+ *      transparently rotate near-expiry access/refresh tokens.
+ *      Mirrors the H.6 implementation byte-for-byte; only the
+ *      composition with the locale middleware is new.
+ *
+ * Auth gating decisions stay at the page level
+ * (`getSupabaseServer().auth.getUser() ? content : redirect('/')`)
+ * — middleware is one-job-each per concern.
+ *
+ * The matcher (see `config` below) excludes:
+ *   - /_next/* internals + static asset extensions (Next.js).
+ *   - /api/* — API routes are technical endpoints, not
+ *              user-facing localized content. The H.5 magic-link
+ *              callback handler at /auth/callback is also
+ *              excluded so it stays at the canonical
+ *              non-locale-prefixed path.
+ *   - /auth/error — same rationale; rare error page kept simple.
  */
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request,
-  });
+const intlMiddleware = createIntlMiddleware(routing);
 
+export async function middleware(request: NextRequest) {
+  // 1. Run next-intl first. For locale-routing paths, this
+  //    returns either a redirect/rewrite (e.g., adding /fr to
+  //    the URL for a French-preferring visitor) or a plain
+  //    NextResponse.next() that carries the resolved locale on
+  //    request headers for downstream consumers.
+  let response = intlMiddleware(request);
+
+  // 2. Compose with Supabase session refresh. Reuse the response
+  //    object from step 1 so cookie writes land on whatever
+  //    response the user ultimately receives — including
+  //    redirects.
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -55,9 +72,16 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
-          response = NextResponse.next({
-            request,
+          // Re-create the response so it picks up the rotated
+          // request cookies from the lines above. Carry over the
+          // original response's headers (which include
+          // next-intl's locale-resolution headers like
+          // x-middleware-rewrite / x-next-intl-locale).
+          const refreshed = NextResponse.next({ request });
+          response.headers.forEach((value, key) => {
+            refreshed.headers.set(key, value);
           });
+          response = refreshed;
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
@@ -67,8 +91,6 @@ export async function middleware(request: NextRequest) {
   );
 
   // Touch the user — the side effect is the cookie refresh.
-  // The returned value is intentionally unused here; auth gates
-  // happen at the page level via `getSupabaseServer().auth.getUser()`.
   await supabase.auth.getUser();
 
   return response;
@@ -82,7 +104,10 @@ export const config = {
      * - /_next/image     (Next.js image optimizer)
      * - /favicon.ico     (browser-default fetch)
      * - any image asset  (svg / png / jpg / etc.)
+     * - /api/*           (technical endpoints — no locale prefix)
+     * - /auth/callback   (H.5 magic-link landing — stays at root)
+     * - /auth/error      (rare error page, English-only)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|auth/callback|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

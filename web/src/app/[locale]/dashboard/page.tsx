@@ -1,8 +1,9 @@
-import { redirect } from 'next/navigation';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { redirect } from '@/i18n/routing';
 import { getSupabaseServer } from '@/lib/supabase/server';
 
 /**
- * Dashboard — H.6 placeholder.
+ * Dashboard — H.6 placeholder, locale-aware (H.7.1).
  *
  * Auth-gated symmetrically with /upgrade. Real subscription
  * management UI (current plan, renewal date, cancel-state, link
@@ -10,22 +11,34 @@ import { getSupabaseServer } from '@/lib/supabase/server';
  * authenticated user's email — same pattern as /upgrade — so the
  * placeholder confirms the auth flow without committing to a UI.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   const supabase = await getSupabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect('/');
+  if (!user) {
+    redirect({ href: '/', locale });
+  }
+  const email = user?.email ?? '';
+
+  const t = await getTranslations('dashboard');
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6 bg-background">
-      <div className="max-w-md w-full space-y-6 bg-surface-elevated rounded-xl p-8 border border-border">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="w-full max-w-md space-y-6 rounded-xl border border-border bg-surface-elevated p-8">
         <h1 className="font-display text-xxxl font-semibold text-text-primary">
-          Dashboard
+          {t('title')}
         </h1>
         <p className="text-text-secondary">
-          Hi, {user.email}. Subscription management is shipping soon.
+          {t('greetingWith', { email })} {t('comingSoonBody')}
         </p>
       </div>
     </main>

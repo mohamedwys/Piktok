@@ -79,6 +79,76 @@ After the first deploy, if the URL differs from
 
 Push-to-main triggers Vercel auto-deploys thereafter.
 
+## Locales
+
+Three locales ship in v1: **`en`** (default), **`fr`**, **`ar`**.
+
+- Translation catalogs live at `messages/<locale>.json`.
+- All locale-aware pages live under `src/app/[locale]/`.
+- Non-localized routes stay at the root: `src/app/auth/callback/route.ts` (H.5 magic-link landing) and `src/app/auth/error/page.tsx` (rare error page, English-only).
+- The header's language switcher (`src/components/ui/LanguageSwitcher.tsx`) writes a `NEXT_LOCALE` cookie so the choice sticks across visits.
+- Locale detection priority: URL path → `NEXT_LOCALE` cookie → `Accept-Language` header → `defaultLocale: 'en'`.
+
+URLs:
+
+```
+/         → English landing (default, no prefix)
+/fr       → French landing
+/ar       → Arabic landing (LTR layout for v1; RTL polish in H.7.2)
+/upgrade  → English upgrade
+/fr/upgrade, /ar/upgrade → localized variants
+```
+
+### Adding a new locale
+
+1. Add the locale code to `src/i18n/routing.ts` (`locales: [...]`).
+2. Create `messages/<code>.json` with the same key shape as `messages/en.json`.
+3. Add the option to `src/components/ui/LanguageSwitcher.tsx`'s `LOCALES` array.
+4. `npm run build` — Next.js prerenders the new locale automatically via `generateStaticParams`.
+
+### Translation quality
+
+- **EN** — written by the team, source-of-truth voice.
+- **FR** — written by the team (mobile market precedent).
+- **AR** — best-effort initial translation, **pending professional review** before public launch. The marketing surface deserves better than auto-translation; flag this when the AR market is prioritized.
+
+Missing keys in any catalog fall back to the default locale (EN).
+
+## Currency
+
+Three currencies ship in v1: **EUR** (default), **USD**, **AED**.
+
+- Per-currency pricing copy lives in `messages/<locale>.json` under the `pricing.<currency>` subtree (`priceMonthly`, `cadenceMonthly`, `priceYearly`, `cadenceYearly`, `savings`).
+- Pricing is per-currency-authored (€19, $19, AED 79 monthly) — no live FX-rate conversion. The Mony Pro subscription has fixed prices per currency, so static authoring is the right model.
+- The header's `CurrencyPicker` (`src/components/ui/CurrencyPicker.tsx`) writes a `NEXT_CURRENCY` cookie so the choice sticks across visits.
+- Currency detection priority: `NEXT_CURRENCY` cookie → first `Accept-Language` country tag mapped via `COUNTRY_CURRENCY` (`src/i18n/currency.ts`) → fallback `eur`.
+
+### Stripe prices (6 total)
+
+The Stripe Dashboard backs the per-currency pricing with six Prices on the Mony Pro Product:
+
+| Currency | Monthly | Yearly |
+| --- | --- | --- |
+| EUR | €19 | €190 |
+| USD | $19 | $190 |
+| AED | AED 79 | AED 749 |
+
+Each Price ID lands in an env var named `STRIPE_PRICE_<CURRENCY>_<CADENCE>` (uppercase) — see `.env.local.example`. The H.8 Checkout API route (revised post-H.7.3) reads the visitor's `NEXT_CURRENCY` cookie + cadence param and selects the matching env var.
+
+### Adding a new currency
+
+1. Add the code to `src/i18n/currency.ts` (`CURRENCIES` + `CURRENCY_LABELS`).
+2. Map relevant country codes to the currency in `COUNTRY_CURRENCY`.
+3. Add the per-currency subtree to all locale catalogs at `pricing.<currency>`.
+4. Create the two new Stripe Prices (monthly + yearly) and capture the IDs into `STRIPE_PRICE_<CURRENCY>_<CADENCE>` env vars.
+5. Add the option to `src/components/ui/CurrencyPicker.tsx`'s rendered list (it already iterates `CURRENCIES`, but a dedicated symbol/label needs the `CURRENCY_LABELS` entry from step 1).
+
+### Mobile vs. web — independent detection
+
+The mobile app already auto-detects display currency via `expo-localization` + jsdelivr live FX rates (Phase H' on the mobile side) — but mobile's currency reflects the BUYER's display preference for marketplace products listed in the SELLER's local currency. Web's currency reflects the visitor's preferred Stripe Checkout currency for the Mony Pro subscription itself.
+
+The two systems are independent; a UAE visitor sees AED on both surfaces (mobile via H'.2.1 jsdelivr, web via H.7.3 cookie/header), but the mechanisms are different.
+
 ## Auth model
 
 Magic links from the mobile app's `useUpgradeFlow()` hook (Phase

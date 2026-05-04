@@ -1,0 +1,139 @@
+{
+  "brand": {
+    "name": "Mony",
+    "tagline": "Mony — the video marketplace. Sell, discover, connect."
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "signIn": "Sign in"
+  },
+  "hero": {
+    "headlineLead": "Sell. Discover. ",
+    "headlineAccent": "Connect.",
+    "sub": "Mony is the video marketplace that brings creators, boutiques, and collectors together. Buy, sell, and grow your business — in an experience built mobile-first.",
+    "ctaPrimary": "Discover Mony Pro",
+    "ctaSecondary": "Get the app"
+  },
+  "features": {
+    "heading": "A marketplace built differently",
+    "sub": "Four things Mony does better.",
+    "videoFirst": {
+      "title": "Video first",
+      "body": "Every listing starts with a video that catches the eye. Sell with the energy of a live, not the friction of a form."
+    },
+    "localGlobal": {
+      "title": "Local and global",
+      "body": "Filter by distance to find what's near you, or explore sellers from anywhere in the world."
+    },
+    "securePayments": {
+      "title": "Secure payments",
+      "body": "Stripe handles every transaction. Pro sellers get paid directly to their bank account."
+    },
+    "community": {
+      "title": "Community",
+      "body": "Follow your favorite sellers. See new drops first, comment, negotiate live."
+    }
+  },
+  "pricing": {
+    "heading": "Become a Pro seller",
+    "sub": "One simple price. No commitment. Cancel anytime.",
+    "recommended": "Recommended",
+    "tierName": "Mony Pro",
+    "yearlyTemplate": "or {price} {cadence} ({savings})",
+    "eur": {
+      "priceMonthly": "€19",
+      "cadenceMonthly": "/ month",
+      "priceYearly": "€190",
+      "cadenceYearly": "/ year",
+      "savings": "save 17%"
+    },
+    "usd": {
+      "priceMonthly": "$19",
+      "cadenceMonthly": "/ month",
+      "priceYearly": "$190",
+      "cadenceYearly": "/ year",
+      "savings": "save 17%"
+    },
+    "aed": {
+      "priceMonthly": "AED 79",
+      "cadenceMonthly": "/ month",
+      "priceYearly": "AED 749",
+      "cadenceYearly": "/ year",
+      "savings": "save 21%"
+    },
+    "feature1": "Unlimited listings (vs 10 on free)",
+    "feature2": "Reduced transaction fees (~4% vs 7%)",
+    "feature3": "Featured boost: 1 listing per week",
+    "feature4": "Analytics dashboard",
+    "feature5": "PRO badge on your profile",
+    "cta": "Start in the app",
+    "subcopyPrefix": "Open the Mony app and tap ",
+    "subcopyHighlight": "“Become Pro”",
+    "subcopySuffix": " in your profile.",
+    "comingSoon": "Coming soon"
+  },
+  "faq": {
+    "heading": "Frequently asked questions",
+    "q1": {
+      "q": "How do I start selling on Mony?",
+      "a": "Download the app, create your account with your email, and post your first video listing. Thirty seconds is all it takes."
+    },
+    "q2": {
+      "q": "What's the difference between a free account and Mony Pro?",
+      "a": "The free account caps at 10 listings with 7% transaction fees. Mony Pro offers unlimited listings, reduced fees at 4%, a weekly featured boost, and an analytics dashboard."
+    },
+    "q3": {
+      "q": "How do payments work?",
+      "a": "Stripe handles every transaction securely. Pro sellers receive their payments directly to their bank account — no middleman, no delay."
+    },
+    "q4": {
+      "q": "Can I cancel Mony Pro anytime?",
+      "a": "Yes, with no commitment. You keep Pro access until the end of your current billing period, then automatically switch back to the free account."
+    },
+    "q5": {
+      "q": "Is Mony available in my country?",
+      "a": "Mony works everywhere. The currency adapts automatically to your region (EUR, USD, AED, GBP, and more) and transactions cross borders without friction."
+    },
+    "q6": {
+      "q": "How does Mony protect my privacy?",
+      "a": "We never sell your data. Your messages and transactions stay private. Full details are in our privacy policy."
+    },
+    "q7": {
+      "q": "How can I contact support?",
+      "a": "Through the “Account” menu in the app. Average response time is under 24 hours, in English or French."
+    }
+  },
+  "footer": {
+    "tagline": "The video marketplace. Sell, discover, connect.",
+    "productHeading": "Product",
+    "legalHeading": "Legal",
+    "contactHeading": "Contact",
+    "linkAbout": "About",
+    "linkPricing": "Pricing",
+    "linkPro": "Mony Pro",
+    "linkTerms": "Terms of service",
+    "linkPrivacy": "Privacy",
+    "linkCookies": "Cookies",
+    "linkSupport": "Support",
+    "linkTwitter": "Twitter",
+    "linkInstagram": "Instagram",
+    "copyright": "© 2026 Mony — All rights reserved."
+  },
+  "upgrade": {
+    "title": "Become Pro",
+    "welcomeWith": "Welcome, {email}.",
+    "comingSoonBody": "Stripe Checkout integration is shipping soon.",
+    "goToDashboard": "Go to dashboard →"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "greetingWith": "Hi, {email}.",
+    "comingSoonBody": "Subscription management is shipping soon."
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "ariaLabel": "Change language"
+  }
+}

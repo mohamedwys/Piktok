@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import { Link } from '@/i18n/routing';
 import { Container } from '@/components/ui/Container';
 
 /**
@@ -7,44 +8,48 @@ import { Container } from '@/components/ui/Container';
  * Three columns of links plus a brand block on the left. Most
  * destinations are placeholders pointing to "#" because the
  * underlying pages (Terms, Privacy, Cookies, Support) aren't
- * built yet — H.X ships them as legal launch prep. The tabular
- * structure is in place so adding real hrefs later is a one-line
- * edit each.
+ * built yet — H.X ships them as legal launch prep.
  *
  * Background steps DOWN to `bg-surface` (one layer below the
  * sections above) — visually anchors the page bottom and gives a
  * clear "here ends the marketing" signal.
+ *
+ * Localized copy via the `footer` and `brand` namespaces. The
+ * link labels translate; the hrefs stay shared across locales
+ * (links to `#pricing` work the same on every locale variant
+ * because the pricing section ID is universal).
  */
-type LinkColumn = { heading: string; links: { label: string; href: string }[] };
+const COLUMNS = [
+  {
+    headingKey: 'productHeading',
+    links: [
+      { labelKey: 'linkAbout', href: '#' },
+      { labelKey: 'linkPricing', href: '#pricing' },
+      { labelKey: 'linkPro', href: '#pricing' },
+    ],
+  },
+  {
+    headingKey: 'legalHeading',
+    links: [
+      { labelKey: 'linkTerms', href: '#' },
+      { labelKey: 'linkPrivacy', href: '#' },
+      { labelKey: 'linkCookies', href: '#' },
+    ],
+  },
+  {
+    headingKey: 'contactHeading',
+    links: [
+      { labelKey: 'linkSupport', href: '#' },
+      { labelKey: 'linkTwitter', href: '#' },
+      { labelKey: 'linkInstagram', href: '#' },
+    ],
+  },
+] as const;
 
-const COLUMNS: LinkColumn[] = [
-  {
-    heading: 'Produit',
-    links: [
-      { label: 'À propos', href: '#' },
-      { label: 'Tarifs', href: '#pricing' },
-      { label: 'Mony Pro', href: '#pricing' },
-    ],
-  },
-  {
-    heading: 'Légal',
-    links: [
-      { label: 'Conditions d’utilisation', href: '#' },
-      { label: 'Confidentialité', href: '#' },
-      { label: 'Cookies', href: '#' },
-    ],
-  },
-  {
-    heading: 'Contact',
-    links: [
-      { label: 'Support', href: '#' },
-      { label: 'Twitter', href: '#' },
-      { label: 'Instagram', href: '#' },
-    ],
-  },
-];
+export async function Footer() {
+  const t = await getTranslations('footer');
+  const tBrand = await getTranslations('brand');
 
-export function Footer() {
   return (
     <footer className="border-t border-border bg-surface py-16">
       <Container>
@@ -52,27 +57,27 @@ export function Footer() {
           <div>
             <Link href="/" className="inline-block">
               <span className="font-display text-2xl font-semibold text-text-primary">
-                Mony
+                {tBrand('name')}
               </span>
             </Link>
             <p className="mt-4 max-w-xs text-sm text-text-tertiary">
-              La marketplace vidéo. Vendez, découvrez, connectez-vous.
+              {t('tagline')}
             </p>
           </div>
 
-          {COLUMNS.map(({ heading, links }) => (
-            <div key={heading}>
+          {COLUMNS.map((col) => (
+            <div key={col.headingKey}>
               <h4 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
-                {heading}
+                {t(col.headingKey)}
               </h4>
               <ul className="mt-4 space-y-3">
-                {links.map(({ label, href }) => (
-                  <li key={label}>
+                {col.links.map((link) => (
+                  <li key={link.labelKey}>
                     <a
-                      href={href}
+                      href={link.href}
                       className="text-sm text-text-secondary transition-colors hover:text-text-primary"
                     >
-                      {label}
+                      {t(link.labelKey)}
                     </a>
                   </li>
                 ))}
@@ -82,9 +87,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border pt-8">
-          <p className="text-xs text-text-tertiary">
-            © 2026 Mony — Tous droits réservés.
-          </p>
+          <p className="text-xs text-text-tertiary">{t('copyright')}</p>
         </div>
       </Container>
     </footer>

@@ -1,100 +1,112 @@
-import './globals.css';
 import type { Metadata } from 'next';
-import { Inter, Fraunces } from 'next/font/google';
+import { NextIntlClientProvider, hasLocale } from 'next-intl';
+import {
+  getMessages,
+  getTranslations,
+  setRequestLocale,
+} from 'next-intl/server';
+import { notFound } from 'next/navigation';
+import { routing } from '@/i18n/routing';
 
 /**
- * Mirror the mobile font stack:
- *   - Inter as the sans default (body, captions, labels, CTAs).
- *   - Fraunces as the display serif (hero moments only).
- * Both are loaded via next/font/google for automatic self-hosting,
- * preloading, and zero layout-shift. The CSS variables
- * `--font-inter` / `--font-fraunces` are consumed by the Tailwind
- * config's `fontFamily` extension so utility classes like
- * `font-sans` / `font-display` resolve to the correct family.
+ * Locale-aware NESTED layout.
  *
- * `display: 'swap'` lets the system fallback render immediately;
- * Inter / Fraunces swap in once loaded. On a paid Vercel plan we
- * could pre-cache via `display: 'optional'` but for v1 'swap' is
- * the safer default.
+ * Wraps locale-prefixed routes ('/', '/fr', '/ar', etc.) in:
+ *   - `setRequestLocale(locale)` — exposes the resolved locale
+ *     to nested Server Components, required for static rendering
+ *     of locale-aware translations.
+ *   - `NextIntlClientProvider` — makes messages available to
+ *     `useTranslations()` in nested Client Components.
+ *
+ * Does NOT render `<html>` / `<body>` — those live in the
+ * top-level root layout at `web/src/app/layout.tsx`. Nested
+ * layouts cannot duplicate them in Next.js's App Router.
+ *
+ * `generateStaticParams` returns the three locale codes so
+ * `next build` prerenders /, /fr, /ar at build time rather than
+ * rendering on demand — important for fast TTFB on Vercel.
  */
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  weight: ['400', '500', '600', '700'],
-});
-
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  variable: '--font-fraunces',
-  display: 'swap',
-  weight: ['400', '500', '600'],
-});
+export function generateStaticParams() {
+  return routing.locales.map((locale) => ({ locale }));
+}
 
 /**
- * Site-wide metadata — SEO + Open Graph + Twitter Card.
- *
- * `metadataBase` is required by Next.js to resolve absolute URLs
- * for OG image references; it points at the production deploy.
- * If the Vercel URL changes (e.g., custom brand domain lands),
- * update here in lockstep with the mobile-side `WEB_BASE_URL`
- * constant and the Supabase secret of the same name.
- *
- * The OG image (`/og-image.png`) is a TODO — H.7 references the
- * path but does not ship the asset. Two paths to close it:
- *   (a) Static asset committed to /web/public/og-image.png
- *       (1200×630, brand mark on the dark stack).
- *   (b) Dynamic generation via next/og at /api/og.
- * Both are post-H.7 work. Until one lands, share previews on
- * Twitter / LinkedIn / iMessage will fall back to a plain link
- * card with the title + description.
- *
- * Locale: French only for v1 (matches mobile's primary market).
- * `lang="fr"` and `locale: 'fr_FR'` for OG. English alternates
- * land when Phase F or H.X internationalizes the site.
+ * Per-locale metadata. The translated `<title>` and
+ * `<meta description>` come from the locale's catalog so shared
+ * link previews on Twitter / iMessage / LinkedIn carry the right
+ * language. `metadataBase` and the OG image path stay shared
+ * across locales.
  */
-export const metadata: Metadata = {
-  title: 'Mony — Marketplace vidéo',
-  description:
-    "Vendez et achetez sur Mony, la marketplace vidéo. Vendeurs Pro avec paiement direct, mise en avant hebdomadaire et frais réduits.",
-  metadataBase: new URL('https://mony.vercel.app'),
-  openGraph: {
-    title: 'Mony — Marketplace vidéo',
-    description:
-      'Marketplace vidéo. Vendez, découvrez, connectez-vous.',
-    url: 'https://mony.vercel.app',
-    siteName: 'Mony',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Mony',
-      },
-    ],
-    locale: 'fr_FR',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Mony — Marketplace vidéo',
-    description:
-      'Marketplace vidéo. Vendez, découvrez, connectez-vous.',
-    images: ['/og-image.png'],
-  },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const safeLocale = hasLocale(routing.locales, locale)
+    ? locale
+    : routing.defaultLocale;
 
-export default function RootLayout({
+  const t = await getTranslations({
+    locale: safeLocale,
+    namespace: 'brand',
+  });
+  const title = `${t('name')} — ${t('tagline')}`;
+  const description = t('tagline');
+
+  const ogLocaleByLocale: Record<string, string> = {
+    en: 'en_US',
+    fr: 'fr_FR',
+    ar: 'ar_AR',
+  };
+
+  return {
+    title,
+    description,
+    metadataBase: new URL('https://mony.vercel.app'),
+    openGraph: {
+      title,
+      description,
+      url: 'https://mony.vercel.app',
+      siteName: 'Mony',
+      images: [
+        {
+          url: '/og-image.png',
+          width: 1200,
+          height: 630,
+          alt: 'Mony',
+        },
+      ],
+      locale: ogLocaleByLocale[safeLocale] ?? 'en_US',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ['/og-image.png'],
+    },
+  };
+}
+
+export default async function LocaleLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ locale: string }>;
 }) {
+  const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) {
+    notFound();
+  }
+
+  setRequestLocale(locale);
+  const messages = await getMessages();
+
   return (
-    <html
-      lang="fr"
-      className={`dark ${inter.variable} ${fraunces.variable}`}
-    >
-      <body>{children}</body>
-    </html>
+    <NextIntlClientProvider messages={messages} locale={locale}>
+      {children}
+    </NextIntlClientProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Globe, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { Container } from '@/components/ui/Container';
 import { Section } from '@/components/ui/Section';
@@ -15,70 +16,42 @@ import { Section } from '@/components/ui/Section';
  * the accent appears, and only in icon form (BRAND.md says
  * "Icons (any size)" is allowed on `colors.brand`).
  *
- * Copy in French; mirrors mobile's tone (direct, not corporate).
+ * The four feature keys (`videoFirst`, `localGlobal`,
+ * `securePayments`, `community`) match across all three locale
+ * catalogs; missing keys would fall back to the default locale.
  */
-type Feature = {
-  Icon: React.ComponentType<{ className?: string; size?: number }>;
-  title: string;
-  body: string;
-};
+const FEATURES = [
+  { Icon: Zap, key: 'videoFirst' },
+  { Icon: Globe, key: 'localGlobal' },
+  { Icon: ShieldCheck, key: 'securePayments' },
+  { Icon: Sparkles, key: 'community' },
+] as const;
 
-const FEATURES: Feature[] = [
-  {
-    Icon: Zap,
-    title: 'Vidéo first',
-    body:
-      'Chaque annonce commence par une vidéo qui capte l’attention. ' +
-      'Vendez avec l’énergie d’un live, pas la friction d’un formulaire.',
-  },
-  {
-    Icon: Globe,
-    title: 'Local et mondial',
-    body:
-      'Filtrez par distance pour trouver près de chez vous, ou explorez ' +
-      'les vendeurs partout dans le monde.',
-  },
-  {
-    Icon: ShieldCheck,
-    title: 'Paiement sécurisé',
-    body:
-      'Stripe gère toutes les transactions. Les vendeurs Pro encaissent ' +
-      'directement sur leur compte bancaire.',
-  },
-  {
-    Icon: Sparkles,
-    title: 'Communauté',
-    body:
-      'Suivez vos vendeurs préférés. Recevez les nouveautés avant tout le ' +
-      'monde, commentez, négociez en direct.',
-  },
-];
+export async function Features() {
+  const t = await getTranslations('features');
 
-export function Features() {
   return (
     <Section id="features">
       <Container>
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="font-display text-4xl font-semibold leading-tight text-text-primary md:text-5xl">
-            Une marketplace pensée différemment
+            {t('heading')}
           </h2>
-          <p className="mt-6 text-lg text-text-secondary">
-            Quatre choses que Mony fait mieux.
-          </p>
+          <p className="mt-6 text-lg text-text-secondary">{t('sub')}</p>
         </div>
 
         <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {FEATURES.map(({ Icon, title, body }) => (
+          {FEATURES.map(({ Icon, key }) => (
             <div
-              key={title}
+              key={key}
               className="rounded-xl border border-border bg-surface-elevated p-8"
             >
               <Icon className="text-brand" size={28} />
               <h3 className="mt-6 font-display text-2xl font-semibold text-text-primary">
-                {title}
+                {t(`${key}.title`)}
               </h3>
               <p className="mt-3 leading-relaxed text-text-secondary">
-                {body}
+                {t(`${key}.body`)}
               </p>
             </div>
           ))}

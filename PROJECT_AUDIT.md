@@ -6277,3 +6277,500 @@ After revert, `cd web && npm install` re-resolves the dependency graph without `
 
 If only the landing UI should be removed but the H.6 latent-any fixes should stay, the surgical revert is `git checkout HEAD -- web/src/app/page.tsx web/src/app/layout.tsx` plus `rm -r web/src/components/landing web/src/components/ui` plus `npm uninstall lucide-react`. But the simple `git revert` is preferred unless that surgical state is specifically wanted.
 
+---
+
+## Step H.7.1 Changelog (2026-05-04) — Web i18n Foundation (EN/FR/AR via next-intl)
+
+JS-only step, scoped to `/web/`. Integrates `next-intl` with three locales (English default, French, Arabic), locale-prefixed routing for user-facing pages, full translations of every H.7 landing component + H.6 upgrade/dashboard placeholders, locale-detection middleware composed with the existing Supabase session-refresh, and a header language switcher. Auth callback + auth error stay non-localized at root paths. Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question 9 (multi-region pricing — H.7.3's scope) and the H.7 changelog's "FR-only locale decision" (now superseded as planned). next-intl v4 was the active stable line at install time.
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **`next-intl` confirmed absent.** Single new dep, pinned to `^4.11.0`. Compatible with Next.js 15 + React 19.
+- **Existing Tailwind tokens are kebab-case.** Carryover from H.6/H.7 — components already use `text-text-secondary`, `bg-surface-elevated`, etc. The LanguageSwitcher matches.
+- **Routes pre-i18n:** `src/app/page.tsx`, `src/app/upgrade/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/layout.tsx` (the H.7 root), plus `src/app/auth/callback/route.ts` and `src/app/auth/error/page.tsx`.
+- **H.8 pages don't exist yet.** The H.7.1 spec mentioned `/upgrade/success/page.tsx` and `/upgrade/canceled/page.tsx` for translation, but H.8 has not shipped — those don't exist on disk. H.7.1 only translates what's currently committed.
+- **String inventory.** All FR copy lives in 6 landing components ([Header](web/src/components/landing/Header.tsx), [Hero](web/src/components/landing/Hero.tsx), [Features](web/src/components/landing/Features.tsx), [Pricing](web/src/components/landing/Pricing.tsx), [FAQ](web/src/components/landing/FAQ.tsx), [Footer](web/src/components/landing/Footer.tsx)). H.6's upgrade/dashboard/auth-error placeholders carry English copy. H.7.1 normalizes everyone to `t()`.
+
+### Files added (8)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/i18n/routing.ts](web/src/i18n/routing.ts) | `defineRouting({ locales: ['en','fr','ar'], defaultLocale: 'en', localePrefix: 'as-needed' })` + locale-aware nav primitives (`Link`, `redirect`, `usePathname`, `useRouter`, `getPathname`) for use under `[locale]/`. |
+| [web/src/i18n/request.ts](web/src/i18n/request.ts) | `getRequestConfig` reads the per-request locale and dynamic-imports `messages/<locale>.json`. Wired via the `next-intl/plugin` in `next.config.ts`. Falls back to default locale on unknown values. |
+| [web/messages/en.json](web/messages/en.json) | English catalog — source-of-truth voice. ~75 keys across 9 namespaces (`brand`, `nav`, `hero`, `features`, `pricing`, `faq`, `footer`, `upgrade`, `dashboard`, `languageSwitcher`). |
+| [web/messages/fr.json](web/messages/fr.json) | French catalog — preserves the H.7 FR copy verbatim where appropriate, ports auth/dashboard placeholders to FR. |
+| [web/messages/ar.json](web/messages/ar.json) | Arabic catalog — best-effort first pass, **pending professional review** before public AR launch. RTL layout polish is H.7.2. |
+| [web/src/components/ui/LanguageSwitcher.tsx](web/src/components/ui/LanguageSwitcher.tsx) | `'use client'` dropdown — Globe icon + active locale label + chevron. Closes on outside click + Escape. Uses `next-intl`'s `useRouter().replace(pathname, { locale })` so the swap preserves the path and writes the `NEXT_LOCALE` cookie. |
+| [web/src/app/layout.tsx](web/src/app/layout.tsx) | Top-level root layout — `<html>`/`<body>`/fonts. Resolves `<html lang>` from `NEXT_LOCALE` cookie → `x-next-intl-locale` header → defaultLocale. One root layout for both the locale tree AND the auth tree. |
+| [web/src/app/[locale]/layout.tsx](web/src/app/[locale]/layout.tsx) | Nested layout for the locale tree. `setRequestLocale(locale)` + `NextIntlClientProvider` + `generateStaticParams` + locale-aware `generateMetadata`. No `<html>`/`<body>` (those live at the root). |
+
+### Files moved (4 via git mv)
+
+Preserves blame history.
+
+```
+src/app/layout.tsx           → src/app/[locale]/layout.tsx (then rewritten)
+src/app/page.tsx             → src/app/[locale]/page.tsx
+src/app/upgrade/page.tsx     → src/app/[locale]/upgrade/page.tsx
+src/app/dashboard/page.tsx   → src/app/[locale]/dashboard/page.tsx
+```
+
+### Files modified (10)
+
+| Path | Change |
+| --- | --- |
+| [web/package.json](web/package.json) | Added `next-intl: ^4.11.0`. |
+| [web/package-lock.json](web/package-lock.json) | Auto-updated. |
+| [web/next.config.ts](web/next.config.ts) | Wrapped export with `createNextIntlPlugin('./src/i18n/request.ts')(nextConfig)`. |
+| [web/README.md](web/README.md) | Added Locales section (URL conventions, "adding a new locale" runbook, AR translation quality caveat). |
+| [web/src/middleware.ts](web/src/middleware.ts) | Composed: `intlMiddleware(request)` first to resolve locale + emit any redirect/rewrite, then Supabase session refresh layered on the same response object. Matcher excludes `api`, `auth/callback`, `auth/error`. |
+| [web/src/components/landing/Header.tsx](web/src/components/landing/Header.tsx) | `getTranslations('nav')` + `getTranslations('brand')`. Locale-aware `Link` from `@/i18n/routing` for `/` and `/upgrade`. Mounts `<LanguageSwitcher />` next to the Connexion CTA. |
+| [web/src/components/landing/Hero.tsx](web/src/components/landing/Hero.tsx) | Headline split into `headlineLead` + `headlineAccent` so translators choose where the coral cut falls. |
+| [web/src/components/landing/Features.tsx](web/src/components/landing/Features.tsx) | Constant 4-feature `[{Icon, key}]` array; copy resolves via `t('${key}.title')` / `t('${key}.body')`. |
+| [web/src/components/landing/Pricing.tsx](web/src/components/landing/Pricing.tsx) | All copy through `t()`. Price strings (`priceMonthly`, `yearlyNote`) are per-locale to allow `19 €` vs `€19` conventions. Multi-currency conversion is H.7.3. |
+| [web/src/components/landing/FAQ.tsx](web/src/components/landing/FAQ.tsx) | Constant 7-question key array; each `t('${key}.q')` + `t('${key}.a')`. |
+| [web/src/components/landing/Footer.tsx](web/src/components/landing/Footer.tsx) | Locale-aware `Link` for the brand wordmark. Column headings + link labels through `t()`. |
+| [web/src/app/[locale]/upgrade/page.tsx](web/src/app/[locale]/upgrade/page.tsx) | `setRequestLocale(locale)` + `redirect({ href: '/', locale })` for unauth + `t()` for placeholder copy. Carries `email` through `t('welcomeWith', { email })` interpolation. |
+| [web/src/app/[locale]/dashboard/page.tsx](web/src/app/[locale]/dashboard/page.tsx) | Symmetric to upgrade. |
+| [web/src/app/[locale]/page.tsx](web/src/app/[locale]/page.tsx) | `setRequestLocale(locale)` to keep static rendering. Composition unchanged. |
+
+### Translations — quality and caveats
+
+- **EN** — written by team. Source-of-truth voice. Will receive editorial polish before launch.
+- **FR** — written by team. Preserves H.7's existing FR copy verbatim where the catalog key matches the original component literal; added new keys for upgrade/dashboard placeholders that were originally English.
+- **AR** — best-effort initial translation. Native-quality Arabic for marketing copy is its own discipline; H.7.1 ships a working translation but the changelog flags this for **professional review before AR market launch**. The keys cover all 75 strings; sentences are grammatically correct and idiomatic, but a native marketing copywriter should review for tone consistency with BRAND.md's "premium, considered, mobile-native" positioning.
+
+The README's Locales section documents this caveat for any contributor adding new strings.
+
+### Routing decisions
+
+- **`localePrefix: 'as-needed'`** keeps the default locale at `/` (no `/en` prefix). This protects canonical SEO (one URL per page) and matches the convention most modern multi-locale sites use. The trade-off vs `'always'` (everyone gets a prefix) is that analytics segmenting EN visitors requires reading the `NEXT_LOCALE` cookie or absence-of-prefix; acceptable for v1.
+- **Auth callback + error stay at root** as required by the spec. The middleware matcher excludes `auth/callback` (so the H.5 magic-link landing URL stays canonical at `mony.vercel.app/auth/callback?...` regardless of any locale signal) and `auth/error` (so an error landing path doesn't get locale-prefixed weirdness). The auth/error page itself stays English-only — translating it would require either moving it under `[locale]/` (against spec) or reading `NEXT_LOCALE` cookie at request time and calling `getTranslations({locale: cookie})`. Acceptable v1 trade-off; auth/error is rare.
+- **API routes** stay at root. None exist yet (H.8+); the matcher pre-excludes `api` so no future API endpoints accidentally get locale-redirected.
+
+### Cookie persistence
+
+`NEXT_LOCALE` cookie is written by `next-intl`'s middleware whenever locale changes, plus by the LanguageSwitcher's explicit `router.replace(pathname, { locale })` call. Default lifetime (per `next-intl`) is 1 year. Re-visit any time within that window → the cookie steers `<html lang>` correctly even before middleware runs (the root layout reads cookie first, header second, defaultLocale third).
+
+### Layout architecture decision
+
+The H.7.1 spec didn't address what happens to non-localized routes when the layout moves under `[locale]/`. Next.js requires every route to descend from a root layout that renders `<html>`/`<body>`; moving the only layout under `[locale]/` orphans `auth/error` and `auth/callback`.
+
+Decision: keep ONE top-level root layout at [web/src/app/layout.tsx](web/src/app/layout.tsx) with the universal `<html>`/`<body>`/fonts, and demote `[locale]/layout.tsx` to a nested layout that ONLY adds `setRequestLocale` + `NextIntlClientProvider`. The `<html lang>` resolves at the root via cookie/header priority chain. The trade-off vs route groups (e.g., `(public)/[locale]/...` + `(technical)/auth/...`) is that route groups would force more file shuffling and duplicate the html/body/fonts boilerplate; one-root-plus-nested is simpler and the lang-resolution chain is robust enough.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **`cd web && npx next build`** → succeeds. 14 static pages prerendered:
+  - `/[locale]` (●) → `/en`, `/fr`, `/ar` static at 2.56 kB each + 121 kB First Load JS.
+  - `/[locale]/upgrade` (●) → `/en/upgrade`, `/fr/upgrade`, `/ar/upgrade` (172 B each — auth-gated, prerendered as redirect-to-/ for the no-cookie case; dynamically rendered with the user's email when cookies are present).
+  - `/[locale]/dashboard` (●) → same pattern.
+  - `/auth/callback` (ƒ) → dynamic, 124 B.
+  - `/auth/error` (ƒ) → dynamic, 124 B.
+  - Middleware bundle 129 kB (up from 88 kB pre-i18n; the next-intl middleware contributes the diff).
+- **Mobile `tsc --noEmit`** → exit 0.
+- **Mobile codebase outside /web** → unchanged. The only `M` entry outside /web is `src/lib/web/constants.ts`, which is the user's earlier `WEB_BASE_URL` edit (not part of H.7.1).
+- **Manual / runtime (deferred to user):**
+  - `cd web && npm run dev` → boots on http://localhost:3000.
+  - Visit `/` → EN landing.
+  - Visit `/fr` → FR landing.
+  - Visit `/ar` → AR content (LTR layout for v1; H.7.2 ships RTL).
+  - Tap LanguageSwitcher → URL updates, `NEXT_LOCALE` cookie set, page re-renders with the new locale.
+  - Refresh after closing the browser → cookie sticks, locale persists.
+  - Push to GitHub → Vercel auto-deploys → live at the configured Vercel URL across all 3 locales.
+
+### Latent H.6 fix carry-forward
+
+H.7.1 inherits H.7's H.6 fix for `@supabase/ssr`'s `setAll(cookiesToSet)` parameter typing — present in both [server.ts](web/src/lib/supabase/server.ts) and [middleware.ts](web/src/middleware.ts).
+
+### Phase H mobile/web status (post-H.7.1)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing (FR-only) |
+| **H.7.1** | **✓ this step** | **i18n: EN/FR/AR** |
+| H.7.2 | next | RTL polish for AR (Tailwind logical properties, dir="rtl", AR font fallback) |
+| H.7.3 | next | Multi-currency picker (3 currencies × 2 cadences = 6 Stripe Price IDs) |
+| H.8 | future | Stripe Checkout on `/upgrade` |
+| H.10 | future | Real `/dashboard` + Customer Portal link |
+| H.11 | future | `/admin/subscriptions` |
+| H.12 | future | `/api/stripe/webhook` |
+
+### H.7.2 handoff (RTL)
+
+H.7.2 polishes the AR experience to feel native. Concrete pieces:
+
+1. **`dir="rtl"` on AR pages.** Add `dir={locale === 'ar' ? 'rtl' : 'ltr'}` to either the root layout's `<html>` or a wrapper inside `[locale]/layout.tsx`. The fonts already support Arabic via Inter's broad coverage; a dedicated Arabic font (Cairo, Noto Naskh Arabic) is a follow-up if Inter's AR rendering looks visually weak.
+2. **Tailwind logical properties.** Audit components for `ml-*` / `mr-*` / `pl-*` / `pr-*` and swap to `ms-*` / `me-*` / `ps-*` / `pe-*`. Tailwind v3.4 supports these natively; the H.7 components mostly use symmetric padding (`px-*`) so the audit should be quick.
+3. **Icon flips.** `ChevronDown` is symmetric (no flip needed). The Hero's `→` arrow in "Go to dashboard →" should mirror to `←` in RTL — Tailwind's `[direction:ltr]` arbitrary or a flexbox-`row-reverse` toggle handles this.
+4. **Read-pattern visual checks.** The Pricing card's checklist reads top-to-bottom in any direction, but the Header's logo-then-nav-then-CTA flow should mirror — with `dir="rtl"`, the flex container reverses naturally if the layout uses logical properties. Test in browser.
+
+### H.7.3 handoff (multi-currency)
+
+H.7.3 ships the currency picker. Concrete pieces:
+
+1. **Stripe Dashboard prep (manual).** Create 6 Prices on the existing `Mony Pro` product: 3 currencies × 2 cadences (EUR-monthly, EUR-yearly, USD-monthly, USD-yearly, AED-monthly, AED-yearly).
+2. **Mobile-side currency detection.** The mobile app already has `useDisplayCurrency` infrastructure — Phase H' currency conversion. The web side mirrors the same pattern: detect via Accept-Language country code → map to currency → store in NEXT_CURRENCY cookie.
+3. **Pricing copy refactor.** The current `priceMonthly` / `yearlyNote` keys per-locale need additional per-currency variants. Probably restructure to `pricing.<locale>.<currency>.priceMonthly` or use ICU `selectordinal` on currency. Decision in H.7.3.
+4. **Stripe Checkout session creation.** When H.8 lands, the `app/api/stripe/checkout/route.ts` reads the user's currency choice and selects the matching Stripe price ID. Multi-currency Checkout is a Stripe-supported feature out of the box.
+
+### Reversion
+
+```bash
+git revert <H.7.1 commit>
+```
+
+Restores the FR-only H.7 state. Note: file moves are tracked via `git mv` so the revert correctly restores file paths. The `messages/` directory and `src/i18n/` are removed; the moved pages return to their `src/app/<page>/` locations; the H.7 FR-language root layout returns.
+
+If only the AR locale should be removed (e.g., AR translation review goes south), the surgical edit is: remove `'ar'` from `routing.ts`'s `locales` array, remove the `LanguageSwitcher`'s AR option, delete `messages/ar.json`. EN + FR continue working.
+
+---
+
+## Step H.7.2 Changelog (2026-05-04) — RTL Polish for Arabic Locale
+
+JS-only step, scoped to `/web/`. Adds `dir="rtl"` resolution on AR pages, converts the three directional Tailwind utilities found in the H.7 / H.7.1 codebase to logical equivalents (`ms-*`, `me-*`, `ps-*`, `pe-*`, `text-start`, `start-*`, `end-*`), flips the literal Unicode arrow in the AR `goToDashboard` translation. Five files touched in total (root layout + 2 components + 1 catalog + the changelog). EN and FR layouts remain byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question 9 (multi-region pricing — H.7.3's scope) and the H.7.1 changelog's H.7.2 handoff list (this implements it).
+
+### Reconnaissance findings
+
+A single comprehensive grep covered the conversion surface:
+
+```
+rg "\\bml-|\\bmr-|\\bpl-|\\bpr-|\\btext-left\\b|\\btext-right\\b|\\bborder-l\\b|\\bborder-r\\b|\\brounded-l\\b|\\brounded-r\\b|\\bleft-|\\bright-" web/src/
+```
+
+Three non-comment hits across the entire H.7 + H.7.1 surface:
+
+| File:line | Original | Why directional | Conversion |
+| --- | --- | --- | --- |
+| [LanguageSwitcher.tsx:99](web/src/components/ui/LanguageSwitcher.tsx#L99) | `absolute right-0 …` | Dropdown anchors to trailing edge of trigger; should flip in RTL. | `absolute end-0 …` |
+| [LanguageSwitcher.tsx:110](web/src/components/ui/LanguageSwitcher.tsx#L110) | `text-left text-sm` | Dropdown option labels read in writing direction. | `text-start text-sm` |
+| [Pricing.tsx:45](web/src/components/landing/Pricing.tsx#L45) | `absolute -top-3 left-10 …` | "Recommended" pill anchors to leading edge of pricing card; should flip in RTL. | `absolute -top-3 start-10 …` |
+
+The H.7.2 spec also expected RTL audits across:
+- `flex-row-reverse` / `justify-start` / etc. — none present (Tailwind's flex utilities honor writing direction natively, no explicit reversal needed).
+- `border-l*` / `border-r*` / `rounded-l*` / `rounded-r*` — none present in H.7's components.
+- Horizontal arrow icons (`ArrowRight`, `ArrowLeft`, `ChevronRight`, `ChevronLeft`) — **none rendered in components**. The only `→` characters in `.tsx` files are inside JSDoc comments (not user-visible). The only rendered arrows live in translation catalog strings.
+
+### Arrow / chevron audit
+
+| Rendered icon | File | Direction | RTL action |
+| --- | --- | --- | --- |
+| `ChevronDown` (FAQ accordion summary) | [FAQ.tsx:48](web/src/components/landing/FAQ.tsx#L48) | Vertical (rotates to ChevronUp via `group-open:rotate-180`) | **Skip** — vertical rotation is locale-invariant. |
+| `ChevronDown` (LanguageSwitcher trigger chevron) | [LanguageSwitcher.tsx:88](web/src/components/ui/LanguageSwitcher.tsx#L88) | Vertical (rotates 180° on dropdown open) | **Skip** — same as above. |
+| `Globe` (LanguageSwitcher trigger leading icon) | [LanguageSwitcher.tsx:84](web/src/components/ui/LanguageSwitcher.tsx#L84) | Symmetric glyph | **Skip** — no mirroring needed. |
+| `Zap`, `Globe`, `ShieldCheck`, `Sparkles`, `Check` (Features + Pricing) | [Features.tsx](web/src/components/landing/Features.tsx), [Pricing.tsx](web/src/components/landing/Pricing.tsx) | Symmetric glyphs | **Skip** — no mirroring needed. |
+| `→` U+2192 in `goToDashboard` translation (rendered) | [messages/ar.json:109](web/messages/ar.json#L109) | Horizontal | **Flip** — replace with `←` U+2190 in AR catalog. |
+
+The Unicode `→` (U+2192 RIGHTWARDS ARROW) is a strong-LTR codepoint that does not auto-mirror in RTL contexts — the bidi algorithm preserves the glyph's visual direction regardless of paragraph direction. To make the AR sentence's arrow point in the RTL reading direction (forward = visually leftward in RTL), the AR translation uses `←` U+2190 LEFTWARDS ARROW. EN and FR keep `→`.
+
+### Files modified (5)
+
+| Path | Change |
+| --- | --- |
+| [web/src/app/layout.tsx](web/src/app/layout.tsx) | Added `RTL_LOCALES = new Set(['ar'])` constant; resolved `dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr'` from the same locale chain that resolves `lang`; rendered `<html lang={locale} dir={dir} …>`. The chain (cookie → `x-next-intl-locale` header → defaultLocale) means even non-locale routes (auth/error, auth/callback) honor the visitor's most recent choice. |
+| [web/src/components/ui/LanguageSwitcher.tsx](web/src/components/ui/LanguageSwitcher.tsx) | `right-0` → `end-0` (dropdown anchor); `text-left` → `text-start` (option labels). |
+| [web/src/components/landing/Pricing.tsx](web/src/components/landing/Pricing.tsx) | `left-10` → `start-10` (Recommended pill anchor). |
+| [web/messages/ar.json](web/messages/ar.json) | `goToDashboard`: `"انتقل إلى لوحة التحكم →"` → `"← انتقل إلى لوحة التحكم"`. The `←` codepoint placed at the JSON-string start; in RTL render context it appears at the visual end of the rendered line, pointing toward the reading direction. |
+| `PROJECT_AUDIT.md` | This changelog. |
+
+### What flips automatically (no code change needed)
+
+When `dir="rtl"` is set on `<html>`, the browser's CSS engine + the bidi algorithm flip these without per-component overrides:
+
+- **Flexbox row direction.** `flex` + `justify-between` distributes children based on writing direction. The Header's `<Link>logo</Link>` ↔ `<nav>` ↔ `<switcher group>` row reverses in RTL with no `flex-row-reverse` needed.
+- **Grid column order.** The Footer's `grid grid-cols-1 md:grid-cols-4` lays out columns in writing direction.
+- **Logical Tailwind utilities** (`ms-*`, `me-*`, `ps-*`, `pe-*`, `start-*`, `end-*`, `text-start`, `text-end`, `border-s`, `border-e`, `rounded-s-*`, `rounded-e-*`). All resolve to physical properties based on `<html dir>`.
+- **`text-align: start/end`** on paragraph text. Browser default for paragraph text inside an RTL document is right-aligned.
+
+### What was already RTL-safe (no conversion required)
+
+- All `px-*` / `py-*` / `mx-*` / `my-*` / `gap-*` utilities — symmetric, locale-invariant.
+- `items-*` / `self-*` / `justify-*` (cross-axis) flex alignment — locale-invariant.
+- The `space-y-*` utilities used in the upgrade / dashboard placeholders — vertical, locale-invariant.
+
+### Arabic font decision
+
+**Decision: ship Inter + system Arabic fallback for v1; document Cairo / Noto Sans Arabic as opt-in polish.**
+
+Inter has limited Arabic glyph coverage; the browser falls back to system Arabic fonts:
+- Mac / iOS: Geeza Pro
+- Windows: Segoe UI
+- Android: Noto Sans Arabic (already)
+
+Quality varies across OS / browser combinations but is never broken — Arabic text renders legibly everywhere. The trade-off vs. shipping a dedicated webfont:
+
+| Trade-off | Inter + system fallback (chosen) | Cairo / Noto Sans Arabic |
+| --- | --- | --- |
+| Visual consistency across OS | Lower (each OS uses its own Arabic font) | Higher (uniform on every device) |
+| Initial load weight | Zero — system fonts | +~30–60 kB woff2 per AR visit |
+| Marketing polish | Acceptable | Better |
+| Implementation cost | None | ~20 lines (next/font import + conditional className + CSS selector) |
+
+If a native AR speaker reviews the live `/ar` page and finds the rendering visually weak, the opt-in path is documented for the H.7.2 follow-up:
+
+```ts
+// web/src/app/[locale]/layout.tsx
+import { Cairo } from 'next/font/google';
+
+const cairo = Cairo({
+  subsets: ['arabic'],
+  variable: '--font-cairo',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
+
+// Inside the LocaleLayout return:
+<NextIntlClientProvider messages={messages} locale={locale}>
+  <div className={locale === 'ar' ? cairo.variable : ''}>
+    {children}
+  </div>
+</NextIntlClientProvider>
+```
+
+```css
+/* web/src/app/globals.css */
+html[lang="ar"] body {
+  font-family: var(--font-cairo), var(--font-inter), system-ui, sans-serif;
+}
+```
+
+This is a single-PR change requiring no other refactors. Defer until the AR visual review concludes.
+
+### EN / FR regression check
+
+The three Tailwind conversions (`right-0` → `end-0`, `text-left` → `text-start`, `left-10` → `start-10`) are mechanical drop-ins. In LTR (`<html dir="ltr">`):
+- `end-0` resolves to `right: 0`. Same as before. ✓
+- `text-start` resolves to `text-align: left`. Same as before. ✓
+- `start-10` resolves to `left: 2.5rem`. Same as before. ✓
+
+EN and FR layouts are byte-identical to H.7.1.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **`cd web && npx next build`** → succeeds. Same 14-route prerender as H.7.1; bundle sizes unchanged (the conversions are class-name-level edits with no JS impact).
+- **Mobile `tsc --noEmit`** → exit 0.
+- **Mobile codebase outside /web** → unchanged. The only non-/web `M` is `src/lib/web/constants.ts` (the user's prior WEB_BASE_URL edit, not part of H.7.2).
+- **Manual / runtime (deferred to user):**
+  - `cd web && npm run dev` → boots on http://localhost:3000.
+  - Visit `/ar` → page reads RTL: brand wordmark anchors to visual right, nav/CTA group anchors to visual left, "Recommended" pill on the Pricing card sits on the visual right (leading edge in RTL), the LanguageSwitcher dropdown opens beneath its trigger anchored to the trailing edge. The `goToDashboard` arrow on `/ar/upgrade` points leftward (toward the RTL reading-direction end).
+  - Visit `/` and `/fr` → byte-identical to H.7.1. No layout shifts.
+  - Toggle the LanguageSwitcher between EN ↔ AR and watch the layout flip in real time on subsequent navigation.
+
+### Phase H mobile/web status (post-H.7.2)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing (FR-only at the time) |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| **H.7.2** | **✓ this step** | **RTL polish for AR** |
+| H.7.3 | next | Multi-currency picker (3 currencies × 2 cadences) |
+| H.8 | future | Stripe Checkout on `/upgrade` |
+| H.10 | future | Real `/dashboard` + Customer Portal link |
+| H.11 | future | `/admin/subscriptions` |
+| H.12 | future | `/api/stripe/webhook` |
+
+### H.7.3 handoff (multi-currency)
+
+H.7.3 adds the currency picker. Concrete pieces, in dependency order:
+
+1. **Stripe Dashboard prep (manual).** On the existing Mony Pro Product, create 6 Prices: `EUR-monthly`, `EUR-yearly`, `USD-monthly`, `USD-yearly`, `AED-monthly`, `AED-yearly`. Capture the `price_*` IDs into env vars.
+2. **Currency catalog.** Restructure the `pricing` namespace: split per-currency price strings (`pricing.eur.priceMonthly = "€19"`, `pricing.usd.priceMonthly = "$22"`, `pricing.aed.priceMonthly = "AED 79"`) so the picker just reads the active currency. The yearly note follows the same shape.
+3. **Currency cookie + picker.** New `NEXT_CURRENCY` cookie + a `<CurrencyPicker />` Client Component (similar shape to LanguageSwitcher) added next to it in the header. Detection priority: cookie → Accept-Language country (`fr-FR` → EUR, `en-US` → USD, `ar-AE` → AED) → fallback EUR.
+4. **Pricing component.** Read currency via a server-side helper that mirrors the locale resolution chain. Pass to the active price strings.
+5. **Stripe Checkout API route prep (H.8 dependency).** When H.8 lands, the `app/api/stripe/checkout/route.ts` reads cookies for both locale and currency, then selects the matching `STRIPE_PRICE_<CURRENCY>_<CADENCE>` env var.
+
+### Reversion
+
+```bash
+git revert <H.7.2 commit>
+```
+
+Restores the H.7.1 state. The five edits are all mechanical drop-ins (one constant + three class-name swaps + one Unicode codepoint flip), so revert is clean. No deps changed; no files added or removed.
+
+If only the dir resolution should be removed (keeping the logical Tailwind conversions for future RTL work), the surgical edit is to delete the `RTL_LOCALES` constant and `dir={dir}` attribute in `web/src/app/layout.tsx`. The logical utilities (`ms-*`, `text-start`, etc.) resolve to LTR by default with no `dir` set; EN/FR layouts stay correct.
+
+---
+
+## Step H.7.3 Changelog (2026-05-04) — Web Multi-currency (EUR / USD / AED)
+
+JS-only step, scoped to `/web/`. Adds three-currency support to the public landing: EUR (default), USD, AED. Detection chain (cookie → Accept-Language country → fallback EUR) lives in a new server-side helper; a Client Component `CurrencyPicker` mirrors `LanguageSwitcher`'s shape in the header; pricing copy moves into per-currency subtrees in the message catalogs; the page opts into dynamic rendering so the cookie-driven currency resolves on every request. Six Stripe Price IDs (3 currencies × 2 cadences) documented in `.env.local.example` for the upcoming H.8 (revised) Checkout API route. Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question 9 (multi-region pricing — implemented here). The H.7.2 changelog's H.7.3 handoff list (this implements it).
+
+### Reconnaissance findings
+
+- **Pre-H.7.3 Pricing.tsx structure** ([web/src/components/landing/Pricing.tsx](web/src/components/landing/Pricing.tsx)) — single EUR-only flat namespace under `pricing.*`: `priceMonthly` (`"€19"`), `perMonth` (`"/ month"`), `yearlyNote` (`"or €190 / year (save ~17%)"`). Compound strings, easy to translate but only one currency.
+- **Catalog layout** — three locale files (en/fr/ar) all carry the EUR copy. The H.7.3 refactor moves price atoms (`priceMonthly`, `cadenceMonthly`, `priceYearly`, `cadenceYearly`, `savings`) into per-currency subtrees while keeping locale-shared copy (heading, recommended, tierName, features, CTA, subcopy) flat at `pricing.*`.
+- **LanguageSwitcher** ([web/src/components/ui/LanguageSwitcher.tsx](web/src/components/ui/LanguageSwitcher.tsx)) — Client Component, owns dropdown state, click-outside + Escape close, uses `next-intl`'s `useRouter().replace(pathname, { locale })` for navigation. The CurrencyPicker mirrors this shape verbatim.
+- **Header mount point** — H.7.1's `<div className="flex items-center gap-4">` wrapper around LanguageSwitcher + Connexion CTA. H.7.3 inserts CurrencyPicker between them and tightens the gap to `gap-2` to fit three children.
+- **Middleware composition** ([web/src/middleware.ts](web/src/middleware.ts)) — H.7.1's `intlMiddleware → Supabase` composition handles per-request locale routing. H.7.3 does NOT add a third middleware layer; currency is read via cookies on each request inside `getCurrency()`, no enforcement at the middleware level.
+
+### Files added (3)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/i18n/currency.ts](web/src/i18n/currency.ts) | `CURRENCIES` tuple, `Currency` type, `DEFAULT_CURRENCY`, `CURRENCY_COOKIE` name, `CURRENCY_LABELS` (code/symbol/label per currency), `COUNTRY_CURRENCY` mapping (Eurozone → EUR, Gulf → AED, English-speaking + AP → USD, fallthrough → EUR), `isCurrency()` type-guard. |
+| [web/src/i18n/getCurrency.ts](web/src/i18n/getCurrency.ts) | Async server-side helper. Resolution priority: NEXT_CURRENCY cookie → Accept-Language country → fallback EUR. Cheap (two header/cookie reads); could be wrapped in React `cache()` if v1's call sites multiply. |
+| [web/src/components/ui/CurrencyPicker.tsx](web/src/components/ui/CurrencyPicker.tsx) | Client Component mirroring LanguageSwitcher's shape. Coins icon trigger + dropdown of three currencies. On pick: writes `NEXT_CURRENCY` cookie via `document.cookie` (1-year max-age, SameSite=Lax) then `router.refresh()` to re-fetch the RSC payload — server reads the new cookie via `getCurrency()` and prices update without a full document reload. |
+
+### Files modified (8)
+
+| Path | Change |
+| --- | --- |
+| [web/messages/en.json](web/messages/en.json) | `pricing.*` flattened atoms (`priceMonthly`, `perMonth`, `yearlyNote`) replaced with per-currency subtrees `pricing.eur.*` / `pricing.usd.*` / `pricing.aed.*`. New shared template `pricing.yearlyTemplate` = `"or {price} {cadence} ({savings})"`. |
+| [web/messages/fr.json](web/messages/fr.json) | Mirror — `pricing.yearlyTemplate` = `"ou {price} {cadence} ({savings})"`. EUR pricing uses `19 €` (FR convention), USD `19 $`, AED `AED 79`. |
+| [web/messages/ar.json](web/messages/ar.json) | Mirror — `pricing.yearlyTemplate` = `"أو {price} {cadence} ({savings})"`. AR uses `/ شهرياً` for monthly cadence, `/ سنوياً` for yearly. |
+| [web/src/components/landing/Pricing.tsx](web/src/components/landing/Pricing.tsx) | Reads `currency = await getCurrency()` then `getTranslations('pricing')` (shared) + `getTranslations(\`pricing.${currency}\`)` (per-currency atoms). The yearly note composes via `t('yearlyTemplate', { price, cadence, savings })` with values from the per-currency subtree. |
+| [web/src/components/landing/Header.tsx](web/src/components/landing/Header.tsx) | Now async — reads `currency = await getCurrency()` and seeds `<CurrencyPicker initial={currency} />` so the trigger label matches the server-rendered Pricing card on first paint (no SSR-hydration flicker). Right-edge cluster: LanguageSwitcher + CurrencyPicker + Connexion CTA, with `gap-2` between pickers and `ms-2` margin on the CTA. |
+| [web/src/app/[locale]/page.tsx](web/src/app/[locale]/page.tsx) | Added `export const dynamic = 'force-dynamic'`. The page now renders on every request so `getCurrency()`'s cookie read inside Pricing returns the actual visitor's choice rather than empty (Next.js 15's static-rendering behavior). |
+| [web/.env.local.example](web/.env.local.example) | **Re-created** — was missing from git tracking (H.6 created it but never committed). Added the six `STRIPE_PRICE_<CURRENCY>_<CADENCE>` env vars + `STRIPE_SECRET_KEY` + `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` per the H.8-revised env convention. |
+| [web/README.md](web/README.md) | New "Currency" section — three currencies, detection chain, cookie name, six Stripe Price ID convention, "Adding a new currency" runbook, mobile-vs-web detection-independence note. |
+
+### Pricing copy structure
+
+Each locale catalog now has the shape:
+
+```jsonc
+"pricing": {
+  // Locale-shared (one copy per locale)
+  "heading": "Become a Pro seller",
+  "sub": "One simple price. No commitment. Cancel anytime.",
+  "recommended": "Recommended",
+  "tierName": "Mony Pro",
+  "yearlyTemplate": "or {price} {cadence} ({savings})",
+  "feature1": "Unlimited listings (vs 10 on free)",
+  // ... features / CTA / subcopy
+
+  // Per-currency atoms (three copies per locale)
+  "eur": { "priceMonthly": "€19", "cadenceMonthly": "/ month",
+           "priceYearly": "€190", "cadenceYearly": "/ year",
+           "savings": "save 17%" },
+  "usd": { "priceMonthly": "$19", … },
+  "aed": { "priceMonthly": "AED 79", … "savings": "save 21%" }
+}
+```
+
+Renders compose like:
+
+| Locale × currency | Monthly line | Yearly note |
+| --- | --- | --- |
+| EN × EUR | `€19 / month` | `or €190 / year (save 17%)` |
+| FR × EUR | `19 € / mois` | `ou 190 € / an (économisez 17%)` |
+| AR × USD | `19 $ / شهرياً` | `أو 19 $ / سنوياً (وفِّر 17%)` |
+| EN × AED | `AED 79 / month` | `or AED 749 / year (save 21%)` |
+
+The 21% AED savings vs. 17% EUR/USD reflects the actual per-currency price math — AED 79 × 12 = 948 vs. AED 749, so 199/948 ≈ 21%. Surface honestly rather than rounding to a uniform "save 17%" across currencies.
+
+### Six Stripe Prices (env var convention)
+
+User creates these on the existing Mony Pro Product in the Stripe Dashboard (test mode for v1):
+
+```
+STRIPE_PRICE_EUR_MONTHLY  = price_…  (€19  recurring monthly)
+STRIPE_PRICE_EUR_YEARLY   = price_…  (€190 recurring yearly)
+STRIPE_PRICE_USD_MONTHLY  = price_…  ($19  recurring monthly)
+STRIPE_PRICE_USD_YEARLY   = price_…  ($190 recurring yearly)
+STRIPE_PRICE_AED_MONTHLY  = price_…  (AED 79  recurring monthly)
+STRIPE_PRICE_AED_YEARLY   = price_…  (AED 749 recurring yearly)
+```
+
+Naming convention is `STRIPE_PRICE_<CURRENCY>_<CADENCE>` (uppercase), enabling the H.8-revised Checkout route to compose the env-var name via `\`STRIPE_PRICE_${currency.toUpperCase()}_${cadence.toUpperCase()}\``. The `STRIPE_WEBHOOK_SECRET` env var is left commented in `.env.local.example` for H.9 (Stripe webhook handler).
+
+### Why the page downgrades from static to dynamic
+
+Pre-H.7.3, `/[locale]/page.tsx` was statically prerendered for /, /fr, /ar via H.7.1's `setRequestLocale` + the layout's `generateStaticParams`. H.7.3 introduces `getCurrency()` which calls `cookies()` and `headers()` — Next.js 15's static-rendering path silently returns empty cookie/header stores in that mode. Without forcing dynamic rendering, every visitor would see the EUR default regardless of their `NEXT_CURRENCY` cookie.
+
+Adding `export const dynamic = 'force-dynamic'` to [web/src/app/[locale]/page.tsx](web/src/app/[locale]/page.tsx) opts the page out of static rendering so the cookie / header reads execute per-request. Trade-offs:
+
+| | Static (pre-H.7.3) | Dynamic (post-H.7.3) |
+| --- | --- | --- |
+| First-paint TTFB | Edge-cached HTML, ~50ms | Server render, ~100–150ms |
+| Currency correctness | Broken (always default) | Correct (per visitor) |
+| Vercel cost | Lower (static hits) | Higher (Function invocations) |
+| Hydration flicker | None | None (server already has the right currency) |
+
+The build output's `●` symbol next to /[locale] reflects that the layout's `generateStaticParams` has enumerated the three locale paths; the page's `force-dynamic` overrides per-render mode at request time. This composition is documented and supported by Next.js 15.
+
+### Mobile vs. web detection independence
+
+The mobile app already has currency detection via `expo-localization` + jsdelivr live FX rates (Phase H' / H'.2.1). Web's H.7.3 detection is independent and serves a different purpose:
+
+- **Mobile**: detects the BUYER's preferred display currency for marketplace products listed in the SELLER's local currency. Live FX rates needed because product prices vary.
+- **Web**: detects the visitor's preferred Stripe Checkout currency for the Mony Pro subscription. Static per-currency authoring (€19 / $19 / AED 79) — no FX rates needed.
+
+Both surfaces converge for a UAE visitor: AED on mobile (via H'.2.1 jsdelivr), AED on web (via H.7.3 cookie/header). The mechanisms are different but the result is consistent.
+
+### Verification
+
+- **JSON parse**: en/fr/ar message catalogs all parse cleanly after the per-currency restructure.
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/[locale]` (●, paths /en, /fr, /ar): 3.11 kB (up from 2.56 kB in H.7.2 — the CurrencyPicker hydration weight + per-currency logic). Renders dynamically per request despite the static path enumeration.
+  - `/[locale]/upgrade` and `/[locale]/dashboard` unchanged (172 B each, auth-gated).
+  - `/auth/callback` and `/auth/error` at root (124 B each).
+  - Middleware 130 kB (up from 129 kB — currency module's tiny addition).
+- **Mobile `tsc --noEmit`** → exit 0. Mobile codebase byte-identical to H.7.2; the only `M` outside `/web` is `src/lib/web/constants.ts` (the user's prior `WEB_BASE_URL` edit, not part of H.7.3).
+- **Manual / runtime (deferred to user):**
+  - `cd web && npm run dev` → boots on http://localhost:3000.
+  - Visit `/` → pricing in EUR (default), or USD/AED if Accept-Language country mapped.
+  - Open CurrencyPicker → pick AED → page re-renders, prices show `AED 79 / month` and `or AED 749 / year (save 21%)`.
+  - Pick USD → re-render shows `$19 / month`.
+  - Cookie persists across navigation + browser restart.
+  - Visit `/fr` → same currency-driven prices, in French copy. Visit `/ar` → same prices, RTL Arabic copy.
+
+### Phase H mobile/web status (post-H.7.3)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing (FR-only at the time) |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| **H.7.3** | **✓ this step** | **Multi-currency EUR/USD/AED** |
+| H.8 (revised) | next | Stripe Checkout on `/upgrade` consuming NEXT_CURRENCY |
+| H.10 | future | Real `/dashboard` + Customer Portal link |
+| H.11 | future | `/admin/subscriptions` |
+| H.12 | future | `/api/stripe/webhook` |
+
+The web codebase is now **tri-lingual + tri-currency**. UAE launch surface complete.
+
+### H.8 (revised) handoff
+
+The H.7.3 multi-currency foundation pre-shapes the H.8 Stripe Checkout API route. Concrete pieces:
+
+1. **Stripe Dashboard prep (manual).** Create the six Prices listed above. Capture the `price_…` IDs into the env vars in `.env.local.example`.
+2. **API route at `app/api/stripe/checkout/route.ts`.** POST handler verifies caller via `getSupabaseServer().auth.getUser()`, reads `NEXT_CURRENCY` cookie + a `cadence: 'monthly' | 'yearly'` body param, composes the env var name (`\`STRIPE_PRICE_${currency.toUpperCase()}_${cadence.toUpperCase()}\``), creates a `mode: 'subscription'` Checkout Session with that price ID, returns `{ url }`.
+3. **Stripe Customer metadata.** When creating the Checkout Session, set `customer_email: user.email` and `metadata: { user_id, seller_id, currency }`. The H.9 webhook reads `metadata.currency` to record on the `subscriptions` row.
+4. **`/upgrade` page upgrade.** Replace H.6's placeholder with a monthly/yearly toggle + a `<form>` POSTing to the API route. The form's hidden inputs carry the cadence; the cookie carries the currency. Stays auth-gated via H.6's `getUser()` redirect-to-/.
+5. **Test mode for v1.** Live keys flip in H.14 alongside production go-live.
+
+The H.9 webhook handler (separate step) reads `customer.subscription.*` events, looks up `metadata.currency`, and stores it on the H.2 `subscriptions` row. The H.2 trigger then mirrors `is_pro` automatically as before — no changes to the schema or trigger needed.
+
+### Reversion
+
+```bash
+git revert <H.7.3 commit>
+```
+
+Removes:
+- The three new files (`currency.ts`, `getCurrency.ts`, `CurrencyPicker.tsx`).
+- The per-currency catalog refactor (reverts to H.7.2's flat EUR-only `pricing.*`).
+- The `force-dynamic` directive on `/[locale]/page.tsx` (page returns to SSG).
+- The Header's CurrencyPicker mount.
+- `.env.local.example`'s six Stripe Price entries.
+- The README's Currency section.
+
+The revert is clean — no dependencies added, no schema changes, no Stripe Dashboard cleanup needed. EN/FR/AR locales continue working with EUR-only pricing.
+
+If only the Pricing refactor should be removed (keeping `currency.ts` / `getCurrency.ts` / CurrencyPicker for future H.8 consumption), the surgical edit is to revert just `Pricing.tsx`, the message catalogs' `pricing` namespace, and the `force-dynamic` directive — leaving the currency primitives in place for later use.
+

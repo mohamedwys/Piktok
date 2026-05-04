@@ -1,0 +1,139 @@
+{
+  "brand": {
+    "name": "Mony",
+    "tagline": "Mony — la marketplace vidéo. Vendez, découvrez, connectez-vous."
+  },
+  "nav": {
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "faq": "FAQ",
+    "signIn": "Connexion"
+  },
+  "hero": {
+    "headlineLead": "Vendez. Découvrez. ",
+    "headlineAccent": "Connectez-vous.",
+    "sub": "Mony est la marketplace vidéo qui rassemble créateurs, boutiques et collectionneurs. Achetez, vendez et faites grandir votre activité — dans une expérience pensée pour mobile.",
+    "ctaPrimary": "Découvrir Mony Pro",
+    "ctaSecondary": "Télécharger l’app"
+  },
+  "features": {
+    "heading": "Une marketplace pensée différemment",
+    "sub": "Quatre choses que Mony fait mieux.",
+    "videoFirst": {
+      "title": "Vidéo first",
+      "body": "Chaque annonce commence par une vidéo qui capte l’attention. Vendez avec l’énergie d’un live, pas la friction d’un formulaire."
+    },
+    "localGlobal": {
+      "title": "Local et mondial",
+      "body": "Filtrez par distance pour trouver près de chez vous, ou explorez les vendeurs partout dans le monde."
+    },
+    "securePayments": {
+      "title": "Paiement sécurisé",
+      "body": "Stripe gère toutes les transactions. Les vendeurs Pro encaissent directement sur leur compte bancaire."
+    },
+    "community": {
+      "title": "Communauté",
+      "body": "Suivez vos vendeurs préférés. Recevez les nouveautés avant tout le monde, commentez, négociez en direct."
+    }
+  },
+  "pricing": {
+    "heading": "Devenez vendeur Pro",
+    "sub": "Un tarif simple. Sans engagement. Annulez à tout moment.",
+    "recommended": "Recommandé",
+    "tierName": "Mony Pro",
+    "yearlyTemplate": "ou {price} {cadence} ({savings})",
+    "eur": {
+      "priceMonthly": "19 €",
+      "cadenceMonthly": "/ mois",
+      "priceYearly": "190 €",
+      "cadenceYearly": "/ an",
+      "savings": "économisez 17%"
+    },
+    "usd": {
+      "priceMonthly": "19 $",
+      "cadenceMonthly": "/ mois",
+      "priceYearly": "190 $",
+      "cadenceYearly": "/ an",
+      "savings": "économisez 17%"
+    },
+    "aed": {
+      "priceMonthly": "AED 79",
+      "cadenceMonthly": "/ mois",
+      "priceYearly": "AED 749",
+      "cadenceYearly": "/ an",
+      "savings": "économisez 21%"
+    },
+    "feature1": "Annonces illimitées (10 max en gratuit)",
+    "feature2": "Frais de transaction réduits (~4% vs 7%)",
+    "feature3": "Mise en avant : 1 annonce boostée par semaine",
+    "feature4": "Tableau de bord analytics",
+    "feature5": "Badge PRO sur votre profil",
+    "cta": "Commencer dans l’app",
+    "subcopyPrefix": "Ouvrez l’app Mony et touchez ",
+    "subcopyHighlight": "« Passer Pro »",
+    "subcopySuffix": " dans votre profil.",
+    "comingSoon": "Bientôt"
+  },
+  "faq": {
+    "heading": "Questions fréquentes",
+    "q1": {
+      "q": "Comment puis-je commencer à vendre sur Mony ?",
+      "a": "Téléchargez l’app, créez votre compte avec votre email, et publiez votre première annonce vidéo. Trente secondes suffisent."
+    },
+    "q2": {
+      "q": "Quelle est la différence entre un compte gratuit et Mony Pro ?",
+      "a": "Le compte gratuit limite à 10 annonces avec 7% de frais de transaction. Mony Pro offre des annonces illimitées, des frais réduits à 4%, une mise en avant hebdomadaire, et un tableau de bord analytics."
+    },
+    "q3": {
+      "q": "Comment fonctionne le paiement ?",
+      "a": "Stripe gère toutes les transactions de manière sécurisée. Les vendeurs Pro reçoivent leurs paiements directement sur leur compte bancaire — sans intermédiaire et sans délai."
+    },
+    "q4": {
+      "q": "Puis-je annuler Mony Pro à tout moment ?",
+      "a": "Oui, sans engagement. Vous gardez l’accès Pro jusqu’à la fin de votre période en cours, puis vous repassez automatiquement en compte gratuit."
+    },
+    "q5": {
+      "q": "Mony est-il disponible dans mon pays ?",
+      "a": "Mony fonctionne partout. La devise s’adapte automatiquement à votre région (EUR, USD, AED, GBP…) et les transactions traversent les frontières sans friction."
+    },
+    "q6": {
+      "q": "Comment Mony protège-t-il ma vie privée ?",
+      "a": "Nous ne vendons jamais vos données. Vos messages et transactions restent privés. Le détail complet est dans notre politique de confidentialité."
+    },
+    "q7": {
+      "q": "Comment contacter le support ?",
+      "a": "Via le menu « Compte » dans l’app. Réponse moyenne en moins de 24 heures, en français ou en anglais."
+    }
+  },
+  "footer": {
+    "tagline": "La marketplace vidéo. Vendez, découvrez, connectez-vous.",
+    "productHeading": "Produit",
+    "legalHeading": "Légal",
+    "contactHeading": "Contact",
+    "linkAbout": "À propos",
+    "linkPricing": "Tarifs",
+    "linkPro": "Mony Pro",
+    "linkTerms": "Conditions d’utilisation",
+    "linkPrivacy": "Confidentialité",
+    "linkCookies": "Cookies",
+    "linkSupport": "Support",
+    "linkTwitter": "Twitter",
+    "linkInstagram": "Instagram",
+    "copyright": "© 2026 Mony — Tous droits réservés."
+  },
+  "upgrade": {
+    "title": "Passer Pro",
+    "welcomeWith": "Bienvenue, {email}.",
+    "comingSoonBody": "L’intégration de Stripe Checkout arrive bientôt.",
+    "goToDashboard": "Accéder au tableau de bord →"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "greetingWith": "Bonjour, {email}.",
+    "comingSoonBody": "La gestion des abonnements arrive bientôt."
+  },
+  "languageSwitcher": {
+    "label": "Langue",
+    "ariaLabel": "Changer de langue"
+  }
+}

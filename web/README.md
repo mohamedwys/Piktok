@@ -149,6 +149,72 @@ The mobile app already auto-detects display currency via `expo-localization` + j
 
 The two systems are independent; a UAE visitor sees AED on both surfaces (mobile via H'.2.1 jsdelivr, web via H.7.3 cookie/header), but the mechanisms are different.
 
+## Stripe webhook (H.9)
+
+Webhook endpoint: **`/api/stripe/webhook`** (root path, not under `[locale]`). Receives `customer.subscription.{created,updated,deleted}` events from Stripe, verifies the signature header, and upserts into `public.subscriptions` via the service-role admin client. The H.2 SQL trigger then mirrors `sellers.is_pro` automatically — the webhook handler does NOT touch `is_pro` directly.
+
+### Environment variables
+
+Two server-only secrets (NEVER prefix with `NEXT_PUBLIC_`):
+
+```
+STRIPE_WEBHOOK_SECRET=whsec_...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
+```
+
+See `.env.local.example` for documentation. Set both in:
+- `.env.local` for local dev
+- Vercel project env vars for production
+
+### Production setup
+
+1. **Stripe Dashboard → Developers → Webhooks → Add endpoint**
+2. Endpoint URL: `https://mony-psi.vercel.app/api/stripe/webhook`
+3. Listen for events:
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+4. Click **Reveal** on the signing secret → copy `whsec_…` → set as `STRIPE_WEBHOOK_SECRET` in Vercel env vars
+5. **Supabase Dashboard → Project Settings → API → service_role** → copy the key → set as `SUPABASE_SERVICE_ROLE_KEY` in Vercel env vars
+
+### Local testing (Stripe CLI)
+
+```bash
+# Terminal A
+cd web
+npm run dev
+
+# Terminal B
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+# Capture the whsec_… the CLI prints — set in .env.local as
+# STRIPE_WEBHOOK_SECRET, then restart the dev server.
+
+# Terminal C — fire a test event
+stripe trigger customer.subscription.created
+# Terminal A logs the event; check Supabase: subscriptions
+# table has a row, sellers.is_pro flipped if status maps
+# to 'active'.
+```
+
+### End-to-end test mode flow
+
+After the user wires up Stripe Dashboard webhook + sets the two env vars in Vercel:
+
+1. Mobile: tap "Upgrade to Pro"
+2. Magic-link → `/[locale]/upgrade` renders
+3. Click Subscribe → redirects to Stripe Checkout (test mode)
+4. Card `4242 4242 4242 4242`, any future date, any CVC → completes
+5. Stripe redirects to `/[locale]/upgrade/success` ("processing" copy)
+6. ~2s later: webhook fires → `subscriptions` row exists → H.2 trigger flips `is_pro = true`
+7. Mobile: pull-to-refresh profile → user is Pro. CTAs / banners disappear
+
+### Idempotency + edge cases
+
+- **Stripe retries on 5xx.** Upsert with `onConflict: 'seller_id'` is naturally idempotent — re-delivery produces the same row state.
+- **Out-of-order delivery.** v1 trade-off: a delayed older event could overwrite a newer state. Mitigation (compare event timestamps before write) is H.13 territory if support tickets surface it.
+- **Resubscribe.** The H.2 schema enforces `seller_id UNIQUE` — one row per seller. Cancel + resubscribe replaces the row; historical Stripe subscription IDs persist in Stripe Dashboard but not locally. Acceptable v1.
+- **Manual Stripe Dashboard subscriptions** (created outside the H.8 Checkout flow) lack `metadata.seller_id` and are skipped with a warning log.
+
 ## Auth model
 
 Magic links from the mobile app's `useUpgradeFlow()` hook (Phase

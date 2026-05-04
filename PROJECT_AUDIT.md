@@ -7071,3 +7071,222 @@ Removes the five new files + reverts the upgrade page + drops the `stripe` dep +
 
 If only the API route should be removed but the form / pages kept (e.g., to swap to a different payment provider), the surgical edit is to delete `/api/stripe/checkout/route.ts` + `lib/stripe.ts` + uninstall `stripe`, then update `UpgradeForm.handleSubmit` to POST to the new endpoint. Pages and copy stay.
 
+---
+
+## Step H.9 Changelog (2026-05-04) — Stripe Webhook Handler
+
+JS-only step, scoped to `/web/`. Closes the Phase H data loop: Stripe charge → webhook event → `public.subscriptions` row → H.2 trigger flips `sellers.is_pro`. Two new files (service-role admin client + webhook route handler), two doc updates (env example + README). No new dependencies — `@supabase/supabase-js ^2.45.4` was already a direct dep from H.6. Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §5 (subscriptions schema design — H.2 ships, H.9 writes). The H.8 changelog's H.9 handoff list (this implements it).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **`@supabase/supabase-js`** is a direct dep at `^2.45.4` (added in H.6). The service-role admin client uses `createClient` from this package — NOT from `@supabase/ssr` (cookies don't apply server-to-server). No install needed.
+- **Middleware excludes `/api/*`** ([web/src/middleware.ts:113](web/src/middleware.ts#L113)). The webhook route runs without intl middleware redirects or Supabase session-refresh interference. Same pattern as H.8's `/api/stripe/checkout`.
+- **Stripe API `2026-04-22.dahlia` moved `current_period_start` / `current_period_end`** off the `Subscription` type onto the `SubscriptionItem` type. Confirmed by inspecting `node_modules/stripe/cjs/resources/Subscriptions.d.ts` (no top-level fields; lines 50/54 of `SubscriptionItems.d.ts` declare them). The H.9 spec read these from `subscription.current_period_*` directly — that would fail typecheck on stripe@22. **Critical reconciliation**: read from `subscription.items.data[0].current_period_*` instead. Mony Pro is a single-item subscription, so `items.data[0]` is the canonical source.
+- **Existing fields on `Subscription` are unchanged**: `status` (line 257), `cancel_at_period_end` (129), `canceled_at` (133), `trial_end` (269). Read directly from the subscription object as planned.
+- **Next.js 15 raw body discipline** — `req.text()` exposes the exact bytes Stripe signed. No `bodyParser: false` config needed (that was a Pages Router convention).
+
+### Files added (2)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/lib/supabase/admin.ts](web/src/lib/supabase/admin.ts) | `getSupabaseAdmin()` factory returning a module-cached `SupabaseClient` initialized with `SUPABASE_SERVICE_ROLE_KEY`. Bypasses RLS. `auth: { autoRefreshToken: false, persistSession: false }` because service-role keys don't expire and we don't want session state. Throws clearly if either env var is missing. |
+| [web/src/app/api/stripe/webhook/route.ts](web/src/app/api/stripe/webhook/route.ts) | POST handler at `/api/stripe/webhook`. Reads raw body via `req.text()` → verifies `stripe-signature` header against `STRIPE_WEBHOOK_SECRET` via `stripe.webhooks.constructEventAsync` → switches on `event.type` for the three subscription events → upserts into `public.subscriptions` keyed on `seller_id`. The H.2 trigger handles `is_pro` mirroring. |
+
+### Files modified (3 + changelog)
+
+| Path | Change |
+| --- | --- |
+| [web/.env.local.example](web/.env.local.example) | Promoted the H.8-commented `STRIPE_WEBHOOK_SECRET` placeholder to an active entry + added `SUPABASE_SERVICE_ROLE_KEY` with a "CRITICAL" comment block. Both flagged as server-only (NEVER `NEXT_PUBLIC_*`). |
+| [web/README.md](web/README.md) | New "Stripe webhook (H.9)" section. Documents: production setup (Stripe Dashboard endpoint config), local testing via `stripe listen --forward-to`, end-to-end test mode flow, idempotency + edge-case notes. |
+| `PROJECT_AUDIT.md` | This changelog. |
+
+### Three event types handled
+
+| Stripe event | Handler action | DB shape after |
+| --- | --- | --- |
+| `customer.subscription.created` | Upsert with status `'active'` / `'trialing'` / `'incomplete'`, periods, currency from `metadata.currency`, etc. | New row exists; H.2 trigger flips `is_pro = true` if status maps. |
+| `customer.subscription.updated` | Upsert with new status / period / cancel-at-period-end values. Covers plan changes, payment-method updates, scheduled cancellations, `past_due` transitions. | Row updated; H.2 trigger re-evaluates `is_pro`. |
+| `customer.subscription.deleted` | Upsert with `status: 'canceled'` and `canceled_at` set. **Does NOT delete the row** — keeps it for audit trail and for next upsert if user resubscribes. | Row stays with `status='canceled'`; H.2 trigger flips `is_pro = false`. |
+
+All other event types are acknowledged with HTTP 200 + a diagnostic log line — Stripe shouldn't retry events we deliberately ignore.
+
+### Idempotency strategy
+
+`upsert(row, { onConflict: 'seller_id' })` exploits H.2's `seller_id UNIQUE` constraint. Properties:
+
+- **Re-delivery is a no-op** — Stripe retries on 5xx; the same event upserts the same row state.
+- **Resubscribe replaces the row** — different `stripe_subscription_id` value but same `seller_id`. Historical Stripe IDs persist in Stripe Dashboard but not in the local DB. Acceptable v1 single-row trade-off; the alternative (multi-row history) breaks H.2's UNIQUE seller_id invariant.
+- **Out-of-order delivery risk (v1 trade-off)** — Stripe usually delivers in chronological order, but during retries an older event for the same seller could overwrite a newer state. Mitigation (compare `event.created` timestamps before write) is H.13 territory if support tickets surface it.
+
+### Subscription type field migration (Stripe API dahlia)
+
+The H.9 spec referenced `subscription.current_period_start` / `current_period_end` directly on the Subscription type. Stripe API `2026-04-22.dahlia` (the version stripe@22 pins) moved these fields onto `SubscriptionItem`:
+
+```ts
+// Wrong (would fail typecheck on stripe@22):
+current_period_start: new Date(subscription.current_period_start * 1000)
+
+// Correct (read from item):
+const item = subscription.items.data[0];
+current_period_start: new Date(item.current_period_start * 1000)
+```
+
+For single-item subscriptions like Mony Pro, this is a straightforward `items.data[0]` read with a guard for the (very rare) empty-items case. Multi-item subscriptions in the future would need a more sophisticated reconciliation; out of v1 scope.
+
+### Two new server-only secrets
+
+Both go in `.env.local` for dev AND in Vercel project env vars for production. Both MUST stay server-only (no `NEXT_PUBLIC_*` prefix):
+
+| Env var | Source | Risk if leaked |
+| --- | --- | --- |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → endpoint → "Reveal signing secret". Different secrets for test mode vs live mode and for each registered endpoint. Local CLI testing uses its own secret emitted by `stripe listen`. | Attacker could forge webhook events → arbitrary subscription state injection. **High** for the test mode key, **critical** for live mode. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Project Settings → API → "service_role" (under Project API keys). | **Critical** — bypasses every RLS policy. Attacker reads / writes any row in any table. Treat as production-grade secret. |
+
+The admin client at [web/src/lib/supabase/admin.ts](web/src/lib/supabase/admin.ts) throws clearly at first use if either env var is missing — fail-fast for ops rather than silent runtime failures during a paying customer's checkout.
+
+### Logging discipline
+
+The handler logs only diagnostic context — never raw payloads (which contain customer email + payment metadata):
+
+| Code path | Log shape |
+| --- | --- |
+| Unhandled event type | `[H.9] ignoring event type=<type> id=<event-id>` |
+| Missing `seller_id` metadata | `[H.9] subscription <sub-id> missing seller_id metadata; skipping (status=<status>)` |
+| Empty subscription items | `[H.9] subscription <sub-id> has no line items; skipping (seller_id=<id>)` |
+| Successful upsert | `[H.9] upserted subscription seller=<id> status=<status> sub=<sub-id>` |
+| Handler error | `[H.9] handler error for <event-type> id=<event-id>: <message>` |
+| Bad signature | `[H.9] webhook signature verification failed: <message>` (warn) |
+| Missing `STRIPE_WEBHOOK_SECRET` | `[H.9] STRIPE_WEBHOOK_SECRET is not set` (error) |
+
+### Status code semantics
+
+| Response | Stripe behavior | Used for |
+| --- | --- | --- |
+| 200 | Acknowledged, no retry | Successful upsert; intentionally-ignored event types; subscriptions missing `metadata.seller_id` |
+| 400 | Permanent failure, no retry | Missing `stripe-signature` header; signature verification failed |
+| 500 | Retry with exponential backoff | Missing `STRIPE_WEBHOOK_SECRET`; DB upsert error; any unexpected handler exception |
+
+The 5xx-on-handler-error pattern lets transient DB blips (network glitch, brief Supabase maintenance) recover automatically — Stripe retries up to 3 days with exponential backoff. The 200-on-skip pattern (missing metadata, ignored event types) prevents Stripe from retrying events we definitively can't / won't process.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/api/stripe/webhook` (ƒ, dynamic, root path): 128 B. Outside `[locale]/` as required for technical endpoints.
+  - All other routes unchanged (H.8's checkout, H.7.x landing, etc.).
+  - Middleware unchanged at 130 kB (the `/api` matcher exclusion handles H.9 transparently).
+- **Mobile `tsc --noEmit`** → exit 0. Mobile codebase byte-identical (no `/src/` changes).
+- **Manual / runtime (deferred to user, requires Stripe Dashboard webhook config + service-role key in Vercel):**
+
+  **Local dev:**
+  ```bash
+  # Terminal A: Next.js dev server
+  cd web; npm run dev
+  # Terminal B: Stripe CLI forwards events to localhost
+  stripe listen --forward-to localhost:3000/api/stripe/webhook
+  # Note the whsec_… emitted; set STRIPE_WEBHOOK_SECRET=<that>
+  # in .env.local; restart dev server.
+  # Terminal C: trigger a test event
+  stripe trigger customer.subscription.created
+  # Terminal A logs the event; Supabase: subscriptions row exists,
+  # sellers.is_pro flipped if status maps to 'active'.
+  ```
+
+  **Production:**
+  1. Stripe Dashboard → Developers → Webhooks → Add endpoint → `https://mony-psi.vercel.app/api/stripe/webhook`. Subscribe to: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`.
+  2. Reveal signing secret → set `STRIPE_WEBHOOK_SECRET` in Vercel env vars (all environments).
+  3. Set `SUPABASE_SERVICE_ROLE_KEY` in Vercel env vars from Supabase Dashboard → API.
+  4. Redeploy (Vercel auto-redeploys on env var change after a fresh push, or trigger manually).
+  5. End-to-end test: tap "Upgrade to Pro" in mobile → magic-link → /upgrade → Subscribe → Stripe Checkout → card `4242 4242 4242 4242` → success page → wait ~2s → verify in Supabase Dashboard: `subscriptions` row exists with `status='active'`, `sellers.is_pro = true`.
+  6. Mobile: pull-to-refresh profile → user is Pro. Banners + cap modal disappear. Acheter button shows on listings.
+
+### Phase H mobile/web status (post-H.9)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| H.7.3 | ✓ | Multi-currency EUR/USD/AED |
+| Op.3 | ✓ | WEB_BASE_URL → mony-psi.vercel.app |
+| H.8 | ✓ | Multi-currency Stripe Checkout |
+| **H.9** | **✓ this step** | **Stripe webhook handler — data loop closes** |
+| H.10 | next | Real `/dashboard` + Customer Portal |
+| H.11 | future | `/admin/subscriptions` |
+| H.14 | future | Stripe live-mode flip + production go-live |
+
+### Phase H data loop closes
+
+After H.9 + the user's webhook config + env vars, the end-to-end Pro upgrade flow works in test mode:
+
+```
+[Mobile]
+  Tap "Upgrade to Pro"
+  → useUpgradeFlow() (H.5) → issue-web-session Edge Function → magic link
+  → in-app browser opens link
+
+[Web — mony-psi.vercel.app]
+  /auth/callback verifies OTP → session cookie
+  → redirects to /[locale]/upgrade
+  → Pricing card renders with cookie-driven currency (H.7.3)
+  → User clicks Subscribe → POSTs to /api/stripe/checkout (H.8)
+  → API route resolves price_id, creates Stripe Checkout Session
+  → Browser redirects to checkout.stripe.com/...
+
+[Stripe — hosted Checkout]
+  User enters card 4242 4242 4242 4242
+  → Stripe completes payment
+  → Stripe redirects browser to /[locale]/upgrade/success ("processing" copy)
+  → Stripe asynchronously fires customer.subscription.created event
+
+[Web webhook — H.9]
+  POST /api/stripe/webhook with signed event
+  → Verify signature
+  → Read metadata.seller_id from subscription
+  → Upsert public.subscriptions (service-role)
+  → Return 200
+
+[Database — H.2 schema + trigger]
+  subscriptions row created
+  → handle_subscription_change trigger fires
+  → sellers.is_pro = true (status in 'active','trialing')
+
+[Mobile — next data fetch]
+  useMySeller refetches (5min stale or focus-trigger)
+  → seller.isPro = true
+  → useIsPro() returns true
+  → useListingCap.isPro = true
+  → CTAs / banners / cap modal disappear
+  → ProBadge appears next to seller name
+  → Action rail Buy button shows (instead of Contact / Activate)
+```
+
+Every layer of Phase H is now connected and the data flows end-to-end.
+
+### H.10 handoff (real `/dashboard` + Customer Portal)
+
+H.10 ships the seller-side subscription management surface:
+
+1. **Real `/dashboard` page.** Replaces H.6's "shipping soon" placeholder. Reads from `public.subscriptions` (server-side, scoped to caller via H.2's RLS SELECT policy `seller_id IN (SELECT id FROM sellers WHERE user_id = auth.uid())`). Displays:
+   - Current plan (cadence + price)
+   - Next renewal date (`current_period_end`)
+   - Status pill (active / past_due / canceled)
+   - "Cancellation scheduled" notice if `cancel_at_period_end = true`, with revert option
+2. **Customer Portal link.** Stripe-hosted billing portal handles cancel, payment-method updates, invoice history, all for free. Implementation: new API route `app/api/stripe/portal/route.ts` that calls `stripe.billingPortal.sessions.create({ customer: <stripe_customer_id>, return_url: '<dashboard>' })`, returns `{ url }`. Client redirects via `window.location.href`. Per PRO_AUDIT.md §10 open-question 5: Stripe-hosted is the recommended choice (zero maintenance, complete feature set).
+3. **Cancellation revert.** When `cancel_at_period_end = true` (user has scheduled cancellation), surface an "Undo cancellation" button that calls a new API route to call `stripe.subscriptions.update(id, { cancel_at_period_end: false })`. The webhook then fires `customer.subscription.updated` → upsert flips the local row, trigger keeps `is_pro = true`.
+4. **Locale + currency awareness.** Same `force-dynamic` + cookie-driven resolution pattern as H.7.3 / H.8.
+
+### Reversion
+
+```bash
+git revert <H.9 commit>
+```
+
+Removes both new files + reverts the env example + the README section. The Stripe Dashboard webhook endpoint (if registered) requires manual deletion via Dashboard → Webhooks → endpoint → Delete. Setting that aside is harmless — the endpoint will just receive 404s on the now-deleted route.
+
+If only the webhook handler is unwanted but the admin client should stay (e.g., for a future H.X that needs RLS bypass for some other reason), the surgical revert is to delete just `app/api/stripe/webhook/route.ts` — `lib/supabase/admin.ts` remains untouched and ready for re-use.
+

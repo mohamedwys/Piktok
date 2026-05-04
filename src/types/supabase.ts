@@ -851,6 +851,10 @@ export type Database = {
         Returns: string
       }
       gettransactionid: { Args: never; Returns: unknown }
+      increment_share_count: {
+        Args: { p_product_id: string }
+        Returns: undefined
+      }
       longtransactionsenabled: { Args: never; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }

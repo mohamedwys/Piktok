@@ -145,9 +145,34 @@
     }
   },
   "dashboard": {
-    "title": "لوحة التحكم",
-    "greetingWith": "مرحباً، {email}.",
-    "comingSoonBody": "إدارة الاشتراكات قريباً."
+    "title": "اشتراكي",
+    "signedInAs": "متصل بالحساب {email}",
+    "plan": {
+      "title": "الخطة الحالية",
+      "monthly": "شهرياً",
+      "yearly": "سنوياً"
+    },
+    "status": {
+      "active": "نشط",
+      "trialing": "تجريبي",
+      "past_due": "متأخر السداد",
+      "canceled": "ملغى",
+      "incomplete": "غير مكتمل",
+      "incomplete_expired": "منتهي",
+      "unpaid": "غير مدفوع",
+      "paused": "متوقف"
+    },
+    "renewsOnLabel": "يُجدَّد في",
+    "cancelsOnLabel": "يُلغى في",
+    "cancelingNotice": "سينتهي اشتراكك في التاريخ أعلاه. يمكنك إعادة تفعيله في أي وقت من بوابة الإدارة.",
+    "manageButton": "إدارة الاشتراك",
+    "manageOpening": "جاري الفتح…",
+    "manageError": "تعذَّر فتح بوابة الإدارة. يُرجى المحاولة مجدداً.",
+    "empty": {
+      "title": "لا يوجد اشتراك نشط",
+      "body": "اشترك في Mony Pro للاستفادة من إعلانات بلا حدود ورسوم مخفَّضة والمزيد.",
+      "cta": "احصل على Mony Pro"
+    }
   },
   "languageSwitcher": {
     "label": "اللغة",

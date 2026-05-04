@@ -145,9 +145,34 @@
     }
   },
   "dashboard": {
-    "title": "Dashboard",
-    "greetingWith": "Hi, {email}.",
-    "comingSoonBody": "Subscription management is shipping soon."
+    "title": "My subscription",
+    "signedInAs": "Signed in as {email}",
+    "plan": {
+      "title": "Active plan",
+      "monthly": "Monthly",
+      "yearly": "Yearly"
+    },
+    "status": {
+      "active": "Active",
+      "trialing": "Trial",
+      "past_due": "Past due",
+      "canceled": "Canceled",
+      "incomplete": "Incomplete",
+      "incomplete_expired": "Expired",
+      "unpaid": "Unpaid",
+      "paused": "Paused"
+    },
+    "renewsOnLabel": "Renews on",
+    "cancelsOnLabel": "Cancels on",
+    "cancelingNotice": "Your subscription will end on the date above. You can reactivate at any time from the manage portal.",
+    "manageButton": "Manage subscription",
+    "manageOpening": "Opening…",
+    "manageError": "Could not open the management portal. Please try again.",
+    "empty": {
+      "title": "No active subscription",
+      "body": "Subscribe to Mony Pro to unlock unlimited listings, reduced fees, and more.",
+      "cta": "Get Mony Pro"
+    }
   },
   "languageSwitcher": {
     "label": "Language",

@@ -145,9 +145,34 @@
     }
   },
   "dashboard": {
-    "title": "Tableau de bord",
-    "greetingWith": "Bonjour, {email}.",
-    "comingSoonBody": "La gestion des abonnements arrive bientôt."
+    "title": "Mon abonnement",
+    "signedInAs": "Connecté en tant que {email}",
+    "plan": {
+      "title": "Formule active",
+      "monthly": "Mensuel",
+      "yearly": "Annuel"
+    },
+    "status": {
+      "active": "Actif",
+      "trialing": "Essai",
+      "past_due": "En retard de paiement",
+      "canceled": "Annulé",
+      "incomplete": "Incomplet",
+      "incomplete_expired": "Expiré",
+      "unpaid": "Impayé",
+      "paused": "En pause"
+    },
+    "renewsOnLabel": "Renouvellement le",
+    "cancelsOnLabel": "Annulation le",
+    "cancelingNotice": "Votre abonnement prendra fin à la date ci-dessus. Vous pouvez le réactiver à tout moment depuis le portail de gestion.",
+    "manageButton": "Gérer l’abonnement",
+    "manageOpening": "Ouverture…",
+    "manageError": "Impossible d’ouvrir le portail de gestion. Veuillez réessayer.",
+    "empty": {
+      "title": "Aucun abonnement actif",
+      "body": "Abonnez-vous à Mony Pro pour profiter d’annonces illimitées, de frais réduits et plus encore.",
+      "cta": "Obtenir Mony Pro"
+    }
   },
   "languageSwitcher": {
     "label": "Langue",

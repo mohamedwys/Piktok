@@ -7290,3 +7290,171 @@ Removes both new files + reverts the env example + the README section. The Strip
 
 If only the webhook handler is unwanted but the admin client should stay (e.g., for a future H.X that needs RLS bypass for some other reason), the surgical revert is to delete just `app/api/stripe/webhook/route.ts` — `lib/supabase/admin.ts` remains untouched and ready for re-use.
 
+---
+
+## Step H.10 Changelog (2026-05-04) — Real Pro Dashboard + Stripe Customer Portal
+
+JS-only step, scoped to `/web/`. Replaces H.6's `/dashboard` "shipping soon" placeholder with a real subscription management surface: subscription summary card with status pill + renewal date + cancel-state notice, "Manage subscription" button that opens the Stripe-hosted Customer Portal, empty state for users without subscriptions. Five new components, one new API route, one page replacement, three message catalog extensions. Zero new dependencies. Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question 5 ("Stripe-hosted vs custom billing portal" — Stripe-hosted chosen, this implements it). The H.9 changelog's H.10 handoff list (this implements it).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **Pre-edit `/dashboard` placeholder** ([web/src/app/[locale]/dashboard/page.tsx](web/src/app/[locale]/dashboard/page.tsx)) — H.6 minimal "Hi, {email}. Subscription management is shipping soon" copy. Three keys: `title`, `greetingWith`, `comingSoonBody`. Full replacement.
+- **`/web/src/lib/stripe.ts` from H.8** — exports `stripe` singleton with API version pinned to `'2026-04-22.dahlia'`. Reused in the H.10 portal route via the same `import { stripe }` pattern.
+- **`getSupabaseServer` from H.6** — returns the SSR cookie-authed client. Used for the dashboard read AND the portal API route's auth gate. Service-role admin client (H.9) is NOT used here — RLS-scoped reads are the right shape for personal-data surfaces.
+- **Stripe `billingPortal.sessions.create`** — confirmed available in stripe@22 at `node_modules/stripe/cjs/resources/BillingPortal/Sessions.d.ts`. Standard params: `{ customer, return_url }`. Configuration of what the portal exposes (cancel, plan-change, etc.) lives in Stripe Dashboard, NOT in our code.
+- **Existing `dashboard.*` namespace** — three keys (`title`, `greetingWith`, `comingSoonBody`). H.10 fully replaces with the real subscription-management copy: 25+ keys including `plan.*`, `status.*` (8 statuses matching H.2's CHECK constraint), `empty.*`.
+- **Local `SubRow` type vs generated** — the H.10 spec referenced `Database['public']['Tables']['subscriptions']['Row']` from `@/types/supabase`, but web's `npm run gen:types` script (defined in package.json) hasn't been executed and the file doesn't exist. Two options: (a) require the user to run gen:types as a manual step, (b) hand-roll a local `SubRow` type matching H.2's stable schema. Chose (b) — H.2's schema won't change without a deliberate H.X step, and a local type avoids a manual ops step before the user can build. The type is exported from `SubscriptionSummaryCard` so it can be reused later if the dashboard surface grows. Documented for future replacement once gen:types lands web-side.
+
+### Files added (5)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/components/dashboard/StatusPill.tsx](web/src/components/dashboard/StatusPill.tsx) | Server Component. 8-status union (matching H.2 CHECK constraint). Color-coded tone tokens via Tailwind theme (success / warning / danger / verified / tertiary). Translated label via `dashboard.status.<status>`. |
+| [web/src/components/dashboard/SubscriptionSummaryCard.tsx](web/src/components/dashboard/SubscriptionSummaryCard.tsx) | Server Component. Plan title + cadence (yearly detection by comparing `stripe_price_id` to env-configured yearly Price IDs) + StatusPill + locale-aware renewal date (`toLocaleDateString` per locale tag) + `<ManageSubscriptionButton />`. Cancel-at-period-end flips the label to "Cancels on" + adds an amber notice block. Exports `SubRow` type for downstream reuse. |
+| [web/src/components/dashboard/ManageSubscriptionButton.tsx](web/src/components/dashboard/ManageSubscriptionButton.tsx) | Client Component. POSTs to `/api/stripe/portal` and `window.location.href`s to the returned Stripe Customer Portal URL. Inline error state on failure; submitting state on the button copy. |
+| [web/src/components/dashboard/EmptyDashboard.tsx](web/src/components/dashboard/EmptyDashboard.tsx) | Server Component. Sparkles icon + "No active subscription" heading + body copy + CTA button → locale-aware `Link` to `/upgrade`. |
+| [web/src/app/api/stripe/portal/route.ts](web/src/app/api/stripe/portal/route.ts) | POST handler. Auth → seller lookup → RLS-scoped read of `stripe_customer_id` → 400 if user has no subscription → locale-aware `return_url` → `stripe.billingPortal.sessions.create` → returns `{ url }`. Lives at root `/api/stripe/portal` per the established H.7.1 / H.8 convention. |
+
+### Files modified (4)
+
+| Path | Change |
+| --- | --- |
+| [web/src/app/[locale]/dashboard/page.tsx](web/src/app/[locale]/dashboard/page.tsx) | Replaced H.6 placeholder. Server Component, `force-dynamic`, auth-gated via `getUser()` + locale-aware redirect. Resolves seller via `sellers.user_id = auth.uid()`, reads subscription RLS-scoped (own-only per H.2 `subscriptions_self_select` policy). Renders `<SubscriptionSummaryCard />` if subscription exists, `<EmptyDashboard />` otherwise. |
+| [web/messages/en.json](web/messages/en.json) | Removed obsolete `greetingWith` / `comingSoonBody`. Added 25+ keys: `signedInAs`, `plan.{title, monthly, yearly}`, `status.{8 statuses}`, `renewsOnLabel`, `cancelsOnLabel`, `cancelingNotice`, `manageButton`, `manageOpening`, `manageError`, `empty.{title, body, cta}`. |
+| [web/messages/fr.json](web/messages/fr.json) | Mirror with French copy. |
+| [web/messages/ar.json](web/messages/ar.json) | Mirror with Arabic copy (best-effort, pending professional review per H.7.1 caveat). |
+
+### RLS-scoped subscription read decision
+
+The H.10 dashboard reads from `public.subscriptions` via `getSupabaseServer()` — the SSR cookie-authed client — NOT via the service-role admin client from H.9. Three reasons:
+
+1. **Defense in depth.** The H.2 RLS policy `subscriptions_self_select` already gates reads to the caller's own row via `seller_id IN (SELECT id FROM sellers WHERE user_id = auth.uid())`. Using the cookie-authed client means a misconfigured query (or a future bug) physically can't return another user's subscription.
+2. **Service-role is for server-to-server contexts.** The H.9 webhook needs admin because Stripe → our server has no user context. The dashboard is a personal-data surface where the user IS the context.
+3. **Audit trail.** Service-role queries skip RLS audit hooks. Cookie-authed queries flow through standard auth — easier to trace if anything ever goes wrong.
+
+Reserved use of admin: webhook handler (H.9) only. Do not import `getSupabaseAdmin()` from any user-facing route or page.
+
+### Cadence detection
+
+Comparing `subscription.stripe_price_id` against `STRIPE_PRICE_<CURRENCY>_YEARLY` env vars resolves whether the user is on monthly or yearly:
+
+```ts
+const yearlyIds = new Set(
+  [
+    process.env.STRIPE_PRICE_EUR_YEARLY,
+    process.env.STRIPE_PRICE_USD_YEARLY,
+    process.env.STRIPE_PRICE_AED_YEARLY,
+  ].filter((id): id is string => Boolean(id)),
+);
+const isYearly = yearlyIds.has(subscription.stripe_price_id);
+```
+
+Pure server-side — env vars are not exposed to client. Avoids a Stripe API call to `stripe.prices.retrieve(id)` per dashboard render. The env vars are the authoritative source per H.7.3's six-Price convention.
+
+The trade-off: if a user's price ID is unknown to the env (e.g., a future seventh price not yet wired), it defaults to "monthly". The fallback is benign — labels are translated copy, not billing logic — but the catalog should track all six configured prices in lockstep.
+
+### Locale-aware return URL
+
+The `/api/stripe/portal` route mirrors H.8's locale-aware redirect URL pattern verbatim. After the user finishes in the Stripe Customer Portal:
+
+```ts
+const localePath = locale === routing.defaultLocale ? '' : `/${locale}`;
+const returnUrl = `${origin}${localePath}/dashboard`;
+```
+
+Three concrete return URLs:
+- EN visitor: `https://mony-psi.vercel.app/dashboard`
+- FR visitor: `https://mony-psi.vercel.app/fr/dashboard`
+- AR visitor: `https://mony-psi.vercel.app/ar/dashboard`
+
+The user lands back on their localized dashboard with whatever changes they made in the portal already reflected (after the H.9 webhook propagates the Stripe event, typically <5s).
+
+### Inline "Undo cancellation" deferred
+
+Stripe Customer Portal already provides a "Don't cancel" reactivation flow with appropriate legal-compliance language and one-click reversal. Building an inline reactivation button on `/dashboard` would:
+
+1. Duplicate Stripe's polished UX
+2. Require maintaining cancellation-revert legal copy across three locales
+3. Add a third API route (or Server Action) for the underlying `stripe.subscriptions.update(id, { cancel_at_period_end: false })` call
+
+Decision: punt to Stripe's portal. The `cancelingNotice` block on the SubscriptionSummaryCard already directs users to the manage button, where Stripe handles the reactivation fully. Documented as deferred for H.10.1 if future user feedback warrants inline reactivation.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0 (after replacing the spec's `@/types/supabase` import with a local `SubRow` type — see Recon findings above).
+- **JSON parse** for all three message catalogs → OK.
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/[locale]/dashboard` (●, paths /en, /fr, /ar): 1.06 kB → 120 kB First Load JS (up from H.6's 177 B placeholder — adds the SubscriptionSummaryCard server bundle + ManageSubscriptionButton client hydration).
+  - `/api/stripe/portal` (ƒ, dynamic, root): 177 B.
+  - `/api/stripe/checkout` (ƒ, H.8): 177 B.
+  - `/api/stripe/webhook` (ƒ, H.9): 128 B.
+  - Middleware 131 kB (up 1 kB from H.9 — `next-intl` middleware imports the new `dashboard.*` keys from the catalogs).
+- **Mobile `tsc --noEmit`** → exit 0. Mobile codebase byte-identical (no `/src/` changes).
+- **Manual / runtime (deferred to user, requires a real subscription created via H.8 + propagated by H.9):**
+  1. Visit `/dashboard` without a subscription → empty state with "Get Mony Pro" CTA → routes to `/upgrade`.
+  2. Complete Checkout via H.8 + wait for H.9 webhook (~2s) → reload `/dashboard` → real subscription card with status pill, plan name, renewal date, manage button.
+  3. Click "Manage subscription" → button enters "Opening…" state → redirects to `https://billing.stripe.com/...` (Stripe-hosted portal).
+  4. In portal: cancel subscription → return to `/dashboard` → status pill flips to "Canceled" or shows "Cancels on [date]" notice within ~5s (webhook propagates `customer.subscription.updated`).
+  5. Reactivate via portal → "Don't cancel" → return to `/dashboard` → status flips back to "Active" within ~5s.
+  6. Repeat in `/fr/dashboard` + `/ar/dashboard` to verify locale-aware copy + return URLs.
+
+### User-manual setup (one-time, before runtime testing)
+
+Stripe Dashboard configuration of what the Customer Portal exposes:
+
+1. **Stripe Dashboard → Settings → Billing → Customer portal** (test mode tab).
+2. Click **Activate test link** if not already active.
+3. Configure portal settings:
+   - **Cancellations**: ✅ Allow customers to cancel subscriptions
+     - **Cancellation mode**: "End of period" (matches our `cancel_at_period_end` flow + the H.2 trigger's status-driven `is_pro` mirroring)
+   - **Subscriptions → Subscription update**: ✅ Allow customers to switch between plans
+     - **Products**: select "Mony Pro" + the 6 prices created in H.8
+   - **Payment methods**: ✅ Allow customers to update payment methods
+   - **Invoice history**: ✅ Allow customers to view billing history
+4. Save. Settings persist for test mode.
+5. Live mode requires a separate activation when H.14 ships — the Dashboard has a separate "Live mode" tab with its own configuration.
+
+### Phase H mobile/web status (post-H.10)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| H.7.3 | ✓ | Multi-currency EUR/USD/AED |
+| Op.3 | ✓ | WEB_BASE_URL → mony-psi.vercel.app |
+| H.8 | ✓ | Multi-currency Stripe Checkout |
+| H.9 | ✓ | Stripe webhook handler |
+| **H.10** | **✓ this step** | **Real Pro dashboard + Customer Portal** |
+| H.11 | next | Admin dashboard at `/admin/subscriptions` |
+| H.14 | future | Stripe live-mode flip + production go-live |
+
+Phase H **seller-side surface complete**: visitors can subscribe (H.8), the data syncs (H.9), and they can manage their subscription (H.10). H.11 is the admin counterpart — list all subscriptions, refund/cancel manually if needed.
+
+### H.11 handoff (admin dashboard)
+
+Concrete next pieces:
+
+1. **Admin role detection.** No precedent in the codebase yet. Two viable shapes:
+   - **`is_admin BOOLEAN` flag on `sellers`** (or a new `auth.users` JWT claim). Simple, integrates with existing RLS via `EXISTS (SELECT 1 FROM sellers WHERE user_id = auth.uid() AND is_admin)`.
+   - **Separate `admins(user_id PK → auth.users)` table.** More auditable, easier to revoke admin without touching seller data.
+   PRO_AUDIT.md §10 open-question 15 defaulted to the dedicated table — recommend that. Schema decision lands in H.11.
+2. **`/admin/subscriptions` page.** Reads ALL subscription rows via the H.9 service-role admin client (RLS would block normal users). Lists with seller name, status, plan, MRR contribution. Filterable by status (`active`, `past_due`, `canceled`).
+3. **Per-row actions**: refund, cancel manually, view in Stripe (deep-link).
+4. **Auth-gating**: a wrapper layout at `app/admin/layout.tsx` checks `is_admin` and `redirect`s to `/` for non-admins. The role check is server-side (cookie-authed, then admin lookup).
+5. **Locale-aware** (English-only might be acceptable for v1 admin — internal staff usage). Decide in H.11.
+
+### Reversion
+
+```bash
+git revert <H.10 commit>
+```
+
+Removes the five new files + reverts the dashboard page + the catalog extensions. The Stripe Customer Portal configuration in the Dashboard is forward-compatible (no harm leaving it active even when this revert is in place — nothing in the revert links to it).
+
+If only the Customer Portal API route should be removed but the dashboard kept (e.g., to swap to a custom billing UI), the surgical edit is to delete just `app/api/stripe/portal/route.ts` + `components/dashboard/ManageSubscriptionButton.tsx`, then update SubscriptionSummaryCard to render a different action. The status pill, layout, and empty state survive.
+

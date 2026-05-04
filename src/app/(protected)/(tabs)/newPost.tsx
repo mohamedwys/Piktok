@@ -24,8 +24,10 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuthStore } from '@/stores/useAuthStore';
 import {
   useCreateProduct,
+  useListingCap,
   useProduct,
   useUpdateProduct,
+  ListingCapReachedError,
   type CreateProductInput,
   type UpdateProductInput,
 } from '@/features/marketplace';
@@ -33,6 +35,9 @@ import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics'
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
 import { colors } from '@/theme';
+import ProUpgradeBanner from '@/components/marketplace/ProUpgradeBanner';
+import { useDismissedBanners } from '@/stores/useDismissedBanners';
+import { useUpgradeFlow } from '@/hooks/useUpgradeFlow';
 import {
   useUserLocation,
   useHasLocation,
@@ -73,6 +78,26 @@ export default function SellScreen(): React.ReactElement {
   const hasUserLocation = useHasLocation();
   const userDisplayName = useUserLocation((s) => s.displayName);
   const openLocationSheet = useLocationSheetStore((s) => s.open);
+
+  // Phase H.4 — sell-flow upsell banner state. Visibility:
+  //   - Hidden while the cap query is loading (avoids flicker).
+  //   - Hidden for Pro sellers (the cap doesn't apply to them).
+  //   - Hidden for 24h after the user dismisses via the X button.
+  //   - Hidden in edit mode — the cap only applies to the create
+  //     path; editing an existing listing is always allowed.
+  // Urgent emphasis kicks in when remaining ≤ 2 (8/10 or 9/10
+  // used) — the user is about to hit the wall, so the banner
+  // visually escalates to filled coral CTA + urgent border.
+  const cap = useListingCap();
+  const capDismissed = useDismissedBanners((s) =>
+    s.isDismissed('sell-flow-cap'),
+  );
+  const dismissBanner = useDismissedBanners((s) => s.dismiss);
+  const openUpgradeFlow = useUpgradeFlow();
+  const showSellFlowBanner =
+    !isEdit && !cap.loading && !cap.isPro && !capDismissed;
+  const sellFlowBannerEmphasis: 'soft' | 'urgent' =
+    cap.remaining <= 2 ? 'urgent' : 'soft';
 
   const onPressPrefillLocation = (): void => {
     void lightHaptic();
@@ -295,6 +320,27 @@ export default function SellScreen(): React.ReactElement {
         router.replace('/(protected)/(tabs)');
       },
       onError: (err) => {
+        // H.3: free-tier cap is the structured branch — surface a
+        // distinct dialog with an upgrade CTA. H.5 consolidation:
+        // the "Upgrade to Pro" button now routes through the shared
+        // `useUpgradeFlow` hook so the cap modal, the sell-flow
+        // banner, the profile pitch banner, and the action-rail
+        // checkout-gate all open the same web flow via the same
+        // code path.
+        if (err instanceof ListingCapReachedError) {
+          Alert.alert(
+            t('sell.listingCapReachedTitle'),
+            t('sell.listingCapReachedBody', { cap: err.cap }),
+            [
+              { text: t('common.cancel'), style: 'cancel' },
+              {
+                text: t('sell.upgradeToPro'),
+                onPress: openUpgradeFlow,
+              },
+            ],
+          );
+          return;
+        }
         Alert.alert(t('sell.fail'), err.message || t('common.errorGeneric'));
       },
     });
@@ -343,6 +389,20 @@ export default function SellScreen(): React.ReactElement {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
           >
+            {showSellFlowBanner ? (
+              <ProUpgradeBanner
+                title={t('pro.sellFlowBannerTitle', {
+                  used: cap.used,
+                  cap: cap.cap ?? 0,
+                })}
+                body={t('pro.sellFlowBannerBody')}
+                ctaLabel={t('pro.upgradeCta')}
+                onPressCta={openUpgradeFlow}
+                onDismiss={() => dismissBanner('sell-flow-cap')}
+                emphasis={sellFlowBannerEmphasis}
+              />
+            ) : null}
+
             <View>
               <Text style={styles.title}>{headerTitle}</Text>
               <Text style={styles.subtitle}>{headerSubtitle}</Text>

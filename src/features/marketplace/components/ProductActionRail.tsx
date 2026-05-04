@@ -1,6 +1,7 @@
 import { useShareProduct } from '@/features/marketplace/hooks/useShareProduct';
 import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import type { Product } from '@/features/marketplace/types/product';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { getLocalized } from '@/i18n/getLocalized';
@@ -9,6 +10,9 @@ import { useCommentsSheetStore } from '@/stores/useCommentsSheetStore';
 import { useMoreActionsSheetStore } from '@/stores/useMoreActionsSheetStore';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useRequireAuth } from '@/stores/useRequireAuth';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { useDismissedBanners } from '@/stores/useDismissedBanners';
+import { useUpgradeFlow } from '@/hooks/useUpgradeFlow';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +38,33 @@ export default function ProductActionRail({
   const shareMutation = useShareProduct();
   const { requireAuth } = useRequireAuth();
   const isPro = product.seller.isPro;
+
+  // Phase H.4 — own-non-Pro checkout-gate. When the viewer is the
+  // seller themselves AND the seller is not Pro, swap the existing
+  // Buy/Contact button for an "Activer le paiement direct" upgrade
+  // CTA. Replaces an awkward UX path (the existing non-Pro branch
+  // would show "Contact" — but the user can't message themselves)
+  // with a productive one (drive to upgrade).
+  //
+  // Visual integration: same `IconButton` shape (variant="filled",
+  // size="lg") so the rail's vertical rhythm is preserved exactly —
+  // we only swap icon, label, onPress, and accessibility copy.
+  // Decision per H.4 spec's visual-fit constraint: a wider pill
+  // would crowd the column, so the icon-button swap is the right
+  // shape. No inline dismiss affordance for v1 (would crowd the
+  // rail with an X mark on a circular button); 'checkout-gate'
+  // dismissal is reserved in the store for H.13 if/when that
+  // affordance lands.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const mySellerQuery = useMySeller(isAuthenticated);
+  const checkoutGateDismissed = useDismissedBanners((s) =>
+    s.isDismissed('checkout-gate'),
+  );
+  const openUpgradeFlow = useUpgradeFlow();
+  const isOwnListing =
+    !!mySellerQuery.data?.id && mySellerQuery.data.id === product.seller.id;
+  const showCheckoutGate =
+    isOwnListing && !product.seller.isPro && !checkoutGateDismissed;
 
   const onPressLike = useCallback((): void => {
     if (!requireAuth()) return;
@@ -80,8 +111,25 @@ export default function ProductActionRail({
     useMoreActionsSheetStore.getState().open(product.id);
   }, [product.id]);
 
-  const buyLabel = isPro ? t('actionRail.buy') : t('marketplace.contactSeller');
-  const buyIconName = isPro ? 'bag-handle' : 'chatbubble-ellipses';
+  // Branching for the leading button:
+  //   - showCheckoutGate (own + non-Pro)  → "Activer" + sparkles → upgrade flow
+  //   - else, isPro (someone else's Pro)  → "Acheter"  + bag       → checkout
+  //   - else (someone else's non-Pro)     → "Contacter" + chat     → DM
+  const buyLabel = showCheckoutGate
+    ? t('pro.checkoutGateLabel')
+    : isPro
+      ? t('actionRail.buy')
+      : t('marketplace.contactSeller');
+  const buyIconName: React.ComponentProps<typeof Ionicons>['name'] =
+    showCheckoutGate
+      ? 'sparkles'
+      : isPro
+        ? 'bag-handle'
+        : 'chatbubble-ellipses';
+  const buyAccessibilityLabel = showCheckoutGate
+    ? t('pro.checkoutGateAriaLabel')
+    : t('actionRail.buyAriaLabel');
+  const onPressLeading = showCheckoutGate ? openUpgradeFlow : onPressBuy;
 
   return (
     <View style={[styles.container, { bottom: tabBarHeight + 16 }]}>
@@ -93,8 +141,8 @@ export default function ProductActionRail({
         }
         label={buyLabel}
         haptic="medium"
-        onPress={onPressBuy}
-        accessibilityLabel={t('actionRail.buyAriaLabel')}
+        onPress={onPressLeading}
+        accessibilityLabel={buyAccessibilityLabel}
       />
 
       <LikeButton

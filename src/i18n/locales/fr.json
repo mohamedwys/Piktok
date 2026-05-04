@@ -9,7 +9,8 @@
     "search": "Rechercher",
     "openSettings": "Ouvrir les Réglages",
     "comingSoonTitle": "Bientôt disponible",
-    "comingSoonBody": "Cette fonctionnalité arrive bientôt."
+    "comingSoonBody": "Cette fonctionnalité arrive bientôt.",
+    "dismiss": "Fermer"
   },
   "auth": {
     "signInRequired": {
@@ -290,7 +291,10 @@
     "useMyLocation": "Utiliser ma position",
     "setMyLocation": "Définir ma position",
     "locationGeocodeFailedTitle": "Annonce créée",
-    "locationGeocodeFailedBody": "Emplacement non trouvé — votre annonce n'apparaîtra pas dans les recherches par rayon."
+    "locationGeocodeFailedBody": "Emplacement non trouvé — votre annonce n'apparaîtra pas dans les recherches par rayon.",
+    "listingCapReachedTitle": "Limite atteinte",
+    "listingCapReachedBody": "Vous avez atteint la limite de {{cap}} annonces. Passez Pro pour publier sans limite.",
+    "upgradeToPro": "Passer Pro"
   },
   "orders": {
     "title": "Mes commandes",
@@ -386,5 +390,16 @@
   "feedItem": {
     "showMore": "Voir plus",
     "showLess": "Voir moins"
+  },
+  "pro": {
+    "sellFlowBannerTitle": "{{used}}/{{cap}} annonces utilisées",
+    "sellFlowBannerBody": "Passez Pro pour publier sans limite, profiter de frais réduits et d'une mise en avant hebdomadaire.",
+    "profileBannerTitle": "Devenir vendeur Pro",
+    "profileBannerBody": "Annonces illimitées, frais réduits et mise en avant.",
+    "checkoutGateLabel": "Activer",
+    "checkoutGateAriaLabel": "Activer le paiement direct — passer Pro",
+    "upgradeCta": "Passer Pro",
+    "upgradeErrorTitle": "Échec de l'ouverture",
+    "upgradeErrorBody": "Veuillez réessayer dans un instant."
   }
 }

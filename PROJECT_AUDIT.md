@@ -5538,3 +5538,585 @@ H.3 is unblocked once the migration is applied and types are regenerated. The ho
 - **No UI work in H.3 beyond the cap modal.** The strategic CTA placements (own-profile hero banner, sell-flow header banner) are H.4's scope per PRO_AUDIT.md §6.2.
 - **Webhook side (H.12, web codebase) is pre-unblocked**: the schema is in place for service-role upserts. H.12 imports `createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)`, handles `customer.subscription.{created,updated,deleted}` + `invoice.payment_{succeeded,failed}`, and upserts on `stripe_subscription_id` (the unique index makes this idempotent). The DB trigger then syncs `is_pro` automatically — no client-side `is_pro` write code in the web codebase.
 
+---
+
+## Step H.3 Changelog (2026-05-04) — Pro State Hooks + Listing Cap
+
+JS-only step. Ships the mobile-side data layer and create-product gate for the Pro subscription system. Six new files (one constant module, one error module, four hooks), seven modifications (sell.ts cap check, create/delete mutations' invalidation wiring, newPost catch branch, two locale files, the marketplace barrel). No new dependencies. No schema or migration changes.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) §6 (CTA strategy) for the cap-modal placement; §10 open-question 1 for the cap-value placeholder. The H.2 [subscriptions migration](supabase/migrations/20260522_subscriptions_schema_and_trigger.sql) is the prerequisite for the trigger-maintained `is_pro` flag this step's hooks read.
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **Type regen confirmed.** [src/types/supabase.ts:544](src/types/supabase.ts#L544) now declares `Database['public']['Tables']['subscriptions']` with `Row`, `Insert`, `Update`, and the `subscriptions_seller_id_fkey` `Relationships` entry at line 592. The user ran `npm run db:push` + `npm run gen:types` between H.2 apply and H.3. H.3 imports the regenerated `Database` type directly — no `as never` / `as any` escape hatches.
+- **`useMySeller(enabled: boolean)` shape.** [src/features/marketplace/hooks/useMySeller.ts:6](src/features/marketplace/hooks/useMySeller.ts#L6) requires an explicit `enabled` boolean; returns `UseQueryResult<SellerProfile | null, Error>`. The `SellerProfile` type ([src/features/marketplace/services/sellers.ts:5-24](src/features/marketplace/services/sellers.ts#L5)) is camelCased — `isPro: boolean` (not `is_pro`). Hooks that depend on `useMySeller` therefore read `seller.data?.isPro`, not `seller.data?.is_pro`.
+- **No pre-existing `useMyProductsCount`.** [src/features/marketplace/hooks/useMyProducts.ts](src/features/marketplace/hooks/useMyProducts.ts) fetches the full `Product[]` via `listMyProducts()` — fine for the profile grid render but wasteful for cap-check (we only need the count). H.3 ships a separate count-only hook using PostgREST's `select('id', { count: 'exact', head: true })` HEAD trick — zero row payload, just the `Content-Range` count header.
+- **`createProduct` shape ex-G.8.** [src/features/marketplace/services/sell.ts:84-142](src/features/marketplace/services/sell.ts#L84) sequenced `getCurrentUserOrThrow → uploadProductMedia → ensureSellerForCurrentUser → INSERT`. H.3 reorders to `getCurrentUserOrThrow → ensureSellerForCurrentUser → cap-check → uploadProductMedia → INSERT` — the upload was previously first because the original code didn't need seller_id earlier; reordering is semantically harmless (the upload uses `auth.user.id` for the storage path, not seller_id) and avoids wasting a storage write on a rejected create. Pure improvement, no behavior change for the success path.
+- **Auth gating convention.** [src/app/(protected)/(tabs)/profile.tsx:192-196](src/app/(protected)/(tabs)/profile.tsx#L192) shows the established pattern: `useRequireAuth() → isAuthenticated → useMySeller(isAuthenticated)`. H.3's `useIsPro` / `useMyProductsCount` / `useMySubscription` read `useAuthStore((s) => s.isAuthenticated)` directly inside the hook so call sites don't have to thread the boolean through. The hooks remain "pure" in the sense the spec intends — no `Alert.alert` or routing inside them, no implicit redirects — but they do read the auth store so the underlying queries' `enabled` flag is correct.
+- **`AuthRequiredError` / `StripeNotConfiguredError` precedent.** Both exist in `services/products.ts` and `services/orders.ts` respectively, both extend `Error`, both call `Object.setPrototypeOf(this, X.prototype)` for the Hermes / V8 prototype-fix. H.3's `ListingCapReachedError` follows the same pattern with one extra field (`cap`).
+- **newPost submit handler.** [src/app/(protected)/(tabs)/newPost.tsx:280-300](src/app/(protected)/(tabs)/newPost.tsx#L280) — `createListing(payload, { onSuccess, onError })`. The existing `onError` is a single `Alert.alert(t('sell.fail'), err.message || t('common.errorGeneric'))`. H.3 adds a `if (err instanceof ListingCapReachedError) { ... return; }` branch above the generic alert; the success path and the form-reset logic are unchanged.
+- **No `constants.ts` / `errors.ts` under `src/features/marketplace/`.** Both files are new in H.3.
+
+### Files added (6)
+
+| Path | Purpose |
+| --- | --- |
+| [src/features/marketplace/constants.ts](src/features/marketplace/constants.ts) | Single-export module: `FREE_TIER_LISTING_CAP = 10`. PRO_AUDIT.md §10 open-question 1 placeholder; user-decided final value lands as a one-line edit here. |
+| [src/features/marketplace/errors.ts](src/features/marketplace/errors.ts) | `ListingCapReachedError extends Error` with `cap: number` field and `Object.setPrototypeOf` prototype-fix. Mirrors `AuthRequiredError` / `StripeNotConfiguredError`. |
+| [src/features/marketplace/hooks/useMySubscription.ts](src/features/marketplace/hooks/useMySubscription.ts) | Reads `from('subscriptions').select('*').eq('seller_id', mySellerId).maybeSingle()`. Returns `SubscriptionRow \| null`. Key: `['marketplace', 'my-subscription', sellerId]`. Stale 5min. Exports the `SubscriptionRow` type alias for downstream consumers (H.10 web dashboard). |
+| [src/features/marketplace/hooks/useIsPro.ts](src/features/marketplace/hooks/useIsPro.ts) | `useAuthStore → useMySeller(isAuthenticated) → seller.data?.isPro ?? false`. Two lines of real logic; the H.2 trigger does the work. |
+| [src/features/marketplace/hooks/useMyProductsCount.ts](src/features/marketplace/hooks/useMyProductsCount.ts) | HEAD-only count query for cap-state aggregation. Key: `['marketplace', 'my-products-count', sellerId]`. Stale 30s. Exported `MY_PRODUCTS_COUNT_KEY` for invalidation by sibling mutations. |
+| [src/features/marketplace/hooks/useListingCap.ts](src/features/marketplace/hooks/useListingCap.ts) | Pure aggregator: `useIsPro` + `useMyProductsCount` → `{ isPro, cap, used, remaining, isAtCap, loading }`. The advisory client-side state H.4 reads for banner / "X / 10 used" surfaces. |
+
+### Files modified (7)
+
+| Path | Change |
+| --- | --- |
+| [src/features/marketplace/services/sell.ts](src/features/marketplace/services/sell.ts) | (1) Two new imports: `FREE_TIER_LISTING_CAP`, `ListingCapReachedError`. (2) `createProduct` reordered: ensureSeller → is_pro lookup → conditional HEAD-count gate → throw `ListingCapReachedError` when over cap → upload → INSERT. The non-Pro path adds **two** server reads (single-row is_pro select + HEAD-count); Pro path adds **one** (just the is_pro select, the count is short-circuited). |
+| [src/features/marketplace/hooks/useCreateProduct.ts](src/features/marketplace/hooks/useCreateProduct.ts) | `onSuccess` now also invalidates `MY_PRODUCTS_KEY` and `MY_PRODUCTS_COUNT_KEY` so `useListingCap.used / .remaining` refreshes immediately after a successful create. |
+| [src/features/marketplace/hooks/useDeleteProduct.ts](src/features/marketplace/hooks/useDeleteProduct.ts) | `onSuccess` now also invalidates `MY_PRODUCTS_COUNT_KEY` so deleting a listing frees a slot in `useListingCap.remaining` on the next render. |
+| [src/features/marketplace/index.ts](src/features/marketplace/index.ts) | Re-exports the six new symbols (`useMyProductsCount`, `MY_PRODUCTS_COUNT_KEY`, `useMySubscription`, `MY_SUBSCRIPTION_KEY`, `SubscriptionRow`, `useIsPro`, `useListingCap`, `ListingCapState`, `FREE_TIER_LISTING_CAP`, `ListingCapReachedError`). |
+| [src/app/(protected)/(tabs)/newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) | (1) `ListingCapReachedError` added to the `'@/features/marketplace'` named imports. (2) `onError` of `createListing(payload, …)` now branches on `err instanceof ListingCapReachedError` and surfaces a two-button alert: cancel / "Upgrade to Pro" → placeholder coming-soon Alert (H.5 swaps for the real deep link). The generic `Alert.alert(t('sell.fail'), …)` path is preserved for non-cap errors. |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | Four new keys under `sell.*`: `listingCapReachedTitle`, `listingCapReachedBody` (with `{{cap}}` interpolation), `upgradeToPro`, `upgradeFlowComingSoonBody`. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Mirror of the English keys with French copy. |
+
+### Race-condition acceptance (v1)
+
+The cap check + INSERT is **not atomic**. Two simultaneous create requests from the same non-Pro seller (e.g., a double-tap on the submit button that the existing UI doesn't fully debounce, or two devices in flight) could in principle both observe `count = 9` before either inserts, race past 10 by one, and end up with 11 listings under the cap. We accept this v1 trade-off because:
+
+1. The mutation hook (`useCreateProduct`) and the form submit haptic both naturally serialize a single user's clicks; the failure mode requires deliberate concurrency.
+2. The cost of "one extra listing past the cap" is small — it does not break payment, security, or other invariants.
+3. The fix (a `SECURITY DEFINER` RPC that wraps `count + INSERT` in a single transaction with a row-level advisory lock on the seller) adds non-trivial server-side complexity and changes the create path's error model. Phase F territory if support tickets surface it.
+
+The race is documented in-line in [services/sell.ts:104-109](src/features/marketplace/services/sell.ts#L104) so future maintainers don't mistake it for a bug.
+
+### "Upgrade to Pro" placeholder pending H.5
+
+The cap-modal's "Upgrade to Pro" button currently fires a second `Alert.alert(t('common.comingSoonTitle'), t('sell.upgradeFlowComingSoonBody'))`. This is intentional — the actual deep link to the web upgrade flow lives in H.5, which itself depends on H.6 shipping the URL. When H.5 lands, the only edit at this site is replacing the inner Alert with `await WebBrowser.openBrowserAsync(deepLinkUrl)`. The H.3 placeholder ensures the cap-blocked user-flow is end-to-end functional today (they hit the cap, they see the upgrade prompt, they get told it's coming soon) without leaving a dead button.
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0**. No diagnostics. The new hooks consume `Database['public']['Tables']['subscriptions']['Row']` cleanly; the existing `SellerProfile.isPro` flows through unchanged.
+- `node -e "JSON.parse(...)"` on both locale files → both parse OK. (Locale JSONs are sensitive to trailing commas and we appended fields mid-block, so this is the reliable smoke check.)
+- No new dependencies. `package.json` untouched.
+- Repo state on completion: 6 untracked new files + 7 modified files, exactly the planned surface — no incidental edits.
+- Manual sanity (deferred to user, requires authed session against an H.2-applied database):
+  - `useIsPro()` returns true for a seller with `is_pro = true`, false otherwise.
+  - `useListingCap()` shape: free + 0 listings → `{ cap: 10, used: 0, remaining: 10, isAtCap: false }`; free + 10 listings → `{ cap: 10, used: 10, remaining: 0, isAtCap: true }`; Pro → `{ cap: null, remaining: Infinity, isAtCap: false }`.
+  - Creating an 11th product as non-Pro → `ListingCapReachedError` thrown by `createProduct`; caught by `newPost.tsx`'s `onError` branch; cap modal renders with "Cancel" + "Upgrade to Pro" buttons; tapping Upgrade → "coming soon" sub-Alert.
+  - Manual admin override: `update public.sellers set is_pro = true where id = '<uuid>'` (service_role required since B.1.5 grants block this from the JS client) → after the next `useMySeller` refetch, `useIsPro()` flips true and the cap lifts on the next mutation attempt.
+
+### H.4 handoff
+
+H.4 is unblocked — every piece of state H.4's banners need is already exposed:
+
+- **"X / 10 used" indicator on `newPost.tsx`** reads `const { used, cap, isPro, remaining } = useListingCap()` and renders nothing for `isPro`, otherwise a small caption ("3 listings remaining" / "10 / 10 used"). Banner placement at the top of the form per PRO_AUDIT.md §6.2 secondary.
+- **Own-profile hero banner** (PRO_AUDIT.md §6.2 primary) reads `useIsPro()` only — no count needed. Renders a pressable card under the existing `heroActions` row at [profile.tsx:444-471](src/app/(protected)/(tabs)/profile.tsx#L444) when `!isPro`. The press handler is the same placeholder Alert as H.3's cap-modal Upgrade button — H.5 unifies the two into a single shared `useUpgradeFlow()` hook that does the deep link.
+- **Sell-flow header banner** (PRO_AUDIT.md §6.2 secondary) reads `useListingCap()` and shows "Pro: unlimited listings + reduced fees" when `!isPro`, with the same Upgrade-CTA shape.
+- **Visual ProBadge sites** (`SellerPill`, `SellerMiniCard`, `FollowerRow`, `CommentItem`, `profile.tsx`) already read the `is_pro` field — no H.4 work there. They will start showing the badge automatically once the H.2 trigger flips a seller's `is_pro` to `true`.
+
+### H.5 handoff (deep link)
+
+H.5 wires the actual `expo-web-browser.openBrowserAsync(...)` call. Two integration points to update at H.5 time:
+
+1. The cap-modal "Upgrade to Pro" `onPress` in [newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) — replace the inner placeholder `Alert.alert(t('common.comingSoonTitle'), …)` with the deep-link call.
+2. Whatever H.4 ships for the profile banner / sell-flow banner Upgrade buttons — same swap.
+
+The deep link's URL shape is pending H.6 (`pro.<domain>/upgrade?session=<short-lived-jwt>` per PRO_AUDIT.md §8.4 option A). H.5 also ships the new `issue-web-session` Edge Function that mints the short-lived token. For now, every Upgrade affordance routes through the same coming-soon Alert — refactor to a single `useUpgradeFlow()` hook at H.5 time so the swap is one edit.
+
+### Reversion
+
+```
+git revert <H.3 commit>
+```
+
+This unwinds all seven modifications and removes the six new files. The H.2 schema and trigger are unaffected (untouched in H.3). After revert, also run `npm run gen:types` ONLY if you intend to drop the `subscriptions` table — H.3 itself does not regenerate types, so the `Database['public']['Tables']['subscriptions']` shape stays valid even with H.3 code gone.
+
+If only the cap-enforcement is unwanted (keeping the hooks for telemetry / banners), the surgical revert is to delete just the cap-check block in [services/sell.ts:94-125](src/features/marketplace/services/sell.ts#L94) and remove the `ListingCapReachedError` branch in [newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) — the hooks themselves are read-only and have no side effects.
+
+---
+
+## Step H.4 Changelog (2026-05-04) — Strategic Pro CTA Placements
+
+JS-only step. Three Pro upsell affordances render proactively for non-Pro users: a sell-flow cap reminder banner, a profile-screen pitch banner, and an own-listing checkout-gate swap on the product action rail. All three CTAs route through a single `useUpgradeFlow()` hook (H.5's one-file edit point). Per-banner 24h dismissal cooldown via a persisted Zustand store. Three new files, four modifications, two locale extensions. Zero new dependencies.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) §6 (CTA placement strategy — primary: own profile; secondary: sell flow + own-listing checkout gate). Phase H.3 hooks (`useIsPro`, `useListingCap`) are the data foundation; H.4 is purely the surface layer on top.
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **`newPost.tsx` mount point.** [src/app/(protected)/(tabs)/newPost.tsx:367-374](src/app/(protected)/(tabs)/newPost.tsx#L367) — the `<ScrollView>`'s first child is a `<View>` with the title/subtitle pair. The banner mounts as a sibling immediately above this header view, inside the same ScrollView. The `styles.scrollContent` already provides `gap: spacing.xl` so the banner inherits clean vertical rhythm without extra margin.
+- **`profile.tsx` mount point.** [src/app/(protected)/(tabs)/profile.tsx:516](src/app/(protected)/(tabs)/profile.tsx#L516) — between the hero card (closes around line 514) and the listings section (`{isAuthenticated ? (<View style={styles.section}> …`). Banner mounts as a sibling at the same level — neither inside the hero `<Surface>` nor inside the listings `<View style={styles.section}>` — so it picks up the parent ScrollView's `gap: spacing.xxl` rhythm.
+- **`ProductActionRail.tsx` shape.** [src/features/marketplace/components/ProductActionRail.tsx:36](src/features/marketplace/components/ProductActionRail.tsx#L36) — the existing `isPro = product.seller.isPro` is the *seller's* Pro state, not the viewer's. The two are equal only when the viewer IS the seller (own listing). H.4 introduces a separate `isOwnListing` derived from `mySellerQuery.data?.id === product.seller.id` to distinguish.
+- **`currentSellerId` source.** [src/features/marketplace/hooks/useMySeller.ts:6](src/features/marketplace/hooks/useMySeller.ts#L6) — `useMySeller(enabled)` returns `SellerProfile | null` with `.id`. Reading `useAuthStore((s) => s.isAuthenticated)` inline gives the action-rail the gate it needs without threading the boolean through props.
+- **UI primitives surveyed.** [src/components/ui/Surface.tsx](src/components/ui/Surface.tsx), [src/components/ui/Chip.tsx](src/components/ui/Chip.tsx), [src/components/ui/IconButton.tsx](src/components/ui/IconButton.tsx) — the Surface + Chip combo covers the banner shape; `IconButton` (circular + label below) is the rail's column primitive — H.4 keeps the same shape and only swaps icon/label/onPress for the own-non-Pro case so the rail's vertical rhythm is preserved exactly.
+- **Theme tokens.** [src/theme/index.ts:38-42](src/theme/index.ts#L38) — `colors.feedback.warning = '#FBBF24'` is the natural urgent-amber, but `colors.brand` (the coral `#FF5A5C`) reads as more "upgrade" than "warning" so the urgent emphasis uses brand-coral border + filled brand CTA rather than the amber. Keeps the upsell positive-toned even when escalating.
+- **Persistence pattern.** [src/stores/useMarketplaceFilters.ts:30-42](src/stores/useMarketplaceFilters.ts#L30) and [src/stores/useDisplayCurrency.ts](src/stores/useDisplayCurrency.ts) both use `persist(...) + createJSONStorage(() => AsyncStorage)`. H.4's `useDismissedBanners` matches this byte-for-byte with storage key `dismissed-banners-v1`.
+
+### Files added (3)
+
+| Path | Purpose |
+| --- | --- |
+| [src/hooks/useUpgradeFlow.ts](src/hooks/useUpgradeFlow.ts) | Returns a stable `() => void` that fires the "coming soon" Alert. **Single integration point for H.5** — replacing the body with `WebBrowser.openBrowserAsync(getUpgradeUrl(...))` is the entire H.5 diff for this hook. |
+| [src/stores/useDismissedBanners.ts](src/stores/useDismissedBanners.ts) | Zustand + persist store with `dismissals: Partial<Record<BannerKey, number>>`, `dismiss(key)`, `isDismissed(key)`. 24h cooldown via `Date.now() - ts < DISMISSAL_COOLDOWN_MS`. Per-banner-key (not global). Storage key `dismissed-banners-v1` (versioned for future state-shape migration). |
+| [src/components/marketplace/ProUpgradeBanner.tsx](src/components/marketplace/ProUpgradeBanner.tsx) | Reusable banner: `Surface (variant=surfaceElevated)` + leading sparkle icon + title/body column + optional close button + Chip CTA on its own row. `emphasis: 'soft' \| 'urgent'` controls border (default vs `colors.brand` 1.5px) and CTA variant (`outlined` vs `filled`). |
+
+### Files modified (4 source + 2 locales + 1 changelog)
+
+| Path | Change |
+| --- | --- |
+| [src/app/(protected)/(tabs)/newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) | (1) Three new imports: `useListingCap`, `ProUpgradeBanner`, `useDismissedBanners`, `useUpgradeFlow`. (2) New banner-state derivation block: `cap`, `capDismissed`, `dismissBanner`, `openUpgradeFlow`, `showSellFlowBanner`, `sellFlowBannerEmphasis`. (3) Mount the banner as the first child of the ScrollView, above the header `<View>`. Hidden in edit mode (`!isEdit`) — the cap only applies to creates. |
+| [src/app/(protected)/(tabs)/profile.tsx](src/app/(protected)/(tabs)/profile.tsx) | (1) Four new imports: `useIsPro`, `ProUpgradeBanner`, `useDismissedBanners`, `useUpgradeFlow`. (2) New banner-state block: `isPro`, `profilePitchDismissed`, `dismissBanner`, `openUpgradeFlow`, `showProfilePitch`. (3) Mount the banner between the hero card and the listings section. Always 'soft' emphasis. |
+| [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) | (1) Five new imports: `useMySeller`, `useAuthStore`, `useDismissedBanners`, `useUpgradeFlow`. (2) Derive `isOwnListing`, `checkoutGateDismissed`, `showCheckoutGate`. (3) Existing `buyLabel` / `buyIconName` two-way ternary → three-way: `showCheckoutGate ? 'Activate' + sparkles : isPro ? 'Buy' + bag : 'Contact' + chat`. (4) New `onPressLeading` routes to `openUpgradeFlow` for the gate, otherwise `onPressBuy` (unchanged). The IconButton itself keeps `variant="filled" size="lg"` so the rail's column rhythm is preserved exactly. |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | (1) `common.dismiss = "Dismiss"`. (2) New top-level `pro` namespace with 9 keys: `sellFlowBannerTitle` (with `{{used}}` / `{{cap}}` interpolation), `sellFlowBannerBody`, `profileBannerTitle`, `profileBannerBody`, `checkoutGateLabel`, `checkoutGateAriaLabel`, `upgradeCta`, `upgradeComingSoonTitle`, `upgradeComingSoonBody`. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Mirror with French copy. |
+
+### Banner visibility logic
+
+All three banners share the same gate shape: **non-Pro AND not dismissed in the last 24h**, plus surface-specific gates:
+
+| Banner | Surface gate | Pro gate | Cooldown gate |
+| --- | --- | --- | --- |
+| Sell flow (`sell-flow-cap`) | `!isEdit && !cap.loading` | `!cap.isPro` | `!isDismissed('sell-flow-cap')` |
+| Profile pitch (`profile-pro-pitch`) | `isAuthenticated` | `!isPro` | `!isDismissed('profile-pro-pitch')` |
+| Checkout gate (`checkout-gate`) | `isOwnListing` | `!product.seller.isPro` | `!isDismissed('checkout-gate')` (reserved; no UI dismiss in v1 — see §below) |
+
+**Cross-banner invariant.** Pro sellers see ZERO upsell banners across the entire app — the `!isPro` (or `!product.seller.isPro` on own listings, which is the same person) check is part of every gate.
+
+### Urgent vs soft emphasis decision
+
+The sell-flow banner is the only surface that escalates: when `cap.remaining <= 2` (i.e., 8 or 9 of 10 listings used), the banner flips from `'soft'` to `'urgent'` emphasis. Visually:
+
+| Emphasis | Surface border | CTA chip | Leading icon |
+| --- | --- | --- | --- |
+| soft | `colors.borderStrong` (default `surfaceElevated` border) | `Chip variant="outlined"` | `sparkles-outline` (subtle) |
+| urgent | `colors.brand`, 1.5px | `Chip variant="filled"` (coral) | `sparkles` (filled, brand color) |
+
+Rationale: catches the user *before* they hit the wall. Hitting the wall surfaces the H.3 cap-modal Alert (also CTA-bearing), so the urgent banner is the predictive heads-up that lets the upgrade decision happen *before* the friction moment.
+
+The profile pitch is **always soft** — passive pitch, no urgency trigger. The action-rail checkout-gate has no emphasis flag (it's an icon-button swap, not a Surface), but its visual treatment is the existing `IconButton variant="filled"` (already brand-colored), so it has implicit "always-active" emphasis.
+
+### Action-rail checkout-gate decision: shipped
+
+The H.4 spec gave an opt-out: "if the layout gets awkward, STOP and surface — defer to H.13." H.4 ships the swap because the visual integration is clean — the `IconButton` keeps the same circular `variant="filled" size="lg"` shape, only the icon (`sparkles` instead of `bag-handle` / `chatbubble-ellipses`) and label (`'Activer'` instead of `'Buy'` / `'Contact'`) change. The rail's vertical column rhythm is preserved exactly.
+
+**Trade-off accepted: no inline dismiss affordance.** Adding an X mark on a circular icon button would crowd the rail's tight column visually. The 'checkout-gate' key exists in `useDismissedBanners` but no UI in v1 writes to it. Two consequences:
+
+1. The own-non-Pro user always sees the "Activate" button on their own listing, every time. They cannot opt out from the rail itself.
+2. They CAN dismiss the *profile pitch* banner (which shows on the same screen flow) — that takes care of the "stop nagging me" use case at a different surface.
+
+If user feedback indicates the action-rail swap feels nag-y, H.13 can add a long-press → dismiss affordance, or an X in the IconButton's container slot, both of which would consume the existing `'checkout-gate'` key.
+
+### Race-condition / edge cases
+
+- **Edit mode.** The sell-flow banner is hidden when `isEdit` is true. The cap only applies to *new* listings; editing an existing one is unconstrained, so an upsell on the edit path would be misleading.
+- **Loading state.** Every banner gates on the underlying query's loading flag (`cap.loading` for sell flow; `mySellerQuery.data?.id` truthiness for the action rail). Avoids flash-of-banner-then-disappear when a Pro user opens a screen and the seller row is still in flight.
+- **Unauth.** The profile screen's `isAuthenticated` gate already covers it; the sell flow's `cap.loading` gate covers it transitively (the underlying `useMyProductsCount` is `enabled: !!sellerId`, so it never resolves for unauth and `loading` stays true). The action rail gates on `mySellerQuery.data?.id` truthiness, which is null for unauth.
+- **Pro flip mid-session.** Webhook fires → trigger flips `is_pro = true` → next `useMySeller` refetch (5min stale or focus-triggered) → all three banners disappear cleanly on the next render.
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0**. No diagnostics.
+- `node -e "JSON.parse(...)"` on both locale files → both parse OK. The new `pro` namespace + the `common.dismiss` addition both serialize cleanly.
+- No new dependencies. `package.json` untouched.
+- Repo state on completion: 9 untracked new files (3 from H.4 + the 6 from H.3 still untracked) + 10 modified files (3 from H.4 over the 7 from H.3).
+- Manual sanity (deferred to user, requires authed session against an H.2-applied database):
+  - Open sell flow as non-Pro with 0 listings → soft banner: "0/10 listings used". Tap CTA → "Coming soon" alert. Tap close X → banner gone for 24h.
+  - Reach 9 listings → banner flips to urgent: brand border, filled coral CTA.
+  - Open own profile as non-Pro → soft "Become a Pro seller" banner above listings section. Dismiss → gone for 24h, independent of the sell-flow banner's dismiss state.
+  - Open own listing in the feed → action rail's leading button shows sparkles + "Activer". Tap → "Coming soon" alert. (Existing Like/Comment/Share/More unchanged.)
+  - Open someone else's Pro listing → existing "Acheter" + bag, routes to checkout. Open someone else's non-Pro listing → existing "Contacter" + chat, routes to DM. Both unchanged.
+  - Toggle the user's `is_pro` to `true` via SQL → next focus refetch, all three banners disappear cross-app.
+
+### H.5 handoff
+
+H.5's diff is exactly this file: [src/hooks/useUpgradeFlow.ts](src/hooks/useUpgradeFlow.ts). Replace the `Alert.alert(...)` body with:
+
+```ts
+import * as WebBrowser from 'expo-web-browser';
+import { getUpgradeUrl } from '@/lib/proUpgradeUrl'; // new in H.5
+
+export function useUpgradeFlow(): () => void {
+  return useCallback(async () => {
+    const url = await getUpgradeUrl();
+    await WebBrowser.openBrowserAsync(url);
+  }, []);
+}
+```
+
+Where `getUpgradeUrl()` reads the user's seller_id (via `useMySeller` or directly via Supabase) and resolves to the brand domain (pending PRO_AUDIT.md §10 brand-name + domain decision; H.6 blocker). H.5 also ships the new `issue-web-session` Edge Function per PRO_AUDIT.md §8.4 option A so the deep-link arrives at the web side already-authed.
+
+The H.3 cap-modal "Upgrade to Pro" alert path in [newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx)'s onError still hardcodes a sub-Alert; H.5 should also refactor that to call `openUpgradeFlow` so all upgrade entry points share the single hook.
+
+### Reversion
+
+```
+git revert <H.4 commit>
+```
+
+Removes the three new files + reverts the four source modifications + the two locale extensions. The H.3 hooks and schema underneath stay intact — H.4 is a pure UI layer over them. No DB rollback needed; no type regen needed.
+
+If only specific banners should be removed (e.g., keep the profile pitch but drop the action-rail swap), the surgical edits are independent — each banner's mount block can be individually deleted without affecting the others.
+
+---
+
+## Step H.5 Changelog (2026-05-04) — Web Upgrade Deep Link with Auto-Auth
+
+JS + Edge Function step. Promotes H.4's `useUpgradeFlow()` placeholder into a real flow that mints a Supabase magic-link via a new `issue-web-session` Edge Function and opens it in an in-app browser, landing the user on the web upgrade page already-authenticated. Plus a `WEB_BASE_URL` constant module (single source of truth for the Vercel URL) and a one-line consolidation that routes the H.3 cap-modal "Upgrade to Pro" button through the same hook. Two new files (Edge Function + constants), three modifications (hook rewrite, cap-modal consolidation, locale files dropping 3 deprecated keys + adding 2 new). Zero new dependencies — `expo-web-browser ~15.0.11` was already installed.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) §8.4 option A (magic-link auth bridge over cookie / Universal Link); §10 open-question 14 (web-routed Stripe over IAP for v1) is pre-decided in the H.4 / H.5 scope.
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **`useUpgradeFlow` H.4 shape.** [src/hooks/useUpgradeFlow.ts](src/hooks/useUpgradeFlow.ts) returned `() => void` and rendered an `Alert.alert(t('pro.upgradeComingSoonTitle'), t('pro.upgradeComingSoonBody'))`. H.5 changes the return type to `() => Promise<void>` — assignable to React Native's `onPress: () => void` (TypeScript discards the promised value), so the H.4 banner / H.3 cap-modal call sites need no shape changes.
+- **Existing Edge Function pattern.** [supabase/functions/send-push-notification/index.ts:1-71](supabase/functions/send-push-notification/index.ts) and [supabase/functions/create-checkout-session/index.ts:1-95](supabase/functions/create-checkout-session/index.ts) both follow:
+  - `// deno-lint-ignore-file` header
+  - `import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'` (esm.sh, NOT jsr — the H.5 spec defaulted to jsr but the project convention is esm.sh)
+  - Module-level admin client created from `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` env vars
+  - Plain-string responses for 4xx (`'Unauthorized'`, `'Method Not Allowed'`), JSON for 5xx with `{ error: (err as Error).message }`
+  - Auth check: `Authorization: Bearer <jwt>` → `supabase.auth.getUser(jwt)` → reject if `!user`
+  - `corsHeaders` constant exactly identical across functions
+  H.5's new function matches verbatim.
+- **`expo-web-browser` confirmed.** `package.json:52` declares `~15.0.11`. [src/features/marketplace/components/ProductDetailSheet.tsx:21,145](src/features/marketplace/components/ProductDetailSheet.tsx#L145) already uses `WebBrowser.openBrowserAsync(url)` for the existing Pro-checkout path. No new dependency.
+- **H.3 cap-modal location.** [src/app/(protected)/(tabs)/newPost.tsx:336-341](src/app/(protected)/(tabs)/newPost.tsx#L336) — the "Upgrade to Pro" button's `onPress` rendered a placeholder `Alert.alert(t('common.comingSoonTitle'), t('sell.upgradeFlowComingSoonBody'))`. H.5 replaces the function body with `openUpgradeFlow` (already imported in this file by H.4 for the sell-flow banner), no additional imports required.
+- **Deprecated key audit.** Grep across `src/` confirms three keys are referenced ONLY by the placeholder paths H.5 rewrites: `pro.upgradeComingSoonTitle`, `pro.upgradeComingSoonBody`, `sell.upgradeFlowComingSoonBody`. Safe to delete cleanly per the H.5 spec.
+
+### Files added (2)
+
+| Path | Purpose |
+| --- | --- |
+| [src/lib/web/constants.ts](src/lib/web/constants.ts) | Two exports: `WEB_BASE_URL = 'https://mony.vercel.app'` and `WEB_UPGRADE_PATH = '/upgrade'`. Single source of truth — the Edge Function reads its companion `WEB_BASE_URL` from a Supabase secret, kept in lockstep with this constant. Brand-name + final-domain decision (PRO_AUDIT.md §10) is a one-line edit here when known. |
+| [supabase/functions/issue-web-session/index.ts](supabase/functions/issue-web-session/index.ts) | Deno Edge Function. POST with `Authorization: Bearer <jwt>` → verify caller via `supabase.auth.getUser(jwt)` → `supabase.auth.admin.generateLink({ type: 'magiclink', email: user.email, options: { redirectTo } })` → return `{ url: action_link }`. Whitelist: `redirect_to` must start with `/` (prevents off-domain redirect injection). Falls back to `https://mony.vercel.app` if the `WEB_BASE_URL` secret is unset (defense in depth — local dev shouldn't break). |
+
+### Files modified (3 source + 2 locales)
+
+| Path | Change |
+| --- | --- |
+| [src/hooks/useUpgradeFlow.ts](src/hooks/useUpgradeFlow.ts) | Full body rewrite. Imports `WebBrowser`, `supabase`, `WEB_BASE_URL`, `WEB_UPGRADE_PATH`. Adds `useRef` reentrancy flag. Flow: invoke Edge Function → pick minted URL or soft-fallback to bare URL → `openBrowserAsync(url, { presentationStyle: PAGE_SHEET })`. Hard-fail catch surfaces `pro.upgradeError*` Alert. Return type `() => Promise<void>` (assignable to `onPress: () => void`). |
+| [src/app/(protected)/(tabs)/newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) | Cap-modal "Upgrade to Pro" button's `onPress` collapsed from a 4-line placeholder Alert to `onPress: openUpgradeFlow`. The `openUpgradeFlow` constant was already in scope (imported + assigned by H.4 for the sell-flow banner) so no new imports. |
+| [src/i18n/locales/en.json](src/i18n/locales/en.json) | (1) Removed `sell.upgradeFlowComingSoonBody`. (2) Replaced `pro.upgradeComingSoonTitle` / `pro.upgradeComingSoonBody` with `pro.upgradeErrorTitle` / `pro.upgradeErrorBody`. |
+| [src/i18n/locales/fr.json](src/i18n/locales/fr.json) | Mirror with French copy. |
+
+### Soft-fallback behavior
+
+The hook's URL resolution intentionally treats Edge Function failure as recoverable, not fatal:
+
+```text
+Edge Function success → urlToOpen = data.url               (magic link, auto-auth)
+Edge Function error   → urlToOpen = WEB_BASE_URL + PATH    (bare URL, web prompts for login)
+WebBrowser throws     → Alert(pro.upgradeError*)           (hard fail, user can retry)
+```
+
+Three motivating cases for the soft fallback:
+
+1. **Function not deployed yet.** During dev / between H.5 mobile work and `supabase functions deploy issue-web-session`, the function returns 404. The fallback opens the bare URL — the user can still complete the upgrade by signing in on web.
+2. **Network blip / Supabase transient error.** Better to land the user on the web (where they're one login away from upgrade) than to surface an error modal that requires a tap to dismiss.
+3. **Misconfigured `WEB_BASE_URL` secret.** If the secret resolves to an unexpected origin, the magic-link redirect would fail allowlist checks. The fallback to the constant-defined URL still routes the user correctly.
+
+The ONLY hard-fail path is `WebBrowser.openBrowserAsync` itself rejecting (rare; usually only when an in-app browser is unavailable on the platform). That's the right time to surface a generic error.
+
+### Cap-modal consolidation
+
+After H.5, every upgrade entry point in the app routes through the **single** `useUpgradeFlow` hook:
+
+| Surface | File | Type | Pre-H.5 | Post-H.5 |
+| --- | --- | --- | --- | --- |
+| Sell-flow banner CTA | [newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) | banner | `useUpgradeFlow` (H.4) | unchanged |
+| Profile pitch banner CTA | [profile.tsx](src/app/(protected)/(tabs)/profile.tsx) | banner | `useUpgradeFlow` (H.4) | unchanged |
+| Action-rail "Activer" pill | [ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) | icon button | `useUpgradeFlow` (H.4) | unchanged |
+| Cap-modal Upgrade button | [newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx) | Alert button | placeholder Alert (H.3) | `useUpgradeFlow` ← **H.5 change** |
+
+When the Vercel URL is finalized (H.6), zero edits to call sites — only [src/lib/web/constants.ts:24](src/lib/web/constants.ts#L24) + the matching `WEB_BASE_URL` Supabase secret.
+
+### Manual setup required (user runs once)
+
+Three steps the user runs explicitly — Claude Code does NOT execute these:
+
+#### 1. Deploy the Edge Function
+
+```bash
+supabase functions deploy issue-web-session
+```
+
+The function inherits `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Supabase's built-in function environment automatically.
+
+#### 2. Set the `WEB_BASE_URL` secret
+
+```bash
+supabase secrets set WEB_BASE_URL=https://mony.vercel.app
+```
+
+(Or whatever URL the Vercel deploy ends up at after H.6. Update both this secret AND `src/lib/web/constants.ts` together.)
+
+#### 3. Allowlist the redirect URL in Supabase Dashboard
+
+**Dashboard → Authentication → URL Configuration → "Additional Redirect URLs":**
+
+Add (one per line):
+```
+https://mony.vercel.app/*
+https://*.vercel.app/*
+```
+
+The wildcard `*.vercel.app` allows preview deploys during dev. For production-only setups, drop the wildcard once the canonical URL is stable. Without this allowlist, `generateLink` succeeds but the magic-link click bounces with "Email link is invalid or has expired".
+
+### Verification
+
+- `npx tsc --noEmit` → **exit 0**. No diagnostics. The new `() => Promise<void>` return type assigns cleanly to every existing `onPress` consumer.
+- `node -e "JSON.parse(...)"` on both locale files → both parse OK after the 3-key removal + 2-key addition.
+- `grep -rn "upgradeComingSoon\|upgradeFlowComingSoon" src/` → **0 matches**. All deprecated keys are unreferenced; the deletion is clean.
+- No new dependencies. `package.json` untouched.
+- Repo state on completion: 11 untracked new files (2 from H.5 + 9 carry-overs from H.3 / H.4) + 10 modified files (matching H.4 surface plus the H.5 hook rewrite shows untracked since H.4 introduced it).
+- **Manual / runtime verification (deferred to user, requires Manual Setup steps above):**
+  - Tap any upgrade CTA on a non-Pro account → ~500ms in-app browser load → redirect to Vercel.
+  - Until H.6 deploys, the Vercel response is **404** — that's expected and confirms the routing works. The auth flow itself is working (verifiable via Supabase Dashboard → Logs → Auth, which shows the magic-link issue + token exchange events).
+  - To verify soft fallback: temporarily revoke the function's deploy (`supabase functions delete issue-web-session`) → tap an upgrade CTA → opens bare `mony.vercel.app/upgrade` (still 404 today, but via the fallback path).
+  - To verify reentrancy: rapid-tap a CTA 5x → exactly one in-app browser opens, exactly one Edge Function invocation in logs.
+
+### H.6 handoff
+
+Mobile-side Phase H is complete. The next major piece is the web codebase, which lives in a separate repo per PRO_AUDIT.md §8.5.
+
+Concrete H.6 work, in dependency order:
+
+1. **Scaffold a Next.js 14+ App Router project at the chosen Vercel URL.** Until brand-name + custom-domain decisions land (PRO_AUDIT.md §10), the Vercel default URL (`mony.vercel.app` or alternative if taken) is the working address. Update [src/lib/web/constants.ts:24](src/lib/web/constants.ts#L24) AND the `WEB_BASE_URL` Supabase secret if the URL ends up different.
+2. **`/auth/callback` route.** Receives the magic-link redirect; uses `@supabase/ssr` to exchange the link for a cookie session. Standard Supabase template — see [their Next.js auth docs](https://supabase.com/docs/guides/auth/server-side/nextjs).
+3. **`/upgrade` page.** Lands the user, shows the Pro tier pricing (PRO_AUDIT.md §10 placeholders €19/mo, €190/yr until user confirms), routes them to Stripe Checkout via a server action / API route handler.
+4. **Stripe Checkout integration.** Server: `app/api/stripe/checkout/route.ts` creates a `mode: 'subscription'` session. Client: redirect to `session.url` (or use `@stripe/stripe-js` `redirectToCheckout`). The server uses STRIPE_SECRET_KEY (Stripe test mode for dev).
+5. **Stripe webhook handler.** `app/api/stripe/webhook/route.ts` verifies signatures, upserts on `subscriptions.stripe_subscription_id`, lets the H.2 trigger sync `is_pro`. Service-role Supabase client only.
+6. **Dashboard + Customer Portal link.** `/dashboard` shows current plan; `app/api/stripe/portal/route.ts` creates a billing portal session. Defer to Stripe-hosted portal — no custom billing UI per PRO_AUDIT.md §8.3.
+
+Single integration point on the mobile side: when the Vercel URL or path changes, edit [src/lib/web/constants.ts](src/lib/web/constants.ts) + the matching `WEB_BASE_URL` Supabase secret. Every other piece of the mobile-side upgrade flow is wired through `useUpgradeFlow` and stays untouched.
+
+### Reversion
+
+Two-part rollback if needed:
+
+```
+git revert <H.5 commit>
+supabase functions delete issue-web-session     # only if function was deployed
+supabase secrets unset WEB_BASE_URL              # only if secret was set
+```
+
+Note: the `git revert` restores `useUpgradeFlow` to its H.4 placeholder shape and the cap-modal to its H.3 placeholder Alert. The 3 deprecated i18n keys come back automatically with the locale-file revert. The Edge Function file vanishes from source control but remains deployed until `supabase functions delete` runs — the deployed function is harmless (ignored by mobile after the revert) but should be cleaned up for hygiene.
+
+The Supabase Dashboard "Additional Redirect URLs" entries are forward-compatible (they don't affect anything until the magic-link feature is in use again) and can be left in place.
+
+---
+
+## Step H.6 Changelog (2026-05-04) — Mony Web Codebase Scaffold
+
+Greenfield Next.js scaffold for the web companion that hosts the Pro upgrade flow + (future) seller dashboard + admin surface. 18 new files under `/web/`, two minimal touches to root config (`.gitignore` adds `/web/*` ignores; `tsconfig.json` excludes `web/**` so mobile tsc doesn't pull in Next-runtime files). Zero changes to mobile feature code. After the user runs `npm install` + creates the Vercel project, the H.5 magic-link mobile flow lands on a real authenticated `/upgrade` page on `mony.vercel.app` instead of a Vercel 404.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) §8 (web codebase architecture recommendation: Next.js 14+ App Router, Tailwind, `@supabase/ssr`, Vercel hosting, separate-repo decision relaxed to monorepo `/web/` per user choice). [BRAND.md](BRAND.md) for the design tokens (mobile theme remains the source of truth; web Tailwind config mirrors).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **`/web` directory absence verified** — `ls web` returned "no such file or directory". Clean scaffold, no clobber risk.
+- **Mobile theme captured for porting.** [src/theme/index.ts:12-160](src/theme/index.ts#L12) exports `colors`, `spacing`, `radii`, `typography` (family/weight/size/lineHeight/tracking), `motion`, `elevation`, `zIndex`, `blur`. Every color value transcribed verbatim into [web/tailwind.config.ts](web/tailwind.config.ts) (e.g., `brand: '#FF5A5C'`, `surface: '#0A0A0A'`, `proBadge: '#8B5CF6'`). Spacing + radii scales mirrored to Tailwind's `extend.spacing` / `extend.borderRadius` 1:1. Typography variants (`display`/`title`/`body`/`caption`/`label`) defer to consumer-side Tailwind utility composition for v1 — formal port of `textVariants` is H.7's scope when real copy lands.
+- **Brand naming gap noted, not closed.** [BRAND.md:13](BRAND.md#L13) still says `Name: TBD. Use the placeholder Marketplace …`. The H.6 spec locks the brand to "Mony" per the user decision in conversation, but BRAND.md as the human-readable source-of-truth was deliberately NOT updated in H.6 — that's a separate brand-locking step. The web's `<title>` / `metadata` and the placeholder landing display "Mony" per spec; if the user later edits BRAND.md to match, no re-work needed in `/web`.
+- **Env var conventions confirmed.** Mobile reads `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` ([src/lib/supabase.ts:6-7](src/lib/supabase.ts#L6)). Web uses Next.js's `NEXT_PUBLIC_*` prefix convention with the same anon credentials — both client-safe per Supabase's RLS-gates-everything model. Service role key (NOT exposed in browser) is reserved for the H.5 Edge Function and the future H.12 webhook handler.
+- **Existing root `.gitignore` style.** Simple comment-then-paths blocks ([.gitignore:1-54](.gitignore#L1)); no nested `gitignore_global` or pattern complexity. H.6 appends one block in the same style.
+- **Mobile tsconfig** already excludes `supabase/functions/**` for the same reason H.6 needs `web/**` — Deno-runtime / Next-runtime files have their own type systems and shouldn't be picked up by Expo's tsc. One-line addition to the existing `exclude` array, mirroring the precedent.
+
+### File inventory (18 new + 2 root touches)
+
+#### Configuration (5 files)
+
+| Path | Purpose |
+| --- | --- |
+| [web/package.json](web/package.json) | Next.js 15 + React 19 + Tailwind 3 + `@supabase/ssr` + TypeScript ~5.9.2 (matched to mobile's TS version). Scripts: `dev`, `build`, `start`, `lint`, `type-check`, `gen:types`. |
+| [web/tsconfig.json](web/tsconfig.json) | Strict TS, ES2022 target, bundler module resolution, `@/*` path alias, Next.js plugin. |
+| [web/next.config.ts](web/next.config.ts) | Minimal — `reactStrictMode: true`. Forward-provisioned for H.7+ (image domains, redirects). |
+| [web/postcss.config.mjs](web/postcss.config.mjs) | Standard Tailwind v3 + autoprefixer pipeline. |
+| [web/tailwind.config.ts](web/tailwind.config.ts) | Port of mobile design tokens. Colors / spacing / radii / fonts / sizes mirrored verbatim. `darkMode: 'class'`, with the `dark` class forced on `<html>` (BRAND.md "Mode: Dark-first only"). |
+
+#### Application code (10 files)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/theme.ts](web/src/theme.ts) | Programmatic theme module for non-Tailwind contexts (e.g., Stripe Elements appearance). v1 ships only the color subset; H.7+ extends. |
+| [web/src/app/globals.css](web/src/app/globals.css) | Tailwind directives + dark-only base (color-scheme, body bg/text). |
+| [web/src/app/layout.tsx](web/src/app/layout.tsx) | Root layout. Loads Inter (400/500/600/700) + Fraunces (400/500/600) via `next/font/google` as CSS vars `--font-inter` / `--font-fraunces` consumed by the Tailwind `fontFamily` extension. |
+| [web/src/app/page.tsx](web/src/app/page.tsx) | Public landing — placeholder ("Mony / Coming soon"). Real H.7 work. |
+| [web/src/app/upgrade/page.tsx](web/src/app/upgrade/page.tsx) | Auth-gated placeholder. Redirects to `/` when unauth'd via `getUser()` (NOT `getSession()`). Renders the user's email + "Stripe Checkout shipping soon". |
+| [web/src/app/dashboard/page.tsx](web/src/app/dashboard/page.tsx) | Auth-gated placeholder, symmetric to `/upgrade`. Real H.10 work. |
+| [web/src/app/auth/callback/route.ts](web/src/app/auth/callback/route.ts) | Magic-link handler — `verifyOtp({ token_hash, type })` → session cookie via `@supabase/ssr` → redirect to `next` (whitelisted to relative paths). |
+| [web/src/app/auth/error/page.tsx](web/src/app/auth/error/page.tsx) | Generic auth-failure landing with a "Back to home" link. Doesn't surface the raw `reason` query param to the visitor. |
+| [web/src/lib/supabase/server.ts](web/src/lib/supabase/server.ts) | Server Supabase client via `createServerClient` with `cookies()` adapter. Used by Server Components, Route Handlers, Server Actions. |
+| [web/src/lib/supabase/client.ts](web/src/lib/supabase/client.ts) | Browser Supabase client via `createBrowserClient`. Forward-provision for H.7+ Client Components. |
+
+#### Middleware + docs (3 files)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/middleware.ts](web/src/middleware.ts) | Session refresh on every non-static request. Calls `supabase.auth.getUser()` for the side-effect cookie rotation. Matcher excludes `_next/static`, `_next/image`, `favicon.ico`, and image asset extensions. |
+| [web/.env.local.example](web/.env.local.example) | Template for `.env.local` (gitignored). Documents `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`. |
+| [web/README.md](web/README.md) | Local dev / build / deploy runbook. Documents the Vercel Root Directory requirement, env var setup, the magic-link auth flow, and the Phase H roadmap on this codebase. |
+
+#### Root touches (2 files)
+
+| Path | Change |
+| --- | --- |
+| [.gitignore](.gitignore) | Appended block: `/web/node_modules/`, `/web/.next/`, `/web/out/`, `/web/.env.local`, `/web/.env*.local`, `/web/.vercel`, `/web/next-env.d.ts`, `/web/*.tsbuildinfo`. Same comment-block style as the existing supabase / Expo / native blocks. |
+| [tsconfig.json](tsconfig.json) | Added `"web/**"` to the existing `exclude` array. Mirror of the precedent set for `supabase/functions/**` — keeps mobile tsc from picking up Next-runtime files that need `/web/node_modules`. |
+
+### Theme port — mobile to Tailwind
+
+Mobile's [theme module](src/theme/index.ts) is the single source of truth on the React Native side. The web codebase's [tailwind.config.ts](web/tailwind.config.ts) mirrors the concrete values (not the JS module) because the two runtimes consume styles differently:
+
+| Mobile (React Native) | Web (Tailwind) |
+| --- | --- |
+| `colors.brand` → inline `style={{ backgroundColor: colors.brand }}` | `bg-brand` utility class |
+| `radii.lg` → `borderRadius: 16` | `rounded-lg` utility |
+| `typography.size.xxxl` → `fontSize: 32` | `text-xxxl` utility |
+| Inter via `expo-font` boot loader | Inter via `next/font/google` + CSS var |
+
+The token names are kept identical so `BRAND.md` reads the same in both contexts. Adding a token requires three edits in lockstep:
+
+1. `src/theme/index.ts` (mobile)
+2. `web/tailwind.config.ts` (web)
+3. `BRAND.md` (human-readable)
+
+### Auth callback flow (end to end)
+
+Magic-link bridging from mobile to web, post-H.6:
+
+```
+[Mobile] User taps "Upgrade to Pro"
+  → useUpgradeFlow() (H.5) calls issue-web-session Edge Function
+  → Function returns { url: <magic-link>?token_hash=…&type=magiclink&redirect_to=/upgrade }
+  → expo-web-browser.openBrowserAsync(url)
+
+[In-app browser]
+  → Loads the magic-link URL directly to mony.vercel.app
+  → Supabase Auth's email-style link redirects to:
+    https://mony.vercel.app/auth/callback?token_hash=…&type=magiclink&next=/upgrade
+  → /auth/callback (route.ts):
+      • Whitelists `next` to relative paths
+      • supabase.auth.verifyOtp({ token_hash, type }) → exchanges for session
+      • @supabase/ssr writes the session cookie
+      • Redirects to /upgrade
+  → /upgrade (Server Component):
+      • supabase.auth.getUser() validates the JWT cryptographically
+      • Renders the placeholder with user.email
+```
+
+### Middleware rationale
+
+Without the middleware, Supabase access tokens (1h default) would silently expire mid-session. The middleware:
+
+1. Runs on every non-static request (matcher excludes `_next/*`, `favicon.ico`, image extensions).
+2. Calls `supabase.auth.getUser()` for its side effect — `@supabase/ssr` transparently rotates near-expiry tokens and writes the new cookies via the `setAll` adapter.
+3. Cookie writes go to BOTH the incoming request (so downstream Server Components see fresh values via `cookies().get(...)`) AND the outgoing response (so the browser persists them).
+
+The middleware is intentionally one-job (refresh) — auth-gating decisions stay at the page level (`getUser() ? content : redirect('/')`). This keeps the auth gate explicit at the consumer rather than implicit in middleware route-matching, which would otherwise scale poorly as the auth surface grows (admin, dashboard, billing portal, etc., each needing different gates).
+
+### Manual setup required (user runs once)
+
+Two parts: local install + Vercel project creation.
+
+#### 1. Install dependencies
+
+```powershell
+cd web
+npm install
+```
+
+The lockfile lives at `web/package-lock.json` (auto-generated on first install). Commit it.
+
+#### 2. Local dev verification (optional but recommended)
+
+```powershell
+cp .env.local.example .env.local
+# Edit .env.local — paste your Supabase project's URL + anon key
+npm run dev
+# Visit http://localhost:3000 — should see "Mony / Coming soon"
+```
+
+#### 3. Vercel project creation
+
+1. Push the repo to GitHub if not already (`git push origin main`).
+2. **Vercel Dashboard → Add New → Project**.
+3. Import the GitHub repo.
+4. **Framework**: Next.js (auto-detected).
+5. **Root Directory**: set to `web`. **This is critical** — without it, Vercel tries to build the Expo app at the repo root and fails.
+6. **Environment Variables** (all environments):
+   - `NEXT_PUBLIC_SUPABASE_URL` = `https://mkofisdyebcnmhgkpqws.supabase.co` (or whatever your project URL is)
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your project's anon (publishable) key from Supabase Dashboard → Settings → API
+7. Click **Deploy**.
+
+#### 4. URL reconciliation
+
+If the Vercel-assigned URL differs from `https://mony.vercel.app` (e.g., the slug is taken):
+
+| Update | Where |
+| --- | --- |
+| `WEB_BASE_URL` constant | [src/lib/web/constants.ts](src/lib/web/constants.ts) (mobile codebase) |
+| `WEB_BASE_URL` Supabase secret | `npx supabase secrets set WEB_BASE_URL=<new-url>` |
+| Site URL | Supabase Dashboard → Authentication → URL Configuration |
+| Additional Redirect URLs | Supabase Dashboard → Authentication → URL Configuration → add `<new-url>/*` |
+
+### Verification
+
+- **Mobile `tsc --noEmit`** → exit 0. The `tsconfig.json` exclusion for `web/**` is the load-bearing change here; without it, mobile tsc fails because /web's imports resolve against /web/node_modules which doesn't exist until the user runs `npm install` in /web.
+- **Mobile codebase byte-identity** outside the two root touches: confirmed via `git status` — no `M` entries under `src/` from H.6 (the existing `M` entries are H.1–H.5 work). The two H.6-only edits are `.gitignore` (append) and `tsconfig.json` (one-line `exclude` extension).
+- **JSON parse**: `web/package.json` and `web/tsconfig.json` both parse cleanly via `JSON.parse`.
+- **File count**: 18 new files under `/web/`, 12 of them TS/TSX.
+- **Manual verification (deferred to user, requires `npm install` + Vercel deploy):**
+  - `cd web && npm install && npm run type-check` → exit 0 (after deps install).
+  - `cd web && npm run build` → produces a clean `.next` directory; this is what Vercel runs.
+  - `cd web && npm run dev` → boots on http://localhost:3000 with the placeholder landing rendering correctly.
+  - End-to-end: tap any "Upgrade to Pro" CTA in the mobile app → in-app browser opens → ~500ms auth bounce → lands on `mony.vercel.app/upgrade` with the user's email displayed and **no double login**, **no Vercel 404**.
+
+### Phase H mobile/web status (post-H.6)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1 | ✓ | Audit (PRO_AUDIT.md) |
+| H.2 | ✓ | `subscriptions` table + trigger |
+| H.3 | ✓ | `useIsPro` / `useListingCap` / cap enforcement |
+| H.4 | ✓ | Three banner placements (sell-flow / profile / action-rail) |
+| H.5 | ✓ | Magic-link Edge Function + `useUpgradeFlow` real flow |
+| **H.6** | **✓ this step** | **Web scaffold + auth bridge + placeholders** |
+| H.7 | next | Real public landing + Stripe Checkout on /upgrade |
+| H.10 | future | Real /dashboard + Customer Portal link |
+| H.11 | future | /admin/subscriptions |
+| H.12 | future | /api/stripe/webhook (writes to subscriptions via service role per H.2) |
+
+Mobile is feature-complete for v1 Pro upsell. The web side is scaffolded; H.7+ builds out the real surfaces.
+
+### H.7 handoff
+
+Three concrete next pieces:
+
+1. **Real public landing.** Replace the H.6 placeholder at [web/src/app/page.tsx](web/src/app/page.tsx) with: hero, pricing card (PRO_AUDIT.md §10 placeholder €19/mo €190/yr until user confirms), feature grid, FAQ, footer. Stays Server Component — no client interactivity needed beyond `<a href="/upgrade">`.
+2. **Stripe Checkout on /upgrade.** Replace [web/src/app/upgrade/page.tsx](web/src/app/upgrade/page.tsx)'s placeholder with a `<form>` that POSTs to a new `app/api/stripe/checkout/route.ts` Route Handler. The handler creates a `mode: 'subscription'` session via the Stripe Node SDK (server-side `STRIPE_SECRET_KEY`, never exposed to browser), returns `{ url }`, the page redirects via `<form action>` or `window.location`. Pin to TEST mode for v1; live-mode flip is a separate H.14.
+3. **`@stripe/stripe-js`** dependency added to `/web/package.json` for the client-side `redirectToCheckout` flow if/when we move beyond the simple `<form action>` redirect.
+
+### H.12 (Stripe webhooks) handoff
+
+Pre-unblocked since H.2's schema landed. Concrete H.12 work:
+
+- Add Route Handler at `/web/src/app/api/stripe/webhook/route.ts`.
+- Verify the request signature with `stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET)`.
+- Switch on `event.type`: `customer.subscription.{created,updated,deleted}`, `invoice.payment_{succeeded,failed}`.
+- Upsert into `public.subscriptions` keyed on `stripe_subscription_id` (the H.2 unique index makes this idempotent).
+- Use a service-role Supabase client (NEW dependency on `SUPABASE_SERVICE_ROLE_KEY` in Vercel env vars — must be set as a non-public env var, not `NEXT_PUBLIC_*`).
+- The H.2 `handle_subscription_change` trigger handles `is_pro` mirror automatically — the webhook handler does NOT touch `sellers.is_pro` directly.
+- Configure the webhook endpoint URL in Stripe Dashboard → Webhooks once H.7 deploys.
+
+### Reversion
+
+```bash
+git revert <H.6 commit>
+```
+
+Removes:
+- All 18 files under `/web/`
+- The `.gitignore` `/web/*` block
+- The `tsconfig.json` `web/**` exclusion (mobile tsc keeps passing because /web is also gone, so there's nothing to pick up)
+
+The Vercel project (if created) requires manual deletion via the Vercel Dashboard → Project Settings → Delete Project. The Supabase Dashboard's Site URL / Redirect URL allowlist entries are forward-compatible — they don't cause any problems with the H.6 revert in place and can be left alone.
+
+If only the scaffold should go but `.gitignore` / `tsconfig.json` keep the changes (e.g., for a clean re-scaffold attempt), the surgical revert is `git rm -r web/` plus `git checkout HEAD -- .gitignore tsconfig.json`. But the simple `git revert` is preferred unless a re-scaffold is imminent.
+

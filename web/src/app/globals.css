@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Global stylesheet — minimal. Most styling happens via Tailwind
+ * utility classes consumed in components. This file pins the
+ * dark-only base (browser color-scheme + body background/text)
+ * so an unstyled fragment never flashes light during hydration.
+ */
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #000000;
+  color: #ffffff;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

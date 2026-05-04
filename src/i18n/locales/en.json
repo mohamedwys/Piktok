@@ -9,7 +9,8 @@
     "search": "Search",
     "openSettings": "Open Settings",
     "comingSoonTitle": "Coming soon",
-    "comingSoonBody": "This feature is coming soon."
+    "comingSoonBody": "This feature is coming soon.",
+    "dismiss": "Dismiss"
   },
   "auth": {
     "signInRequired": {
@@ -290,7 +291,10 @@
     "useMyLocation": "Use my location",
     "setMyLocation": "Set my location",
     "locationGeocodeFailedTitle": "Listing created",
-    "locationGeocodeFailedBody": "Location not found — your listing won't appear in radius searches."
+    "locationGeocodeFailedBody": "Location not found — your listing won't appear in radius searches.",
+    "listingCapReachedTitle": "Limit reached",
+    "listingCapReachedBody": "You've hit the {{cap}}-listing limit. Upgrade to Pro for unlimited listings.",
+    "upgradeToPro": "Upgrade to Pro"
   },
   "orders": {
     "title": "My orders",
@@ -386,5 +390,16 @@
   "feedItem": {
     "showMore": "Show more",
     "showLess": "Show less"
+  },
+  "pro": {
+    "sellFlowBannerTitle": "{{used}}/{{cap}} listings used",
+    "sellFlowBannerBody": "Upgrade to Pro for unlimited listings, lower fees, and a weekly featured boost.",
+    "profileBannerTitle": "Become a Pro seller",
+    "profileBannerBody": "Unlimited listings, lower fees, and featured placement.",
+    "checkoutGateLabel": "Activate",
+    "checkoutGateAriaLabel": "Activate direct checkout — upgrade to Pro",
+    "upgradeCta": "Upgrade to Pro",
+    "upgradeErrorTitle": "Couldn't open upgrade",
+    "upgradeErrorBody": "Please try again in a moment."
   }
 }

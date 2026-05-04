@@ -24,6 +24,10 @@ import { useMyProducts } from '@/features/marketplace/hooks/useMyProducts';
 import { useMyOrders } from '@/features/marketplace/hooks/useMyOrders';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct';
+import { useIsPro } from '@/features/marketplace/hooks/useIsPro';
+import ProUpgradeBanner from '@/components/marketplace/ProUpgradeBanner';
+import { useDismissedBanners } from '@/stores/useDismissedBanners';
+import { useUpgradeFlow } from '@/hooks/useUpgradeFlow';
 import { timeAgo } from '@/features/marketplace/utils/timeAgo';
 import { getLocalized } from '@/i18n/getLocalized';
 import { formatCount } from '@/lib/format';
@@ -198,6 +202,20 @@ export default function ProfileScreen(): React.ReactElement {
 
   const seller = mySellerQuery.data;
   const listingsCount = myProductsQuery.data?.length ?? 0;
+
+  // Phase H.4 — own-profile Pro pitch banner. Always 'soft' emphasis
+  // (no urgency trigger; this is a passive pitch, not a cap warning).
+  // Visibility: authed + non-Pro + not dismissed in the last 24h.
+  // Pro sellers see nothing here — the cross-banner invariant from
+  // PRO_AUDIT.md §6.
+  const isPro = useIsPro();
+  const profilePitchDismissed = useDismissedBanners((s) =>
+    s.isDismissed('profile-pro-pitch'),
+  );
+  const dismissBanner = useDismissedBanners((s) => s.dismiss);
+  const openUpgradeFlow = useUpgradeFlow();
+  const showProfilePitch =
+    isAuthenticated && !isPro && !profilePitchDismissed;
   const displayName =
     seller?.name
     || user?.username
@@ -494,6 +512,17 @@ export default function ProfileScreen(): React.ReactElement {
             </View>
           </View>
         )}
+
+        {showProfilePitch ? (
+          <ProUpgradeBanner
+            title={t('pro.profileBannerTitle')}
+            body={t('pro.profileBannerBody')}
+            ctaLabel={t('pro.upgradeCta')}
+            onPressCta={openUpgradeFlow}
+            onDismiss={() => dismissBanner('profile-pro-pitch')}
+            emphasis="soft"
+          />
+        ) : null}
 
         {isAuthenticated ? (
           <View style={styles.section}>

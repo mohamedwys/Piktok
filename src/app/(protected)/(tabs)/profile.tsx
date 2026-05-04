@@ -29,6 +29,7 @@ import { getLocalized } from '@/i18n/getLocalized';
 import { formatCount } from '@/lib/format';
 import SellerProductCard from '@/features/marketplace/components/SellerProductCard';
 import SellerProductCardSkeleton from '@/features/marketplace/components/SellerProductCardSkeleton';
+import CurrencyPicker from '@/components/profile/CurrencyPicker';
 import {
   Avatar,
   Pressable,
@@ -616,6 +617,8 @@ export default function ProfileScreen(): React.ReactElement {
                 })}
               </View>
             </View>
+            <View style={styles.settingsDivider} />
+            <CurrencyPicker />
           </Surface>
         </View>
 
@@ -864,6 +867,11 @@ const styles = StyleSheet.create({
   // Settings row
   settingsRow: {
     gap: spacing.sm,
+  },
+  settingsDivider: {
+    marginVertical: spacing.md,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
   pillRow: {
     flexDirection: 'row',

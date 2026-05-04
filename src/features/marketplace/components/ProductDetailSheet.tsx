@@ -33,21 +33,12 @@ import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics'
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { getLocalized } from '@/i18n/getLocalized';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
-import type {
-  Product,
-  ProductAttribute,
-} from '@/features/marketplace/types/product';
+import { useFormatDisplayPrice } from '@/hooks/useFormatDisplayPrice';
+import type { ProductAttribute } from '@/features/marketplace/types/product';
 import { colors } from '@/theme';
 
 const SHEET_BG = '#0a0a0a';
 const BOOKMARK_COLOR = '#FFC83D';
-
-function formatPrice(value: number, currency: Product['currency']): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency,
-  }).format(value);
-}
 
 function explainStartConvError(err: Error, t: (k: string) => string): string {
   const msg = err.message ?? '';
@@ -106,6 +97,7 @@ export default function ProductDetailSheet(): React.ReactElement {
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['50%', '90%'], []);
   const { data: product, isLoading, isError } = useProduct(productId);
+  const fmt = useFormatDisplayPrice();
   const { data: engagement } = useUserEngagement();
   const isBookmarked = product
     ? (engagement?.bookmarkedIds.has(product.id) ?? false)
@@ -312,7 +304,7 @@ export default function ProductDetailSheet(): React.ReactElement {
         <View style={styles.body}>
           <View style={styles.priceRow}>
             <Text style={styles.price}>
-              {formatPrice(product.price, product.currency)}
+              {fmt(product.price, product.currency)}
             </Text>
             <Pressable onPress={onPressBookmark} hitSlop={10}>
               <Ionicons

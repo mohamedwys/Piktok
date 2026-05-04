@@ -11,7 +11,16 @@
  *
  * Helpers exposed:
  *   - formatPrice(amount, currency, locale) — currency formatting
- *     ("299,00 €").
+ *     in the given currency ("299,00 €"). Use for transactional
+ *     surfaces where the displayed amount must match the actual
+ *     money flow (order history, share strings, conversation
+ *     offers).
+ *   - formatDisplayPrice(amount, productCurrency, displayCurrency,
+ *     locale, rates) — display-currency conversion with "≈" prefix
+ *     when source ≠ target. Added in Phase H'.2. Use for marketplace
+ *     surfaces where the user's preferred display currency may
+ *     differ from the listing currency. The wallet still settles
+ *     in product currency; this is purely cosmetic.
  *   - formatCount(n, locale) — abbreviated count for tight chips and
  *     headers ("1,2k", "12,3k", "1,2M").
  *   - formatActionCount(n, locale) — full Intl-formatted count for
@@ -20,6 +29,8 @@
  *   - formatDistance(km, locale) — added in Phase G.7 for the Près de
  *     toi rail and any future per-card distance UI.
  */
+
+import { APPROX_PREFIX } from '@/lib/currency/constants'
 
 export function formatPrice(
   amount: number,
@@ -30,6 +41,50 @@ export function formatPrice(
     style: 'currency',
     currency,
   }).format(amount)
+}
+
+/**
+ * Display-currency formatter. The wallet always settles in
+ * `productCurrency`; this returns what the user *sees*.
+ *
+ * Behaviour:
+ *   • Fast path: if `productCurrency === displayCurrency`, defers
+ *     directly to `formatPrice` — no conversion math, no prefix.
+ *     This is the dominant case today (every product is EUR).
+ *   • Convert path: when both rates are present, computes
+ *     `amount * (rates[display] / rates[product])` and prefixes
+ *     the result with "≈ " to flag the approximation.
+ *   • Fallback: if rates are missing or one of the currencies isn't
+ *     covered by the upstream rate provider, displays the original
+ *     amount in `productCurrency` with no prefix. Better to show
+ *     the real listing price than a stale or invented number.
+ */
+export function formatDisplayPrice(
+  amount: number,
+  productCurrency: string,
+  displayCurrency: string,
+  locale = 'fr-FR',
+  rates: Record<string, number> | null = null,
+): string {
+  if (productCurrency === displayCurrency) {
+    return formatPrice(amount, productCurrency, locale)
+  }
+
+  if (
+    !rates ||
+    rates[productCurrency] === undefined ||
+    rates[displayCurrency] === undefined
+  ) {
+    return formatPrice(amount, productCurrency, locale)
+  }
+
+  const productRate = rates[productCurrency] as number
+  const displayRate = rates[displayCurrency] as number
+  if (productRate === 0) {
+    return formatPrice(amount, productCurrency, locale)
+  }
+  const converted = amount * (displayRate / productRate)
+  return APPROX_PREFIX + formatPrice(converted, displayCurrency, locale)
 }
 
 export function formatCount(n: number, locale = 'fr-FR'): string {

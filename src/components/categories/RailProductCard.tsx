@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { GlassCard, Pressable, Text } from '@/components/ui';
 import type { Product } from '@/features/marketplace/types/product';
 import { getLocalized } from '@/i18n/getLocalized';
-import { formatDistance, formatPrice } from '@/lib/format';
+import { formatDistance } from '@/lib/format';
+import { useFormatDisplayPrice } from '@/hooks/useFormatDisplayPrice';
 import { colors, spacing } from '@/theme';
 
 export type RailProductCardProps = {
@@ -26,6 +27,7 @@ export function RailProductCard({
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const title = getLocalized(product.title, lang);
+  const fmt = useFormatDisplayPrice();
   const imageUri = product.media.thumbnailUrl ?? product.media.url;
   const showDistance =
     typeof distanceKm === 'number' && Number.isFinite(distanceKm);
@@ -50,7 +52,7 @@ export function RailProductCard({
             {title}
           </Text>
           <Text variant="caption" color="secondary">
-            {formatPrice(product.price, product.currency)}
+            {fmt(product.price, product.currency)}
           </Text>
           {showDistance ? (
             <View

@@ -72,6 +72,8 @@
     "title": "Profile",
     "settings": "Settings",
     "language": "Language",
+    "currencyLabel": "Currency",
+    "currencyAuto": "Auto",
     "guestHeading": "Welcome",
     "guestSubtitle": "Sign in to personalize your profile, save favorites, and sell your items.",
     "account": "Account",

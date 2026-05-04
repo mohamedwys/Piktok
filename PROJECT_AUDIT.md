@@ -5023,3 +5023,518 @@ Changes:
 Trade-off: tag chips render even when compact rather than getting hidden along with the description. They carry identity (material, color, dimensions, distance) at near-zero visual cost, so demoting them to expanded-only would over-prune. Description and seller mini-card are the bulky bits and stay gated.
 
 Verification: `npx tsc --noEmit` exits 0; `npx expo export --platform ios --dev` bundles clean.
+
+---
+
+## Step H'.2 Changelog (2026-05-04) — Currency Localization Foundation
+
+Foundation step for display-currency localization. Ships the data layer (constants, country-currency map, rate service, two Zustand stores, refresh hook, formatter helper, formatter hook, root-layout mount) without migrating any call site. H'.3 owns the call-site migration and the Settings UI.
+
+Audit reference: [CURRENCY_AUDIT.md](CURRENCY_AUDIT.md). All decisions locked there: device-locale detection via `expo-localization`, free no-key rate API, 12h cache, in-app override UI (deferred to H'.3), display-only conversion (transactions still settle in product currency).
+
+### Reconnaissance findings
+
+- **`expo-localization ~17.0.8`** is already installed ([package.json:43](package.json:43)) and wired ([app.json:74](app.json:74)). Reused the existing `getLocales()` API surface for consistency with [src/i18n/index.ts:13](src/i18n/index.ts:13) — `Localization.getLocales()[0]?.currencyCode` (preferred) and `?.regionCode` (fallback). No deprecated flat properties.
+- **`api.exchangerate.host` now requires an API key** (HTTP 200 with `{"success":false,"error":{"code":101,"type":"missing_access_key"}}`). Per Task 1's escape hatch, switched to **Frankfurter** (free, no key). The `.app` host is unreachable from this environment but `api.frankfurter.dev/v1/latest?base=EUR` works and returns the same shape: `{"amount":1.0,"base":"EUR","date":"2026-04-30","rates":{"USD":1.1702,"GBP":0.86625,...}}`.
+- **Coverage gap to flag:** Frankfurter covers ~30 currencies (USD/GBP/JPY/CHF/CAD/AUD/CNY/INR/most EU minors). It does **not** cover AED, SAR, QAR, KWD, MAD. MENA users selecting one of those Gulf/Maghreb currencies hit the no-rates fallback (display in product currency, no `≈` prefix). Acceptable for v1; revisit if telemetry shows real users in the gap.
+- **Persistence pattern** mirrored verbatim from [src/features/location/stores/useUserLocation.ts:60-180](src/features/location/stores/useUserLocation.ts:60) — `persist` middleware with `version`, `partialize`, `migrate`, defensive `onRehydrateStorage`, AsyncStorage backend. Same shape `useDisplayCurrency` and `useExchangeRates` adopt.
+- **Root layout mount point** at [src/app/_layout.tsx:86](src/app/_layout.tsx:86) — `usePushNotifications()` is already a side-effect hook called inside `RootLayout`. Mounted `useExchangeRatesRefresh()` immediately after it.
+
+### Files created
+
+| File | Purpose |
+|---|---|
+| [src/lib/currency/constants.ts](src/lib/currency/constants.ts) | `CURRENCY_CACHE_TTL_MS` (12h), `CURRENCY_API_URL` (Frankfurter v1), `CURRENCY_RATES_CACHE_KEY`, `CURRENCY_PREFERENCE_KEY`, version constants, `DEFAULT_CURRENCY`, `APPROX_PREFIX`. |
+| [src/lib/currency/country-currency-map.ts](src/lib/currency/country-currency-map.ts) | All 249 ISO 3166-1 alpha-2 codes → ISO 4217 currency. `countryToCurrency(code)` helper with `DEFAULT_CURRENCY` fallback for unknown/null inputs. |
+| [src/lib/currency/exchangeRates.ts](src/lib/currency/exchangeRates.ts) | `fetchExchangeRates()` service, `isStale(snapshot)` predicate, `ExchangeRateSnapshot` type. **Synthesizes `[base]: 1` into the rates map** since Frankfurter omits the base — keeps the formatter's `rates[product] / rates[display]` math uniform across the EUR-product-default case. |
+| [src/stores/useDisplayCurrency.ts](src/stores/useDisplayCurrency.ts) | Zustand+AsyncStorage store. 3-tier auto-detection (`getLocales()[0].currencyCode` → `countryToCurrency(regionCode)` → `DEFAULT_CURRENCY`). `setManual(code)` and `setAuto()` actions. On rehydrate with `source: 'auto'`, re-runs detection so users moving regions pick up the change; `'manual'` rehydrates as-is. Defensive `onRehydrateStorage` resets corrupted state to fresh detection. |
+| [src/stores/useExchangeRates.ts](src/stores/useExchangeRates.ts) | Zustand+AsyncStorage store. `refresh()` and `refreshIfStale()` actions. Persists `snapshot` only (loading/error are runtime). Fail-soft on network errors — keeps last known snapshot. Defensive rehydrate validates the snapshot shape and drops it if corrupted. |
+| [src/hooks/useExchangeRatesRefresh.ts](src/hooks/useExchangeRatesRefresh.ts) | Side-effect hook. On mount: `refreshIfStale()`. Subscribes to `AppState` and re-runs the staleness check on transitions to `'active'`. Returns nothing; mounted once at the root layout. Uses the modern `AppState.addEventListener('change', handler)` API with subscription `.remove()` cleanup. |
+| [src/hooks/useFormatDisplayPrice.ts](src/hooks/useFormatDisplayPrice.ts) | Composition hook. Pulls display currency from `useDisplayCurrency`, rates from `useExchangeRates.snapshot?.rates`, locale from `react-i18next`'s `i18n.language`. Returns a memoized `(amount, productCurrency?) => string` formatter. The single entry point H'.3 call sites will use. |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| [src/lib/format.ts](src/lib/format.ts) | Added `formatDisplayPrice(amount, productCurrency, displayCurrency, locale, rates)` alongside the existing `formatPrice`. Updated the doc block to enumerate all five formatters and clarify when to use `formatPrice` (transactional surfaces — order history, share strings, conversation offers) vs `formatDisplayPrice` (marketplace display surfaces). Existing `formatPrice` signature/behavior unchanged. |
+| [src/app/_layout.tsx](src/app/_layout.tsx) | Imported and mounted `useExchangeRatesRefresh()` next to `usePushNotifications()`. Two-line additive change — no other `_layout.tsx` logic touched. |
+
+### EUR-EUR fast path
+
+`formatDisplayPrice` short-circuits when `productCurrency === displayCurrency`, deferring directly to `formatPrice` with no conversion math, no rate lookups, and no `≈` prefix. Per [CURRENCY_AUDIT.md §2](CURRENCY_AUDIT.md), every product currency is `'EUR'` today, and a French simulator/device auto-detects `'EUR'` as display currency — so this fast path covers ~100% of current real users. The convert path is exercised only after H'.3 ships the override UI and a user actively picks a non-EUR display currency.
+
+### Graceful no-rates fallback
+
+When `rates` is null OR either currency is missing from the rates map (Frankfurter coverage gap, or first launch with no network and empty cache), `formatDisplayPrice` displays the original amount in `productCurrency` with no `≈` prefix. Better to show the real listing price than a stale or invented number. Failure modes that hit this path:
+
+- Cold first launch on an offline device.
+- Display currency outside Frankfurter's ~30-currency coverage (AED, SAR, QAR, KWD, MAD).
+- API outage during a 12h-window refresh attempt (the previous snapshot is kept; this is a fail-soft, not the fallback path — the fallback only kicks in when the snapshot is genuinely missing).
+
+### Verification
+
+- `npx tsc --noEmit` exits 0 (zero TypeScript errors).
+- Zero new npm dependencies. Frankfurter switch reuses the existing `fetch` global; `expo-localization` and `@react-native-async-storage/async-storage` were already installed.
+- Lint check attempted via `npx expo lint`; pre-existing infra issue — `expo lint` auto-installed `eslint`/`eslint-config-expo` as a side-effect on first run, then failed with `Cannot find module 'eslint'`. Reverted those `package.json`/`package-lock.json` edits and the auto-generated `eslint.config.js` per the no-new-deps constraint. The lint infra is broken on this branch independent of H'.2 — separate concern.
+- No app behavior change yet (H'.2 is foundation; no consumer wired up).
+- Manual sanity (deferred to user, runtime):
+  - On launch, `useExchangeRates.getState().snapshot` should populate within ~1–2 s with `{ base: 'EUR', rates: { EUR: 1, USD: 1.17, ...}, fetchedAt: <unix-ms> }` (note `EUR: 1` is synthesized).
+  - `useDisplayCurrency.getState()` returns `{ currency: 'EUR', source: 'auto' }` on a French simulator; should switch to `'AUD'` / `'USD'` etc. when the simulator region changes.
+  - `useFormatDisplayPrice()(299, 'EUR')` returns `"299,00 €"` on EUR-display, `"≈ 350,07 $US"` on USD-display, or just `"299,00 €"` if rates haven't fetched yet.
+
+### H'.3 handoff
+
+H'.3 ships the call-site migration and the override UI. From [CURRENCY_AUDIT.md §1](CURRENCY_AUDIT.md):
+
+**5 call sites to migrate** (display surfaces — swap to `useFormatDisplayPrice()`):
+
+1. [src/components/feed/PriceCard.tsx:50](src/components/feed/PriceCard.tsx:50) — already locale-aware, simple swap.
+2. [src/components/categories/RailProductCard.tsx:53](src/components/categories/RailProductCard.tsx:53) — needs locale plumbing.
+3. [src/features/marketplace/components/PriceCard.tsx:21,63](src/features/marketplace/components/PriceCard.tsx:21) — **delete the local-shadow `formatPrice`** at line 21 as part of the swap.
+4. [src/features/marketplace/components/ProductDetailSheet.tsx:45,315](src/features/marketplace/components/ProductDetailSheet.tsx:45) — **delete the local-shadow `formatPrice`** at line 45 as part of the swap.
+5. [src/features/marketplace/components/SellerProductCard.tsx:44](src/features/marketplace/components/SellerProductCard.tsx:44) — replace inline `Intl.NumberFormat` with the formatter hook.
+
+**4 sites to leave on `formatPrice`** (transactional record semantics — wallet/receipts/messages):
+
+- [src/features/marketplace/components/ProductActionRail.tsx:61](src/features/marketplace/components/ProductActionRail.tsx:61) — share string. Keep product currency.
+- [src/app/(protected)/(tabs)/profile.tsx:60](src/app/(protected)/(tabs)/profile.tsx:60) — order history. Keep product currency (real money charged).
+- [src/app/(protected)/conversation/[id].tsx:168](src/app/(protected)/conversation/[id].tsx:168) — conversation offer. Pre-existing latent bug (hardcoded `'EUR'`); flag for separate fix, **not** H'.3's responsibility.
+- (Plus the lib helper itself — `src/lib/format.ts:formatPrice` stays exported.)
+
+**2 local-shadow `formatPrice` declarations to DELETE** in H'.3 alongside the migration: [src/features/marketplace/components/PriceCard.tsx:21](src/features/marketplace/components/PriceCard.tsx:21) and [src/features/marketplace/components/ProductDetailSheet.tsx:45](src/features/marketplace/components/ProductDetailSheet.tsx:45). Failing to delete them silently bypasses the display formatter on those screens.
+
+**Settings UI to mirror** [src/app/(protected)/(tabs)/profile.tsx:576-620](src/app/(protected)/(tabs)/profile.tsx:576) — the language-pill pattern. Add a sibling row inside the same `<Surface>` (don't open a new card). Recommended pill set:
+
+- `'Auto'` (resets to detected; `setAuto()`)
+- Top currencies derived from `COUNTRY_CURRENCY_MAP`'s most-frequent values: `'EUR'`, `'USD'`, `'GBP'` cover the existing `Currency` union; `'AED'`, `'SAR'`, `'CHF'`, `'CAD'` are sensible v1 additions matching Marqe's growth markets. Keep the list small (≤6 pills) per the language-toggle precedent.
+- New i18n keys to add: `profile.currency`, `profile.currencyAuto`, `profile.currencyAutoHint` (per CURRENCY_AUDIT.md §5).
+
+### Reversion command
+
+```
+git restore --source=HEAD --staged --worktree -- \
+  src/app/_layout.tsx \
+  src/lib/format.ts
+git clean -fd -- \
+  src/lib/currency/ \
+  src/stores/useDisplayCurrency.ts \
+  src/stores/useExchangeRates.ts \
+  src/hooks/useExchangeRatesRefresh.ts \
+  src/hooks/useFormatDisplayPrice.ts
+```
+
+(Then revert the changelog entry from PROJECT_AUDIT.md by hand if rolling all the way back.)
+
+---
+
+## Step H'.2.1 Changelog (2026-05-04) — Rate Source Swap (Frankfurter → jsdelivr currency-api)
+
+Targeted fix on top of H'.2: replace Frankfurter (~30 currencies, no MENA/GCC) with the jsdelivr-hosted fawazahmed0/currency-api (~300 currencies including AED, SAR, QAR, KWD, MAD). H'.2's stores, hooks, formatter, and root-layout mount are unchanged — only the URL constants and the response-shape parser change.
+
+### Why
+
+H'.2's reconnaissance already flagged the gap: a UAE user with display currency `'AED'` would hit the no-rates fallback (display in product currency, no `≈` prefix). The original feature brief specifically called out Dubai → AED as the target case to close. jsdelivr's currency-api is the standard free, key-less, comprehensive coverage choice.
+
+### Reconnaissance findings
+
+- Probed both hosts directly. **Both reachable, identical 6,345-byte payloads** (`diff -q` reports no difference). Date returned: `2026-05-03`.
+- Top-level keys: `["date", "eur"]`. Nested `eur` object holds 300 currency keys.
+- **All previously missing MENA/GCC currencies present** with finite numeric rates (sample, EUR base, 2026-05-03):
+
+| Code | Rate from EUR | Notes |
+|---|---|---|
+| AED | 4.306153 | UAE Dirham — the brief's target case |
+| SAR | 4.396996 | Saudi Riyal |
+| QAR | 4.272149 | Qatari Riyal |
+| KWD | 0.36031 | Kuwaiti Dinar |
+| MAD | 10.847448 | Moroccan Dirham |
+| USD | 1.172539 | sanity check |
+| GBP | 0.862002 | sanity check |
+| JPY | 184.174195 | sanity check |
+| EUR (self) | 1 | provider includes the base; H'.2's `[base]: 1` synthesis is now redundant-but-load-bearing |
+
+### URLs
+
+- **Primary** (jsdelivr CDN):
+  `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json`
+- **Fallback** (Cloudflare Pages mirror):
+  `https://latest.currency-api.pages.dev/v1/currencies/eur.json`
+
+`fetchExchangeRates()` tries the primary first; on any failure (network, non-2xx, malformed JSON), retries the fallback; if both fail, throws the *primary* error for diagnostic clarity. The store's `refresh()` catches and fail-softs by keeping the last cached snapshot — UX-visible behavior unchanged from H'.2.
+
+### Adapter changes
+
+- [src/lib/currency/constants.ts](src/lib/currency/constants.ts) —
+  - `CURRENCY_API_URL` now points to jsdelivr.
+  - **New** `CURRENCY_API_FALLBACK_URL` for the pages.dev mirror.
+  - **New** `CURRENCY_API_BASE_KEY = 'eur'` — lowercase as it appears under the response's base-currency key. The parser uppercases for internal storage.
+  - Doc block rewritten to enumerate the provider history (exchangerate.host → Frankfurter → jsdelivr) and the new response shape.
+  - Other constants (`CURRENCY_CACHE_TTL_MS`, cache keys, version constants, `DEFAULT_CURRENCY`, `APPROX_PREFIX`) unchanged.
+
+- [src/lib/currency/exchangeRates.ts](src/lib/currency/exchangeRates.ts) —
+  - Internal `fetchFromURL(url)` helper that fetches, validates the `eur` object on the response, iterates entries, filters to finite numbers, and uppercases keys before storing.
+  - Public `fetchExchangeRates()` becomes a primary→fallback wrapper around `fetchFromURL`.
+  - `[base]: 1` synthesis preserved (the provider already returns it, but the explicit assignment defends against future shape drift and keeps the EUR-EUR fast path's `rates[productCurrency] !== undefined` guard load-bearing).
+  - Removed the Frankfurter-specific `FrankfurterResponse` shape type; replaced with a generic `CurrencyApiResponse` index-signature type.
+  - Removed the now-unused `DEFAULT_CURRENCY` import (the new code uses `CURRENCY_API_BASE_KEY.toUpperCase()` directly, which is unconditionally `'EUR'`).
+  - `isStale()` unchanged — operates on `ExchangeRateSnapshot`, not on URLs.
+
+### Failover behavior
+
+The two-host CDN failover means a single-host outage (jsdelivr CDN node misconfigured, Cloudflare Pages region routing problem) doesn't break the feature. With both hosts down, the existing fail-soft path keeps the last cached snapshot — until that goes stale, at which point users see product-currency display with no `≈` prefix. Same fallback semantics as H'.2; just less likely to trigger.
+
+### Verification
+
+- `npx tsc --noEmit` exits 0.
+- Zero new npm dependencies (still using the global `fetch`).
+- No dev-only `console.log` shipped — verified the parser logic against the live response payload via a one-shot `node -e` script during reconnaissance, then removed all temp probes.
+- No other H'.2 file modified — `useDisplayCurrency`, `useExchangeRates`, `useExchangeRatesRefresh`, `useFormatDisplayPrice`, `formatDisplayPrice`, and the root-layout mount are untouched.
+
+### Manual sanity (deferred to user, runtime)
+
+After reload + ~1–2 s for the network fetch, the dev console should show:
+
+```js
+useExchangeRates.getState().snapshot.rates['AED']
+// → ~4.30 (was undefined under Frankfurter)
+useExchangeRates.getState().snapshot.rates['SAR']
+// → ~4.40
+useExchangeRates.getState().snapshot.rates['KWD']
+// → ~0.36
+useExchangeRates.getState().snapshot.rates['EUR']
+// → 1 (synthesis preserved)
+useExchangeRates.getState().snapshot.base
+// → 'EUR'
+```
+
+With display currency manually set to `'AED'`:
+
+```js
+useDisplayCurrency.getState().setManual('AED');
+const fmt = useFormatDisplayPrice();   // inside a component
+fmt(299, 'EUR')
+// → "≈ AED 1 287,54" (or similar — depends on the day's rate)
+```
+
+### H'.3 unblock
+
+H'.3 (call-site migration + Settings UI) can now proceed knowing the rate source covers every geography the country→currency map names — including Marqe's stated MENA/GCC growth markets. The recommended pill set in the H'.2 handoff (`Auto`, `EUR`, `USD`, `GBP`, `AED`, `SAR`, `CHF`) is fully supported.
+
+### Reversion
+
+A single revert restores Frankfurter:
+
+```
+git revert <H'.2.1-commit>
+```
+
+Reverts both files atomically. The H'.2 store/hook/formatter scaffolding is unaffected by the revert.
+
+---
+
+## Step H'.3 Changelog (2026-05-04) — Currency Migration + Settings Picker
+
+End-to-end completion of Phase H'. Migrates 5 display call sites to `useFormatDisplayPrice`, deletes the 2 local-shadow `formatPrice` declarations the audit specifically warned about, and adds a 5-pill currency picker to the profile settings card mirroring the language-toggle pattern.
+
+After H'.3: every display surface auto-renders in the user's local currency with the `≈` prefix when converted; the 4 transactional surfaces flagged by [CURRENCY_AUDIT.md §1](CURRENCY_AUDIT.md) keep showing what was actually charged. A Dubai user with display currency set to AED now sees a French (EUR) listing as `"≈ AED 1 287,00"` instead of `"299,00 €"`.
+
+### Reconnaissance
+
+- Re-confirmed the 5 migration sites and 4 transactional sites against [CURRENCY_AUDIT.md §1](CURRENCY_AUDIT.md). All file:line citations matched the audit table.
+- Verified the language-toggle pattern at [src/app/(protected)/(tabs)/profile.tsx:576-619](src/app/(protected)/(tabs)/profile.tsx:576): `<Surface>` containing a single `<View style={styles.settingsRow}>`, label `<Text>`, and a `<View style={styles.pillRow}>` rendering `<Pressable>` pills. Pill styles defined locally (`styles.pill`, `styles.pillActive`, `styles.pillInactive`, `styles.pillText`, `styles.pillTextActive`, `styles.pillTextInactive`, `styles.pillIcon`).
+- Confirmed both local-shadow declarations verbatim:
+  - [src/features/marketplace/components/PriceCard.tsx:21-26](src/features/marketplace/components/PriceCard.tsx:21) — `function formatPrice(value, currency: Product['currency'])` hardcoding `'fr-FR'`.
+  - [src/features/marketplace/components/ProductDetailSheet.tsx:45-50](src/features/marketplace/components/ProductDetailSheet.tsx:45) — identical shape.
+- Verified the `Product` type usage in each file before deleting shadows: `PriceCard.tsx` keeps `Product` for prop types (`Product['currency']`, `Product['stock']`, `Product['shipping']`); `ProductDetailSheet.tsx` no longer needs `Product` after shadow deletion (kept `ProductAttribute` only).
+
+### Migration table
+
+| # | File:Line | Before | After |
+|---|---|---|---|
+| 1 | [src/components/feed/PriceCard.tsx:50](src/components/feed/PriceCard.tsx:50) | `formatPrice(amount, currency, i18n.language)` | `fmt(amount, currency)` (hook supplies locale) |
+| 2 | [src/components/categories/RailProductCard.tsx:53](src/components/categories/RailProductCard.tsx:53) | `formatPrice(product.price, product.currency)` (hardcoded `'fr-FR'`) | `fmt(product.price, product.currency)` |
+| 3 | [src/features/marketplace/components/PriceCard.tsx:63](src/features/marketplace/components/PriceCard.tsx:63) | `formatPrice(price, currency)` via local shadow | `fmt(price, currency)` |
+| 4 | [src/features/marketplace/components/ProductDetailSheet.tsx:315](src/features/marketplace/components/ProductDetailSheet.tsx:315) | `formatPrice(product.price, product.currency)` via local shadow | `fmt(product.price, product.currency)` |
+| 5 | [src/features/marketplace/components/SellerProductCard.tsx:44-47,73](src/features/marketplace/components/SellerProductCard.tsx:44) | inline `Intl.NumberFormat('fr-FR', ...)` → `formatted` variable rendered in `<Text>` | `fmt(product.price, product.currency)` rendered directly |
+
+Each migration is a 3–4 line change: import the hook, declare `const fmt = useFormatDisplayPrice()` alongside other hooks, swap the call. The `formatPrice` and `formatDistance` imports from `@/lib/format` were updated per file (kept where another exported helper is still used; removed entirely from the feed `PriceCard` since it imported only `formatPrice`).
+
+### Deleted shadows
+
+- [src/features/marketplace/components/PriceCard.tsx:21-26](src/features/marketplace/components/PriceCard.tsx:21) — entire local function block removed.
+- [src/features/marketplace/components/ProductDetailSheet.tsx:45-50](src/features/marketplace/components/ProductDetailSheet.tsx:45) — entire local function block removed; also dropped now-unused `Product` from the import (kept `ProductAttribute`).
+
+Post-deletion verification:
+
+```bash
+rg "function formatPrice" src/
+# → src/lib/format.ts:35 only (the canonical)
+
+rg "const formatPrice = " src/
+# → no matches
+
+rg "formatPrice\(" src/
+# → src/lib/format.ts (4 internal uses inside formatDisplayPrice + the
+#                     canonical export)
+# → src/features/marketplace/components/ProductActionRail.tsx:61
+#   (the share string — preserved per audit, transactional semantics)
+```
+
+### Transactional sites preserved (verified untouched)
+
+`git diff --stat HEAD` confirms zero modifications to:
+
+- [src/features/marketplace/components/ProductActionRail.tsx](src/features/marketplace/components/ProductActionRail.tsx) (share string, line 61)
+- [src/app/(protected)/conversation/[id].tsx](src/app/(protected)/conversation/[id].tsx) (offer message, line 168 — latent EUR-hardcode bug, separate concern)
+- [src/lib/format.ts:formatOrderAmount](src/app/(protected)/(tabs)/profile.tsx:60) is inside `profile.tsx` which **was** modified, but only to mount the picker + add a divider style; the inline `formatOrderAmount` at line 60 is unchanged. (verified via the `git diff` excerpt — no lines around the order-amount formatter appear in the diff).
+
+### CurrencyPicker design
+
+[src/components/profile/CurrencyPicker.tsx](src/components/profile/CurrencyPicker.tsx) — new self-contained component, ~145 lines. Renders:
+
+```
+"Devise" / "Currency" label
+[Auto · EUR] [EUR] [USD] [GBP] [AED]    ← horizontal ScrollView
+```
+
+- Pill primitive: mirrors the language-toggle's `<Pressable>` + theme-key styling exactly. Same paddings, same radii, same active/inactive treatment (filled coral active, outlined glass inactive), same checkmark on active. No new pill primitive introduced.
+- Active state logic:
+  - `Auto` pill is active when `source === 'auto'`. Label shows `"Auto · {detectedCurrency}"` so users see what was detected at a glance.
+  - Each currency pill is active when `source === 'manual' && currency === code`.
+  - Tapping `Auto` calls `setAuto()` which re-runs the 3-tier detection inside `useDisplayCurrency` and clears the manual override.
+  - Tapping a currency pill calls `setManual(code)` which sets `source: 'manual'`.
+- Layout: outer `<View>` with `gap: spacing.sm` (label + scroll), inner `<ScrollView horizontal>` with `gap: spacing.xs` between pills. ScrollView (per brief) over flex-wrap (per language toggle) because 5 pills don't fit inline on narrow phones.
+- Currencies in the quick-pick set: `EUR / USD / GBP / AED`. Covers the dominant audiences (EU, transatlantic, Gulf) without ballooning the UI. A "More currencies..." sheet for the remaining ~290 supported codes is v2 polish.
+- Accessibility: each pill has `accessibilityRole="button"` and `accessibilityState={{ selected: isActive }}`.
+
+### Profile screen wire-up
+
+[src/app/(protected)/(tabs)/profile.tsx](src/app/(protected)/(tabs)/profile.tsx) changes:
+
+1. Added `import CurrencyPicker from '@/components/profile/CurrencyPicker'` (line 32).
+2. Inside the existing settings `<Surface>` (line 580+), added a hairline divider then `<CurrencyPicker />` as a sibling row to the language toggle (line 620-621).
+3. Added `settingsDivider` style: `{ marginVertical: spacing.md, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }` (line 871-875). Visual separation between language and currency rows.
+
+The language toggle itself is unchanged — including its `flexWrap: 'wrap'` pillRow, since 2 pills always fit inline.
+
+### i18n keys
+
+Added under `profile.*` in both [src/i18n/locales/fr.json](src/i18n/locales/fr.json) and [src/i18n/locales/en.json](src/i18n/locales/en.json):
+
+- `currencyLabel`: `"Devise"` / `"Currency"`
+- `currencyAuto`: `"Auto"` / `"Auto"` (identical — universal abbreviation)
+
+The currency codes (EUR/USD/GBP/AED) render directly without translation — they're universal ISO 4217 codes.
+
+### Verification
+
+- `npx tsc --noEmit` exits 0.
+- Zero new npm dependencies.
+- Grep confirms exactly one `formatPrice` function declaration repo-wide (the canonical at [src/lib/format.ts:35](src/lib/format.ts:35)).
+- `git diff --stat HEAD` summary: 11 files changed, +295/-31. Matches expectations: 5 migration files + 2 i18n locales + 1 profile.tsx (picker mount) + 1 PROJECT_AUDIT.md (this changelog) + 1 new CurrencyPicker.tsx + 1 lib/format.ts (untouched in H'.3 — just listed because of staged H'.2 changes).
+
+### Manual sanity (deferred to user, runtime)
+
+- Open profile → settings card now shows two rows: Langue (existing) and Devise (new) separated by a hairline.
+- Tap the EUR / USD / GBP / AED pills → pills toggle visually, every price across the app re-renders with the new currency.
+- Tap "Auto · …" pill → reverts to detection. On a French simulator the label updates to "Auto · EUR"; on a UAE simulator it should read "Auto · AED".
+- On the marketplace feed, a French (EUR) seller's listing displays as:
+  - `"299,00 €"` when display = EUR (fast path, no `≈`).
+  - `"≈ AED 1 287,00"` (or similar — depends on day's rate) when display = AED.
+- Order history rows, conversation offer bubbles, and share strings continue to show product currency unchanged — confirming transactional record semantics preserved per audit.
+
+### Phase H' end-to-end summary
+
+| Step | Date | Outcome |
+|---|---|---|
+| H'.1 | 2026-05-04 | Read-only audit. Produced [CURRENCY_AUDIT.md](CURRENCY_AUDIT.md) — 12 sections enumerating call sites, locale-detection plan, persistence pattern reference, edge cases, migration risks. |
+| H'.2 | 2026-05-04 | Foundation. Constants, country-currency map (249 codes), rate service, two Zustand stores, AppState-aware refresh hook, formatter helper, formatter hook, root-layout mount. No call site migration. |
+| H'.2.1 | 2026-05-04 | Provider swap. Frankfurter (~30 currencies, no MENA/GCC) → jsdelivr-hosted fawazahmed0/currency-api (~300 currencies including AED, SAR, QAR, KWD, MAD). Two-host CDN failover for resilience. |
+| H'.3 | 2026-05-04 | Migration + UI. 5 display sites migrated; 2 local shadows deleted; 4 transactional sites preserved; CurrencyPicker added to profile settings card; i18n keys added (FR + EN). |
+
+### Known follow-ups (out of H' scope)
+
+- **Latent EUR-hardcode at [src/app/(protected)/conversation/[id].tsx:168](src/app/(protected)/conversation/[id].tsx:168)** — the offer-message bubble hardcodes `'EUR'` regardless of the conversation's product currency. Pre-existing bug flagged by [CURRENCY_AUDIT.md §1 row 9](CURRENCY_AUDIT.md). Phase F territory (chat/messaging cleanup), not H'.
+- **"More currencies…" sheet** for the remaining ~290 supported codes. v2 polish — defer until telemetry shows users hitting the gap.
+- **Stripe-checkout currency clarity** — the wallet correctly settles in product currency, and the marketplace correctly displays the converted estimate. A small UX hint near the buy CTA ("You'll be charged 299,00 €") could pre-empt user confusion when the converted display estimate differs from the eventual charge. Phase F polish.
+- **Top-N currencies derived from telemetry** — the quick-pick set (EUR/USD/GBP/AED) is a guess. Once telemetry is in place, refine to the actual most-used `setManual` codes.
+- **`'Currency'` Display type widening** — H'.2's `useDisplayCurrency.currency` is `string`, while [src/features/marketplace/types/product.ts:3](src/features/marketplace/types/product.ts:3) defines `Currency = 'EUR' | 'USD' | 'GBP'` as the *product* currency union. They're intentionally different; if H' is ever extended to allow non-EUR product listings (Feature B), the listing/wallet path needs a separate widening — not just relabelling the display union.
+
+### Reversion command
+
+```
+git restore --source=HEAD --staged --worktree -- \
+  src/components/feed/PriceCard.tsx \
+  src/components/categories/RailProductCard.tsx \
+  src/features/marketplace/components/PriceCard.tsx \
+  src/features/marketplace/components/ProductDetailSheet.tsx \
+  src/features/marketplace/components/SellerProductCard.tsx \
+  src/app/\(protected\)/\(tabs\)/profile.tsx \
+  src/i18n/locales/fr.json \
+  src/i18n/locales/en.json
+git clean -fd -- src/components/profile/
+```
+
+(Then revert this changelog entry from PROJECT_AUDIT.md by hand if rolling all the way back. The H'.2 / H'.2.1 foundation is unaffected.)
+
+---
+
+## Step H.2 Changelog (2026-05-04) — Subscriptions Schema + is_pro Sync Trigger
+
+Schema-only step. Adds the `subscriptions` table mirroring Stripe's subscription model, two supplementary indexes, a `SECURITY DEFINER` trigger function maintaining the denormalized `sellers.is_pro` flag, two triggers wiring it (`BEFORE INSERT OR UPDATE` for the is_pro sync + `updated_at` touch, `AFTER DELETE` for defensive cleanup), one RLS policy (own-subscription SELECT), and the table-level `GRANT SELECT` to `authenticated`. No TypeScript / source-code changes. Type regeneration required after apply — H.3 depends on it.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) — recommended schema direction §5 (denormalized `is_pro` synced by trigger; `subscriptions` table mirrors Stripe's enum verbatim; webhook-only writes via service_role).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **C.2 / D.2 trigger pattern is the verbatim template.** [supabase/migrations/20260518_follows_schema_and_counters.sql:158-184](supabase/migrations/20260518_follows_schema_and_counters.sql#L158) (`handle_follow_change()`) and [supabase/migrations/20260520_comments_schema.sql:190-210](supabase/migrations/20260520_comments_schema.sql#L190) (`handle_comment_change()`) both use `language plpgsql` + `security definer` + `set search_path = public, pg_catalog` + `if (TG_OP = 'INSERT') then ... elsif (TG_OP = 'DELETE') then ... return null; end if;` + a `DROP TRIGGER IF EXISTS` guard before each `CREATE TRIGGER`. H.2 mirrors this byte-for-byte, with one shape difference: the new function additionally handles `UPDATE` (since subscription status changes are the dominant case, not deletes) and modifies `NEW.updated_at` — which forces the INSERT/UPDATE trigger to be `BEFORE` (the only timing where a row trigger may return a modified `NEW`).
+- **`sellers.is_pro` confirmed** — `boolean not null default false` declared at [supabase/migrations/20260501_initial_marketplace_schema.sql:26](supabase/migrations/20260501_initial_marketplace_schema.sql#L26); generated type `Database['public']['Tables']['sellers']['Row']['is_pro']: boolean` at [src/types/supabase.ts:451](src/types/supabase.ts#L451). The trigger writes this column; no DDL change to `sellers` is required.
+- **B.1.5 grant constraint reaffirmed.** [supabase/migrations/20260515_tighten_sellers_update_grants.sql:53-64](supabase/migrations/20260515_tighten_sellers_update_grants.sql#L53) keeps `is_pro` (and the dormant `stripe_*` columns) outside the `authenticated` UPDATE allowlist. The trigger's `SECURITY DEFINER` bypasses this by design — same lineage as C.2 / D.2. No edits to B.1.5 are needed and none are made.
+- **`uuid_generate_v4()` vs `gen_random_uuid()`.** Project convention is `uuid_generate_v4()` (uuid-ossp extension enabled at [20260501_initial_marketplace_schema.sql:16](supabase/migrations/20260501_initial_marketplace_schema.sql#L16)). All eight existing tables (`sellers`, `products`, `conversations`, `messages`, `orders`, `push_tokens`, `comments`, `follows`'s composite PK aside) use `uuid_generate_v4()`. H.2 matches.
+- **Migration filename convention.** `YYYYMMDD_description.sql` — latest existing is `20260521_increment_share_count_rpc.sql`. New file is `20260522_subscriptions_schema_and_trigger.sql` (next lexical slot, today's calendar date 2026-05-04 lags behind the lexical sequence by intent — the convention prioritizes apply ordering).
+- **Dormant `stripe_*` columns on `sellers` confirmed untouched.** Per PRO_AUDIT.md §2.4, `stripe_account_id` / `stripe_charges_enabled` / `stripe_payouts_enabled` ([20260511_seller_stripe.sql:1-4](supabase/migrations/20260511_seller_stripe.sql#L1)) are reserved for a future Stripe Connect integration and are out of Phase H scope. H.2 does not reference them.
+
+### Migration
+
+**File:** [supabase/migrations/20260522_subscriptions_schema_and_trigger.sql](supabase/migrations/20260522_subscriptions_schema_and_trigger.sql)
+
+**Schema additions in six steps (all wrapped in a single `BEGIN; ... COMMIT;`):**
+
+| # | Action | Statement |
+| --- | --- | --- |
+| 1 | `subscriptions` table | `create table if not exists public.subscriptions ( id uuid primary key default uuid_generate_v4(), seller_id uuid not null unique references public.sellers(id) on delete cascade, stripe_subscription_id text not null unique, stripe_customer_id text not null, stripe_price_id text not null, status text not null, current_period_start timestamptz, current_period_end timestamptz, cancel_at_period_end boolean not null default false, canceled_at timestamptz, trial_end timestamptz, created_at timestamptz not null default now(), updated_at timestamptz, constraint subscriptions_status_valid check (status in ('active','trialing','past_due','canceled','incomplete','incomplete_expired','unpaid','paused')) );` — `seller_id UNIQUE` enforces 1:1 (one Pro sub per seller); CASCADE on FK composes cleanly with B.4's `delete_my_account` chain. |
+| 2 | Supplementary indexes (2) | `create index if not exists subscriptions_stripe_customer_id_idx on public.subscriptions (stripe_customer_id);` (webhook customer-side lookups) and `create index if not exists subscriptions_status_idx on public.subscriptions (status);` (admin-dashboard scans). The implicit unique indexes on `seller_id` + `stripe_subscription_id` cover the other access patterns. |
+| 3 | Trigger function | `create or replace function public.handle_subscription_change() returns trigger language plpgsql security definer set search_path = public, pg_catalog as $$ ... $$;` — `INSERT/UPDATE` branch: writes `sellers[NEW.seller_id].is_pro` based on `NEW.status IN ('active','trialing')`; on `UPDATE` additionally bumps `NEW.updated_at := now()`. `DELETE` branch: defensively flips `is_pro = false` on `OLD.seller_id`. |
+| 4 | Trigger wiring (2) | `drop trigger if exists subscriptions_change_trigger on public.subscriptions; create trigger subscriptions_change_trigger before insert or update on public.subscriptions for each row execute function public.handle_subscription_change();` — `BEFORE` is required so the function may return a modified `NEW` (touching `updated_at`). Plus `drop trigger if exists subscriptions_delete_trigger on public.subscriptions; create trigger subscriptions_delete_trigger after delete on public.subscriptions for each row execute function public.handle_subscription_change();` — same function, separate `AFTER DELETE` wiring (BEFORE-row triggers cannot return a modified row on DELETE in a useful way). |
+| 5 | RLS policy (1) | `alter table public.subscriptions enable row level security;` then `drop policy if exists "subscriptions_self_select" on public.subscriptions; create policy "subscriptions_self_select" on public.subscriptions for select to authenticated using (seller_id in (select id from public.sellers where user_id = auth.uid()));` — own-subscription SELECT only. **No INSERT/UPDATE/DELETE policies.** Webhooks write via `service_role` which bypasses RLS by design. |
+| 6 | Table-level grant | `grant select on public.subscriptions to authenticated;` — SELECT only. No grant to `anon`, no INSERT/UPDATE/DELETE to anyone. Defense-in-depth: even if a future RLS policy were accidentally added that allowed a write, the missing grant would still block the JS client. |
+
+### Trigger SECURITY DEFINER rationale (cite B.1.5 + C.2 / D.2 lineage)
+
+After B.1.5 ([20260515_tighten_sellers_update_grants.sql](supabase/migrations/20260515_tighten_sellers_update_grants.sql)), the `authenticated` role has no UPDATE grant on `sellers.is_pro` (column-level allowlist excludes it deliberately). For the trigger function to UPDATE that column on every subscription INSERT / UPDATE / DELETE, it must be `SECURITY DEFINER` so it runs with the migration owner's rights instead of the calling user's rights — same justification as the C.2 follows-counter (`handle_follow_change`) and D.2 comments-counter (`handle_comment_change`) triggers. The function additionally pins `set search_path = public, pg_catalog` to defeat the classic SECURITY DEFINER hijack vector — without this, a malicious user could create a `public.sellers` shadow object in their own schema and trick the trigger into resolving it. Both clauses are required; neither is optional.
+
+### is_pro v1 policy — strict
+
+`sellers.is_pro = true` ONLY when `subscriptions.status IN ('active', 'trialing')`. Every other status flips the flag false:
+
+| Status | is_pro | Notes |
+| --- | --- | --- |
+| `active` | true | Normal paying state. |
+| `trialing` | true | Free-trial period (if H.9 enables a trial). |
+| `past_due` | **false** | Stripe is retrying a failed payment. **Strict v1**: Pro access is revoked immediately. If support tickets show this is too aggressive (e.g., 24h grace during normal card-renewal failures), soften by extending the `IN (...)` set or by introducing a `grace_until` column. Not a v1 concern. |
+| `canceled` | false | Subscription has ended. |
+| `incomplete` | false | Initial payment failed and the subscription has not been activated yet. |
+| `incomplete_expired` | false | Initial payment never succeeded; subscription expired before activation. |
+| `unpaid` | false | All retries exhausted. |
+| `paused` | false | Stripe-paused subscription (rare; admin-initiated). |
+
+The `cancel_at_period_end = true` + `status = 'active'` combination keeps `is_pro = true` until the period rolls over and Stripe sends `customer.subscription.deleted` (or moves the row to `canceled`). UI should display "Plan canceled — access until {current_period_end}" in this state — H.10 surface.
+
+### Four-scenario walk-through (informal proof)
+
+| # | Trigger | Initial state | Webhook event | Trigger outcome |
+| --- | --- | --- | --- | --- |
+| **(a)** | `subscriptions_change_trigger` (BEFORE INSERT) | No row exists. | `customer.subscription.created` upserts a row with `status = 'active'`. | `NEW.status = 'active'` → matches `IN ('active','trialing')` → `update sellers set is_pro = true where id = NEW.seller_id`. `updated_at` not touched on INSERT (the explicit branch only fires on UPDATE). Row is then inserted. ProBadge surfaces in mobile clients on next read. |
+| **(b)** | `subscriptions_change_trigger` (BEFORE UPDATE) | Row exists with `status = 'active'`. | `invoice.payment_failed` → handler updates `status = 'past_due'`. | `NEW.status = 'past_due'` → not in the active set → `update sellers set is_pro = false where id = NEW.seller_id`. `NEW.updated_at := now()`. Row's new state is then committed. The mobile client's `useMySeller` query refetches on next focus and sees `isPro = false`. The ProBadge disappears; the action-rail Buy button reverts to "Contact seller" branch ([src/features/marketplace/components/ProductActionRail.tsx:83](src/features/marketplace/components/ProductActionRail.tsx#L83)). |
+| **(c)** | `subscriptions_change_trigger` (BEFORE UPDATE) | Row exists with `status = 'past_due'`. | `invoice.payment_succeeded` after card-recovery → handler updates `status = 'active'`. | `NEW.status = 'active'` → matches active set → `update sellers set is_pro = true where id = NEW.seller_id`. `NEW.updated_at := now()`. Pro state restored. |
+| **(d)** | `subscriptions_delete_trigger` (AFTER DELETE) | Row exists. | Hard `DELETE FROM subscriptions WHERE ...` (rare; Stripe-side normally soft-cancels via status). | `update sellers set is_pro = false where id = OLD.seller_id`. Returns `OLD`. Sellers row is now `is_pro = false`; the deleted subscription row is gone. Defensive: covers the case where a CASCADE from `sellers.delete` (B.4 chain) fires — the AFTER DELETE branch runs against the (already-deleting) seller row, which is a harmless no-op since the seller is going away in the same transaction. |
+
+### Disallowed (out of scope, deliberately deferred)
+
+- **`subscription_events` audit-trail table** (PRO_AUDIT.md §5.3). Adds complexity without v1 value. Phase F or H.13 territory if support ever needs the audit log.
+- **Edits to B.1.5's column-level UPDATE grants on `sellers`.** Trigger's `SECURITY DEFINER` bypasses the grants by design. Adding `is_pro` to the user-writable allowlist would re-open the self-elevation gap that B.1.5 closed.
+- **Touching the dormant `stripe_account_id` / `stripe_charges_enabled` / `stripe_payouts_enabled` columns** ([20260511_seller_stripe.sql:1-4](supabase/migrations/20260511_seller_stripe.sql#L1)). Reserved for a future Stripe Connect integration (marketplace seller payouts). Out of Phase H scope.
+- **An `application_fee_amount` write path** in the existing `create-checkout-session` Edge Function ([supabase/functions/create-checkout-session/index.ts:47-67](supabase/functions/create-checkout-session/index.ts#L47)). The Pro-tier reduced-fee feature (H.13(a)) is downstream of this migration and may or may not require Stripe Connect; deferred either way.
+
+### Composition with B.4's `delete_my_account` RPC
+
+The cascade chain in [20260517_delete_my_account_rpc.sql:11-28](supabase/migrations/20260517_delete_my_account_rpc.sql#L11) gains one new CASCADE-direct path via `subscriptions`:
+
+```
+auth.users → sellers (CASCADE on user_id)
+           → subscriptions (CASCADE on seller_id)   -- NEW
+```
+
+No edit to the B.4 RPC is required. As the cascade unwinds:
+
+1. `delete from auth.users where id = v_user_id` cascades to the deleted user's `sellers` row.
+2. The `sellers` delete cascades to the deleted user's `subscriptions` row.
+3. The `subscriptions_delete_trigger` (AFTER DELETE) fires `handle_subscription_change()`, which tries to flip `is_pro = false` on the (already-deleting) seller row. This is a harmless same-transaction write on a row that's about to vanish.
+
+Stripe-side cleanup is the webhook's job, not this trigger's. When a seller deletes their account, the H.12 webhook handler (or H.13 admin path) should ALSO call `stripe.subscriptions.cancel()` for the seller's sub. The subsequent `customer.subscription.deleted` event arrives at the webhook with no DB-side row to update (the CASCADE already removed it), and the upsert no-ops against the missing FK. Acceptable.
+
+### Production apply
+
+```
+npm run db:status                                                       # confirm 20260522 is pending
+npm run db:push                                                         # applies the migration
+npm run gen:types                                                       # REQUIRED — regenerates src/types/supabase.ts
+git add src/types/supabase.ts && git commit -m "chore(types): generate supabase types after H.2"
+```
+
+Both commands are safe to re-run; the migration is idempotent (`IF NOT EXISTS` / `OR REPLACE` / `DROP IF EXISTS` on every DDL) and `gen:types` overwrites the types file deterministically.
+
+### Type regen — REQUIRED before H.3
+
+Unlike B.1.5 / D.1.5 (grant-only changes do not surface in generated types), this migration adds:
+
+- A new public-schema table → `Database['public']['Tables']['subscriptions']` with `Row`, `Insert`, `Update`, `Relationships` (the FK to `sellers`).
+
+`sellers.is_pro` is unchanged on the wire (still `boolean not null default false`), so the existing `Database['public']['Tables']['sellers']['Row']['is_pro']: boolean` type stays correct — the trigger maintains the underlying column without the type shape moving.
+
+H.3 implements `useMySubscription()` reading from `from('subscriptions').select(...).eq('seller_id', mySellerId).maybeSingle()` and a thin `useIsPro()` reading from `useMySeller().data?.isPro`. Without `gen:types`, `from('subscriptions')` would require an `as never` escape-hatch cast (the same pattern B.4 used for `'delete_my_account' as never` while types were stale). To keep H.3 cleanly typed, run `gen:types` between H.2 apply and H.3 implementation.
+
+### Verification (this step)
+
+- `npx tsc --noEmit` → **exit 0**. No source changes; the migration file is SQL-only.
+- Migration SQL syntactically inspected:
+  - Balanced `BEGIN; ... COMMIT;` (single transaction wrapper).
+  - Every `CREATE` has matching `IF NOT EXISTS` (table, indexes) or `OR REPLACE` (function) or `DROP ... IF EXISTS` + `CREATE` (triggers, policy). Re-running is a no-op.
+  - No `GRANT ... TO anon` or `GRANT ... TO public` anywhere. Only `GRANT SELECT ON public.subscriptions TO authenticated`. **No INSERT/UPDATE/DELETE grants** to any role — webhooks bypass via service_role.
+  - Trigger function is `SECURITY DEFINER` with `SET search_path = public, pg_catalog` — both required, both present.
+  - `CHECK (status IN (...))` enumerates all 8 Stripe statuses verbatim and is named (`subscriptions_status_valid`) so a future drop/replace is unambiguous.
+  - No `INSERT/UPDATE/DELETE` policy on `subscriptions` for `authenticated`. The single SELECT policy `"subscriptions_self_select"` is gated by the `sellers.user_id = auth.uid()` subquery.
+  - The dormant `stripe_*` columns on `sellers` are NOT touched.
+  - The optional `subscription_events` audit-trail table is NOT created (deferred).
+  - Inline rollback SQL block is a complete reverse of the forward migration (revokes grant → drops policy → drops triggers → drops function → drops indexes → drops table) plus a documented manual is_pro restoration note.
+- Local apply is OPTIONAL per Op.1's STOP boundary. The user runs production apply explicitly.
+
+### Reversion
+
+```
+git revert <H.2 commit>
+```
+
+This removes [supabase/migrations/20260522_subscriptions_schema_and_trigger.sql](supabase/migrations/20260522_subscriptions_schema_and_trigger.sql) from source control. **If the migration was already applied to a database, `git revert` does NOT undo applied DDL** — the rollback SQL block at the top of the migration file must be run manually against each environment:
+
+```sql
+begin;
+  revoke select                                       on public.subscriptions from authenticated;
+  drop policy   if exists "subscriptions_self_select" on public.subscriptions;
+  drop trigger  if exists subscriptions_delete_trigger on public.subscriptions;
+  drop trigger  if exists subscriptions_change_trigger on public.subscriptions;
+  drop function if exists public.handle_subscription_change();
+  drop index    if exists public.subscriptions_status_idx;
+  drop index    if exists public.subscriptions_stripe_customer_id_idx;
+  drop table    if exists public.subscriptions;
+commit;
+```
+
+**Note: the rollback above does NOT restore `sellers.is_pro` for any seller whose flag the trigger flipped while this migration was live.** Once the subscriptions table is gone, no future event can flip the flag, but the existing values reflect the trigger's last decision. To wipe Pro state cleanly post-rollback:
+
+```sql
+update public.sellers set is_pro = false where is_pro = true;
+```
+
+Then admins can manually re-flip whoever should legitimately be Pro (which, before H.2 lands, is the seed sellers in the initial migration only). After running, also `npm run gen:types` to remove `Database['public']['Tables']['subscriptions']` from the generated types.
+
+### H.3 handoff
+
+H.3 is unblocked once the migration is applied and types are regenerated. The hooks/services to write next:
+
+- **`useMySubscription()`** — new hook in `src/features/marketplace/hooks/`. Reads `from('subscriptions').select('*').eq('seller_id', mySellerId).maybeSingle()`. Query key: `['marketplace', 'my-subscription']`. Joined with `useMySeller` so `seller_id` is resolved before fetch. Returns `{ status, current_period_end, cancel_at_period_end, ... } | null`. Used by H.10 (web dashboard) and by the H.4 mobile profile hero banner to show plan state.
+- **`useIsPro()`** — thin wrapper over `useMySeller().data?.isPro ?? false`. The trigger maintains the flag on every status change, so the seller-side read is the source of truth at the JS layer. No need to derive from subscription status client-side.
+- **Listing-cap enforcement (H.3 core feature)** — at sell-flow submit time ([src/app/(protected)/(tabs)/newPost.tsx](src/app/(protected)/(tabs)/newPost.tsx)), gate the create mutation by reading `useIsPro()` AND `useMyProducts().data?.length`. If non-Pro AND count >= 10, throw a structured `ListingCapReachedError` and surface a CTA-bearing modal that deep-links to the web upgrade page. The existing `useCreateProduct` mutation in [src/features/marketplace/hooks/useCreateProduct.ts](src/features/marketplace/hooks/useCreateProduct.ts) is the natural integration point.
+- **No UI work in H.3 beyond the cap modal.** The strategic CTA placements (own-profile hero banner, sell-flow header banner) are H.4's scope per PRO_AUDIT.md §6.2.
+- **Webhook side (H.12, web codebase) is pre-unblocked**: the schema is in place for service-role upserts. H.12 imports `createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)`, handles `customer.subscription.{created,updated,deleted}` + `invoice.payment_{succeeded,failed}`, and upserts on `stripe_subscription_id` (the unique index makes this idempotent). The DB trigger then syncs `is_pro` automatically — no client-side `is_pro` write code in the web codebase.
+

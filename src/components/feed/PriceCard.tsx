@@ -8,7 +8,7 @@ import {
   Text,
 } from '@/components/ui'
 import { colors, spacing } from '@/theme'
-import { formatPrice } from '@/lib/format'
+import { useFormatDisplayPrice } from '@/hooks/useFormatDisplayPrice'
 
 export type PriceCardProps = {
   amount: number
@@ -27,7 +27,8 @@ export function PriceCard({
   isSaved,
   onToggleSave,
 }: PriceCardProps) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
+  const fmt = useFormatDisplayPrice()
   return (
     <GlassCard
       variant="dark"
@@ -47,7 +48,7 @@ export function PriceCard({
         }}
       >
         <Text variant="title" weight="semibold">
-          {formatPrice(amount, currency, i18n.language)}
+          {fmt(amount, currency)}
         </Text>
         <IconButton
           variant="ghost"

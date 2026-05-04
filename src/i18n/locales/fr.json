@@ -72,6 +72,8 @@
     "title": "Profil",
     "settings": "Paramètres",
     "language": "Langue",
+    "currencyLabel": "Devise",
+    "currencyAuto": "Auto",
     "guestHeading": "Bienvenue",
     "guestSubtitle": "Connecte-toi pour personnaliser ton profil, sauvegarder tes favoris et vendre tes articles.",
     "account": "Compte",

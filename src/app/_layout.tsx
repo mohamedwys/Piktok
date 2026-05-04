@@ -21,6 +21,7 @@ import ErrorBoundary from "@/components/ErrorBoundary"
 import { initI18n } from "@/i18n"
 import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
+import { useExchangeRatesRefresh } from "@/hooks/useExchangeRatesRefresh"
 import { typography } from "@/theme"
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
@@ -84,6 +85,7 @@ export default function RootLayout() {
   }, [])
 
   usePushNotifications()
+  useExchangeRatesRefresh()
 
   const isReady = isI18nReady && (fontsLoaded || !!fontsError)
 

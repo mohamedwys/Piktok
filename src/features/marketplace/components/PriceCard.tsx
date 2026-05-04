@@ -9,6 +9,7 @@ import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagemen
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
 import { useRequireAuth } from '@/stores/useRequireAuth';
+import { useFormatDisplayPrice } from '@/hooks/useFormatDisplayPrice';
 
 type PriceCardProps = {
   productId: string;
@@ -18,13 +19,6 @@ type PriceCardProps = {
   shipping: Product['shipping'];
 };
 
-function formatPrice(value: number, currency: Product['currency']): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency,
-  }).format(value);
-}
-
 export default function PriceCard({
   productId,
   price,
@@ -33,6 +27,7 @@ export default function PriceCard({
   shipping,
 }: PriceCardProps): React.ReactElement {
   const { t, i18n } = useTranslation();
+  const fmt = useFormatDisplayPrice();
   const { data: engagement } = useUserEngagement();
   const isBookmarked = engagement?.bookmarkedIds.has(productId) ?? false;
   const toggleBookmark = useToggleBookmark(productId);
@@ -60,7 +55,7 @@ export default function PriceCard({
       <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFillObject} />
       <View style={styles.cardInner}>
         <View style={styles.topRow}>
-          <Text style={styles.price}>{formatPrice(price, currency)}</Text>
+          <Text style={styles.price}>{fmt(price, currency)}</Text>
           <Pressable onPress={onPressBookmark} hitSlop={8}>
             <Ionicons
               name={isBookmarked ? 'bookmark' : 'bookmark-outline'}

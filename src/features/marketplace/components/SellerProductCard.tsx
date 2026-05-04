@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { getLocalized } from '@/i18n/getLocalized';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { useFormatDisplayPrice } from '@/hooks/useFormatDisplayPrice';
 import type { Product } from '@/features/marketplace/types/product';
 
 type Props = {
@@ -22,6 +23,7 @@ export default function SellerProductCard({
 }: Props): React.ReactElement {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const fmt = useFormatDisplayPrice();
   const onPress = () => {
     void lightHaptic();
     useProductSheetStore.getState().open(product.id);
@@ -41,10 +43,6 @@ export default function SellerProductCard({
       { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
-  const formatted = new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: product.currency,
-  }).format(product.price);
   return (
     <Pressable
       onPress={onPress}
@@ -70,7 +68,7 @@ export default function SellerProductCard({
         <Text style={styles.title} numberOfLines={2}>
           {getLocalized(product.title, lang)}
         </Text>
-        <Text style={styles.price}>{formatted}</Text>
+        <Text style={styles.price}>{fmt(product.price, product.currency)}</Text>
       </View>
     </Pressable>
   );

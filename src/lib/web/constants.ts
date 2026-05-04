@@ -22,7 +22,7 @@
  * custom domain (e.g., `pro.<brand>.com`) is a one-line edit here when
  * DNS is configured.
  */
-export const WEB_BASE_URL = 'https://mony-psi.vercel.app/';
+export const WEB_BASE_URL = 'https://mony-psi.vercel.app';
 
 /**
  * Path on the web app where the upgrade flow lives. Combined with

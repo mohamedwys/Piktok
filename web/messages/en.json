@@ -122,10 +122,27 @@
     "copyright": "© 2026 Mony — All rights reserved."
   },
   "upgrade": {
-    "title": "Become Pro",
-    "welcomeWith": "Welcome, {email}.",
-    "comingSoonBody": "Stripe Checkout integration is shipping soon.",
-    "goToDashboard": "Go to dashboard →"
+    "title": "Mony Pro",
+    "sub": "Unlimited listings, reduced fees, featured boost.",
+    "signedInAs": "Signed in as {email}",
+    "chooseFormula": "Choose your plan",
+    "planMonthly": "Monthly",
+    "planYearly": "Yearly",
+    "subscribe": "Subscribe",
+    "redirecting": "Redirecting…",
+    "securityNote": "No commitment. Cancel anytime. Secure payment via Stripe.",
+    "genericError": "An error occurred. Please try again.",
+    "success": {
+      "title": "Welcome to Mony Pro",
+      "processing": "Your payment was received. Your subscription is being activated — your Pro status will be active in a moment.",
+      "returnHint": "Return to the Mony app to enjoy your benefits.",
+      "dashboardLink": "View my dashboard"
+    },
+    "canceled": {
+      "title": "Payment canceled",
+      "body": "No charge was made. You can try again anytime.",
+      "retry": "Back to options"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

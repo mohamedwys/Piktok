@@ -6774,3 +6774,300 @@ The revert is clean — no dependencies added, no schema changes, no Stripe Dash
 
 If only the Pricing refactor should be removed (keeping `currency.ts` / `getCurrency.ts` / CurrencyPicker for future H.8 consumption), the surgical edit is to revert just `Pricing.tsx`, the message catalogs' `pricing` namespace, and the `force-dynamic` directive — leaving the currency primitives in place for later use.
 
+---
+
+## Step Op.3 Changelog (2026-05-04) — WEB_BASE_URL Reconciliation (mony-psi.vercel.app)
+
+One-line source change. The Vercel deploy assigned `mony-psi.vercel.app` (the `mony` slug was taken), so the H.5/H.6/H.7.x placeholder `https://mony.vercel.app` is updated in the single source of truth on the mobile side. Two server-side updates (Supabase secret + Auth allowlist) are documented below for the user to run in lockstep.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question (final domain decision). H.5's manual setup section originally specified `mony.vercel.app` as a placeholder; this step closes that placeholder against the actual Vercel-assigned URL.
+
+### Reconnaissance findings
+
+- **Pre-edit value**: `WEB_BASE_URL = 'https://mony-psi.vercel.app/'` (trailing slash) at [src/lib/web/constants.ts:25](src/lib/web/constants.ts#L25). The user had manually updated the URL between H.5 and Op.3 but kept the trailing slash from a copy-paste of the dashboard URL.
+- **Trailing-slash bug uncovered.** The mobile-side magic-link assembly at [src/hooks/useUpgradeFlow.ts:65](src/hooks/useUpgradeFlow.ts#L65) does string concatenation `${WEB_BASE_URL}${WEB_UPGRADE_PATH}` (where `WEB_UPGRADE_PATH = '/upgrade'`). With the trailing slash, this produces `https://mony-psi.vercel.app//upgrade` (double slash) — browsers may normalize this on navigation, but Supabase Auth's redirect-URL allowlist matching is path-exact and rejects double-slash variants. The Edge Function at [supabase/functions/issue-web-session/index.ts:90](supabase/functions/issue-web-session/index.ts#L90) is robust either way (it uses `new URL(redirectPath, webBaseUrl)` which normalizes), but the JS-client concatenation is not. Op.3 fixes this by dropping the trailing slash.
+- **No other hardcoded references.** `grep -rn "mony.vercel.app\|mony-psi.vercel.app" src/` returns only the constants.ts line. Web-side has no hardcoded URL either — its API routes consume `process.env.NEXT_PUBLIC_WEB_BASE_URL` from Vercel env vars (user's responsibility, not source-tracked).
+
+### Files modified (1)
+
+| Path | Change |
+| --- | --- |
+| [src/lib/web/constants.ts](src/lib/web/constants.ts#L25) | `'https://mony-psi.vercel.app/'` → `'https://mony-psi.vercel.app'` (drop trailing slash). |
+
+### User-manual server-side steps (run in lockstep)
+
+These keep the mobile constant + Supabase secret + auth allowlist consistent. Without them, magic links will redirect correctly URL-wise but Supabase Auth will reject the redirect with "Email link is invalid or has expired".
+
+#### 1. Update the Edge Function secret
+
+```powershell
+npx supabase secrets set WEB_BASE_URL=https://mony-psi.vercel.app
+```
+
+This is what the [issue-web-session Edge Function](supabase/functions/issue-web-session/index.ts#L91) reads at runtime to compose the magic-link `redirectTo`. The previous value (`https://mony.vercel.app`) is overwritten.
+
+#### 2. Update Supabase Auth's redirect URL allowlist
+
+**Dashboard → Authentication → URL Configuration → Redirect URLs**
+
+Add (keep existing entries; allowlist accepts multiple):
+
+```
+https://mony-psi.vercel.app/*
+http://localhost:3000/*
+```
+
+The `localhost:3000/*` entry enables local web dev to receive magic links during testing. The legacy `https://mony.vercel.app/*` and `https://*.vercel.app/*` entries can stay — they're harmless extras since the Edge Function only redirects to whatever is in the `WEB_BASE_URL` secret.
+
+Click **Save**.
+
+#### 3. Update the Vercel project's environment variable (if/when H.8 ships)
+
+Pre-staged: when H.8's API route goes live, it'll read `process.env.NEXT_PUBLIC_WEB_BASE_URL` for any same-origin URL composition. Set this in **Vercel Dashboard → Project Settings → Environment Variables**:
+
+```
+NEXT_PUBLIC_WEB_BASE_URL = https://mony-psi.vercel.app
+```
+
+Not blocking for Op.3 — H.8 hasn't shipped yet — but list it here so the env-var inventory stays current.
+
+### Verification
+
+- **`grep -rn "mony.vercel.app\|mony-psi.vercel.app" src/`** → single hit at [src/lib/web/constants.ts:25](src/lib/web/constants.ts#L25). No other hardcoded URLs in mobile source.
+- **`npx tsc --noEmit`** → exit 0.
+- **Manual / runtime (deferred to user, after the two server-side steps):**
+  - Tap any "Upgrade to Pro" CTA in the mobile app.
+  - In-app browser opens with a brief loading state, then lands on `https://mony-psi.vercel.app/upgrade` — auth-gated, so the user sees the placeholder for now.
+  - Verify in Supabase Dashboard → Logs → Auth that the magic-link issue + token verification events succeed (no "redirect URL not allowed" rejections).
+
+### Why a `/` trailing slash matters
+
+| Form | Concatenation | Result | Allowlist match? |
+| --- | --- | --- | --- |
+| `https://mony-psi.vercel.app/` + `/upgrade` | `https://mony-psi.vercel.app//upgrade` | **double slash** | ✗ |
+| `https://mony-psi.vercel.app` + `/upgrade` | `https://mony-psi.vercel.app/upgrade` | clean | ✓ |
+
+Defensive alternatives (URL-builder helper, `pathJoin()` etc.) are over-engineered for a single concatenation site. The single-line constant fix is the right shape.
+
+### Reversion
+
+```bash
+git revert <Op.3 commit>
+```
+
+Restores the `WEB_BASE_URL = 'https://mony-psi.vercel.app/'` value (the trailing-slash form, since that's the previous state — not the original `mony.vercel.app` placeholder). Plus, run the matching secret rollback if needed:
+
+```powershell
+npx supabase secrets set WEB_BASE_URL=https://mony-psi.vercel.app/
+```
+
+The Supabase Auth allowlist entries are forward-compatible and don't need to be removed; leaving extras in place doesn't affect normal operation.
+
+### Phase H mobile/web status (post-Op.3)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| H.7.3 | ✓ | Multi-currency EUR/USD/AED |
+| **Op.3** | **✓ this step** | **WEB_BASE_URL points at mony-psi.vercel.app** |
+| H.8 | next | Stripe Checkout on `/upgrade` (consumes NEXT_CURRENCY) |
+| H.10 | future | Real `/dashboard` + Customer Portal |
+| H.11 | future | `/admin/subscriptions` |
+| H.12 | future | `/api/stripe/webhook` |
+
+---
+
+## Step H.8 Changelog (2026-05-04) — Multi-currency Stripe Checkout
+
+JS-only step, scoped to `/web/`. Replaces H.6's `/upgrade` "shipping soon" placeholder with a real multi-currency-aware Stripe Checkout flow. Six new files (Stripe SDK init, API route, UpgradeForm, success page, canceled page, plus the modified upgrade page). Three message catalogs extended with the `upgrade.*` namespace tree. One new dependency (`stripe` Node SDK, server-only). Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §3 (charge model + customer creation strategy), §10 open-question 9 (multi-region pricing — H.7.3 + H.8 close it), §10 open-question 7 (trial period — deferred). The H.7.3 changelog's H.8-revised handoff list (this implements it).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **Pre-edit `[locale]/upgrade/page.tsx`** — H.6 placeholder still in place (post-H.7.1 move under `[locale]/`). Renders email + "shipping soon" message with three keys: `welcomeWith`, `comingSoonBody`, `goToDashboard`. H.8 fully replaces.
+- **`/upgrade/success/page.tsx` + `/upgrade/canceled/page.tsx` did NOT exist.** The H.8 spec said "replace placeholder" but H.6/H.7.1 never created them — Stripe needs `success_url` + `cancel_url` so H.8 ships these new.
+- **Currency / locale infrastructure intact.** [src/i18n/getCurrency.ts](web/src/i18n/getCurrency.ts) (H.7.3, cookie + Accept-Language chain), [src/i18n/currency.ts](web/src/i18n/currency.ts) (`CURRENCIES`, `Currency`, `isCurrency` type-guard, `CURRENCY_COOKIE`), [src/i18n/routing.ts](web/src/i18n/routing.ts) (`routing.locales`, `routing.defaultLocale`, `redirect`, `Link`).
+- **No Stripe dep.** `package.json` clean. H.8 adds `stripe@^22.1.0` (single new dep, server-only).
+- **Stripe SDK API version pinned to `'2026-04-22.dahlia'`.** The H.8 spec defaulted to `'2024-06-20'` but stripe@22's TypeScript types are pinned to the newer dahlia version — using a mismatched literal would fail typecheck. Read from `node_modules/stripe/cjs/apiVersion.d.ts` to find the correct value.
+- **`.env.local` placeholders accept Stripe init.** The user's `.env.local` has `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_PRICE_*=price_...` (literal placeholder strings, not real values). Stripe's `new Stripe(secret, options)` constructor doesn't network — it accepts any non-empty string, so `next build` succeeds. The actual API calls (creating Checkout Sessions) will fail at runtime until the user replaces with real test keys. That's the correct behavior — fail at request, not at build.
+
+### Files added (5)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/lib/stripe.ts](web/src/lib/stripe.ts) | Module-level Stripe SDK singleton + `getStripePriceId(currency, cadence)` env-var lookup. Throws at module load if `STRIPE_SECRET_KEY` is missing — fail-fast for ops. Pinned to API version `'2026-04-22.dahlia'`. |
+| [web/src/app/api/stripe/checkout/route.ts](web/src/app/api/stripe/checkout/route.ts) | POST handler at `/api/stripe/checkout`. Auth → cadence parse → currency/locale cookies → seller lookup → Stripe customer (lookup or create with metadata) → locale-aware `success_url`/`cancel_url` → `getStripePriceId` → `stripe.checkout.sessions.create({ mode: 'subscription', ... })` → returns `{ url }`. Lives outside `[locale]/` because it's a technical endpoint; H.7.1's middleware matcher already excludes `/api`. |
+| [web/src/components/upgrade/UpgradeForm.tsx](web/src/components/upgrade/UpgradeForm.tsx) | Client Component. Cadence toggle (monthly/yearly), feature list (iterates `pricing.feature1`–`feature5` matching the landing's [Pricing.tsx](web/src/components/landing/Pricing.tsx) FEATURE_KEYS pattern), submit handler that POSTs to `/api/stripe/checkout` and `window.location.href`s to the returned Stripe URL. |
+| [web/src/app/[locale]/upgrade/success/page.tsx](web/src/app/[locale]/upgrade/success/page.tsx) | Auth-gated. Renders "processing" copy + dashboard link + check icon. The `?session_id={CHECKOUT_SESSION_ID}` query param Stripe appends is captured but not displayed in v1. |
+| [web/src/app/[locale]/upgrade/canceled/page.tsx](web/src/app/[locale]/upgrade/canceled/page.tsx) | Auth-gated. Low-friction "no charge" copy + retry button back to `/upgrade`. |
+
+### Files modified (5)
+
+| Path | Change |
+| --- | --- |
+| [web/src/app/[locale]/upgrade/page.tsx](web/src/app/[locale]/upgrade/page.tsx) | Replaced H.6 placeholder. Now: `force-dynamic`, auth-gated via `getUser()`, resolves currency via `getCurrency()`, loads `getTranslations('upgrade')` + `getTranslations(\`pricing.${currency}\`)`, mounts `<UpgradeForm />` with currency-aware pricing strings as props. |
+| [web/messages/en.json](web/messages/en.json) | Removed obsolete `welcomeWith` / `comingSoonBody` / `goToDashboard` (placeholder copy). Added: `sub`, `signedInAs`, `chooseFormula`, `planMonthly`, `planYearly`, `subscribe`, `redirecting`, `securityNote`, `genericError` + nested `upgrade.success.{title, processing, returnHint, dashboardLink}` + `upgrade.canceled.{title, body, retry}`. |
+| [web/messages/fr.json](web/messages/fr.json) | Mirror with French copy. |
+| [web/messages/ar.json](web/messages/ar.json) | Mirror with Arabic copy (best-effort, pending professional review per H.7.1). |
+| [web/package.json](web/package.json) | Added `stripe: ^22.1.0`. |
+| [web/package-lock.json](web/package-lock.json) | Auto-updated. |
+
+### Currency + locale resolution chain (server-side)
+
+The API route reads BOTH cookies on every request:
+
+```
+NEXT_CURRENCY → CURRENCY_COOKIE = 'NEXT_CURRENCY' → isCurrency() guard → DEFAULT_CURRENCY (eur) fallback
+NEXT_LOCALE   → LOCALE_COOKIE   = 'NEXT_LOCALE'   → hasLocale() guard  → routing.defaultLocale ('en') fallback
+```
+
+Both cookies are set by the H.7.3 CurrencyPicker / H.7.1 LanguageSwitcher / next-intl middleware. The API route doesn't accept currency/locale in the request body — they're transparent context, not user-controllable per-request inputs.
+
+### Locale-aware redirect URLs
+
+H.7.1's `'as-needed'` prefix means EN URLs lack a locale segment. The API route composes `success_url` and `cancel_url` accordingly:
+
+```ts
+const localePath = locale === routing.defaultLocale ? '' : `/${locale}`;
+// EN: https://mony-psi.vercel.app/upgrade/success?session_id=...
+// FR: https://mony-psi.vercel.app/fr/upgrade/success?session_id=...
+// AR: https://mony-psi.vercel.app/ar/upgrade/success?session_id=...
+```
+
+The `?session_id={CHECKOUT_SESSION_ID}` placeholder is Stripe-template syntax — Stripe substitutes the actual session ID before redirecting. The cancel URL doesn't get a session ID (Stripe only adds it on success).
+
+### Stripe Checkout's `locale` parameter
+
+Stripe's hosted Checkout natively supports a fixed list of locales. From `stripe-node`'s type definition, the relevant subset for our launch:
+- `'en'` → English ✓
+- `'fr'` → French ✓
+- `'auto'` → Browser-detected (used as the AR fallback)
+- **No `'ar'`** — Stripe doesn't ship Arabic localization
+
+Mapping logic:
+
+```ts
+const stripeLocale: 'en' | 'fr' | 'auto' =
+  locale === 'en' || locale === 'fr' ? locale : 'auto';
+```
+
+For AR visitors: Stripe Checkout's hosted page lands in EN (or whatever the browser auto-detects, occasionally FR). The visitor's preference is honored on the Mony pages (EN/FR/AR landing + upgrade page); only the Stripe step itself displays in the auto-detected locale. Acceptable v1 — Stripe Checkout is a single transactional step, not the full marketing surface; an EN payment form on an AR-flagged session is intelligible. Documented for the user; if AR-quality Checkout becomes a launch blocker, [Stripe Custom Checkout](https://docs.stripe.com/payments/checkout/build-payment-form) lets us own the form (separate H.X if needed).
+
+### Customer creation strategy
+
+Per the audit's lookup-or-create pattern:
+
+1. Look up existing `subscriptions.stripe_customer_id` by `seller_id`. The webhook (H.9) is the writer of this column — for a returning subscriber whose previous subscription has been cancelled, the customer id persists.
+2. If found: reuse — pass to Stripe so the new subscription attaches to the same customer. Stripe knows their email, payment methods, etc.
+3. If absent (first-time upgrader): `stripe.customers.create({ email, metadata: { seller_id, user_id } })`. Capture the new ID and pass it to the Checkout Session.
+4. Either way, set `subscription_data.metadata = { seller_id, user_id, currency }` on the session so the H.9 webhook can correlate the eventual `customer.subscription.created` event back to our schema.
+
+This route does NOT write to `public.subscriptions`. Writing happens only in the H.9 webhook handler against the H.2 schema's RLS-protected table (service-role only). Pre-creating the customer here is safe because:
+- Stripe customer objects are cheap and benign — orphaned customers (no subscription) sit harmless in Stripe.
+- The webhook upsert is keyed on `stripe_subscription_id` (UNIQUE per H.2), not `stripe_customer_id`, so duplicate customer rows don't cause schema conflicts.
+
+### Race condition: success page deliberately shows "processing"
+
+Stripe's payment confirmation does NOT mutate `public.subscriptions` directly. The flow is:
+
+```
+User completes Checkout
+  → Stripe redirects to success_url (immediate, ~50ms)
+  → Stripe asynchronously fires `customer.subscription.created` (typically <2s in test mode)
+  → H.9 webhook receives event, upserts into `public.subscriptions`
+  → H.2 SQL trigger flips `sellers.is_pro = true`
+```
+
+When the user lands on `/upgrade/success`, the subscription row may or may not exist yet. Claiming "you are now Pro!" before the row exists is wrong. The page renders "processing" copy, sets the user's expectation correctly, and links to `/dashboard` (where H.10 will eventually show real subscription state).
+
+Future polish (H.10+): poll `subscriptions` from a Client Component on the success page, swap to a "You are now Pro!" celebratory state once the row appears.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **JSON parse** for all three message catalogs → OK.
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/[locale]/upgrade` (●, paths /en, /fr, /ar): 2.11 kB → 121 kB First Load JS (up from 172 B placeholder — adds the UpgradeForm Client Component bundle).
+  - `/[locale]/upgrade/success` (●): 177 B per locale.
+  - `/[locale]/upgrade/canceled` (●): 177 B per locale.
+  - `/api/stripe/checkout` (ƒ, dynamic, **root path**): 177 B. **Outside the `[locale]` tree** as required for technical endpoints; H.7.1 middleware already excludes `/api` from locale prefixing.
+  - Middleware 130 kB (unchanged from H.7.3).
+- **Mobile `tsc --noEmit`** → exit 0.
+- **Mobile codebase byte-identical** outside /web. The only non-/web `M` is `src/lib/web/constants.ts` (the Op.3 URL fix, not part of H.8).
+- **Manual / runtime (deferred to user, requires Stripe Dashboard prep + 6 real Price IDs in .env.local + Vercel env):**
+  - On mobile, tap "Upgrade to Pro" → magic-link auth → lands on `/upgrade` (or `/fr/upgrade` / `/ar/upgrade`).
+  - Page renders the cadence toggle + feature list + Subscribe button in the user's locale + currency.
+  - Click Subscribe → form POSTs to `/api/stripe/checkout` → `window.location.href`s to the Stripe URL.
+  - In Stripe test mode: card `4242 4242 4242 4242` + any future date / CVC → completes Checkout → Stripe redirects to `/[locale]/upgrade/success`.
+  - Success page renders "processing" copy. The `subscriptions` row WON'T exist yet — H.9 closes that loop.
+  - `/dashboard` still says "shipping soon" (H.6 placeholder; H.10 ships the real subscription management).
+
+### Manual setup required (Stripe Dashboard, in test mode for v1)
+
+User runs once before runtime testing:
+
+1. **Create the Mony Pro Product** in Stripe Dashboard → Products → Add product. Name: `Mony Pro`. Description: optional.
+2. **Create six Prices** on that product:
+   - Monthly recurring, EUR €19 → capture the `price_…` ID into `STRIPE_PRICE_EUR_MONTHLY`
+   - Yearly recurring, EUR €190 → `STRIPE_PRICE_EUR_YEARLY`
+   - Monthly recurring, USD $19 → `STRIPE_PRICE_USD_MONTHLY`
+   - Yearly recurring, USD $190 → `STRIPE_PRICE_USD_YEARLY`
+   - Monthly recurring, AED 79 → `STRIPE_PRICE_AED_MONTHLY`
+   - Yearly recurring, AED 749 → `STRIPE_PRICE_AED_YEARLY`
+3. **Update `.env.local`** with the real price IDs (replace `price_...` placeholders) + the test mode `STRIPE_SECRET_KEY=sk_test_...` from Stripe Dashboard → API keys.
+4. **Update Vercel env vars** (Project Settings → Environment Variables) with the same eight values plus `NEXT_PUBLIC_WEB_BASE_URL=https://mony-psi.vercel.app` (per Op.3).
+5. **Restart `npm run dev`** (kill, clear `.next/`, re-run) so the new env vars are picked up.
+
+### Phase H mobile/web status (post-H.8)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| H.7.3 | ✓ | Multi-currency EUR/USD/AED |
+| Op.3 | ✓ | WEB_BASE_URL → mony-psi.vercel.app |
+| **H.8** | **✓ this step** | **Multi-currency Stripe Checkout (test mode)** |
+| H.9 | next | Stripe webhook handler |
+| H.10 | future | Real `/dashboard` + Customer Portal |
+| H.11 | future | `/admin/subscriptions` |
+| H.14 | future | Stripe live-mode flip + production go-live |
+
+The web codebase now charges real money in test mode. The data loop closes in H.9.
+
+### H.9 handoff (Stripe webhook handler)
+
+H.9's job: receive Stripe events at a dedicated webhook endpoint, write subscription state into `public.subscriptions` (the H.2-shipped table), let the H.2 trigger mirror `is_pro`. Concrete pieces:
+
+1. **Route**: `/web/src/app/api/stripe/webhook/route.ts`.
+2. **Signature verification**: Stripe sends a `stripe-signature` header on every webhook. Use `stripe.webhooks.constructEventAsync(rawBody, sig, STRIPE_WEBHOOK_SECRET)` to validate. Reject any request that fails signature with HTTP 400.
+3. **Service-role Supabase client** (NEW env var: `SUPABASE_SERVICE_ROLE_KEY` in Vercel + local `.env.local`, server-only — NEVER `NEXT_PUBLIC`). Only this role can write to `public.subscriptions` per the H.2 RLS policy.
+4. **Events to handle**:
+   - `customer.subscription.created` → upsert with `status: 'active' | 'trialing'`, period_start/end, currency from `metadata.currency`, etc.
+   - `customer.subscription.updated` → upsert with new status/period values. Includes plan changes, cancellations-at-period-end, payment-method updates.
+   - `customer.subscription.deleted` → set `status: 'canceled'`, capture `canceled_at`. Don't delete the row — keep the audit trail.
+   - `invoice.payment_failed` → reflects in `customer.subscription.updated` with `status: 'past_due'`. The H.9 handler may not need to do anything separately if the subscription event arrives in the same batch; check Stripe's event ordering.
+5. **Idempotency**: upsert keyed on `stripe_subscription_id` (the H.2 schema's UNIQUE constraint). Stripe sends events at-least-once; the upsert pattern handles duplicates cleanly.
+6. **The H.2 trigger** (`handle_subscription_change`) automatically mirrors `is_pro` — H.9 doesn't touch the column directly.
+7. **Webhook endpoint registration**: in Stripe Dashboard → Developers → Webhooks → Add endpoint, point at `https://mony-psi.vercel.app/api/stripe/webhook` (test mode), select the four event types above. Capture the `whsec_…` signing secret into `STRIPE_WEBHOOK_SECRET` env var (local + Vercel).
+8. **Local dev**: use `stripe listen --forward-to localhost:3000/api/stripe/webhook` (Stripe CLI) to forward events to the dev server during testing.
+
+After H.9 lands: tap Upgrade → complete Checkout → land on `/upgrade/success` ("processing") → ~2s later the webhook fires → `subscriptions` row exists → `is_pro = true` → mobile profile picks up the flag on next focus. End-to-end Pro upgrade works in test mode.
+
+### Reversion
+
+```bash
+git revert <H.8 commit>
+```
+
+Removes the five new files + reverts the upgrade page + drops the `stripe` dep + restores the H.6 placeholder copy in catalogs. Manual cleanup if the user already created Stripe products: optional (orphaned Stripe products are benign and free).
+
+If only the API route should be removed but the form / pages kept (e.g., to swap to a different payment provider), the surgical edit is to delete `/api/stripe/checkout/route.ts` + `lib/stripe.ts` + uninstall `stripe`, then update `UpgradeForm.handleSubmit` to POST to the new endpoint. Pages and copy stay.
+

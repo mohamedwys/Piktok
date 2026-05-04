@@ -122,10 +122,27 @@
     "copyright": "© 2026 Mony — Tous droits réservés."
   },
   "upgrade": {
-    "title": "Passer Pro",
-    "welcomeWith": "Bienvenue, {email}.",
-    "comingSoonBody": "L’intégration de Stripe Checkout arrive bientôt.",
-    "goToDashboard": "Accéder au tableau de bord →"
+    "title": "Mony Pro",
+    "sub": "Annonces illimitées, frais réduits, mise en avant.",
+    "signedInAs": "Connecté en tant que {email}",
+    "chooseFormula": "Choisissez votre formule",
+    "planMonthly": "Mensuel",
+    "planYearly": "Annuel",
+    "subscribe": "S’abonner",
+    "redirecting": "Redirection…",
+    "securityNote": "Sans engagement. Annulez à tout moment. Paiement sécurisé via Stripe.",
+    "genericError": "Une erreur est survenue. Veuillez réessayer.",
+    "success": {
+      "title": "Bienvenue sur Mony Pro",
+      "processing": "Votre paiement a bien été reçu. Votre abonnement est en cours d’activation — votre statut Pro sera actif dans un instant.",
+      "returnHint": "Retournez sur l’app Mony pour profiter de vos avantages.",
+      "dashboardLink": "Voir mon tableau de bord"
+    },
+    "canceled": {
+      "title": "Paiement annulé",
+      "body": "Aucun montant n’a été prélevé. Vous pouvez réessayer à tout moment.",
+      "retry": "Revenir aux options"
+    }
   },
   "dashboard": {
     "title": "Tableau de bord",

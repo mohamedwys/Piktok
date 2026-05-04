@@ -122,10 +122,27 @@
     "copyright": "© 2026 Mony — جميع الحقوق محفوظة."
   },
   "upgrade": {
-    "title": "كن محترفاً",
-    "welcomeWith": "أهلاً بك، {email}.",
-    "comingSoonBody": "تكامل Stripe Checkout قريباً.",
-    "goToDashboard": "← انتقل إلى لوحة التحكم"
+    "title": "Mony Pro",
+    "sub": "إعلانات بلا حدود، رسوم مخفَّضة، إبراز.",
+    "signedInAs": "متصل بالحساب {email}",
+    "chooseFormula": "اختر خطتك",
+    "planMonthly": "شهرياً",
+    "planYearly": "سنوياً",
+    "subscribe": "اشترك",
+    "redirecting": "جاري التحويل…",
+    "securityNote": "بدون التزام. أَلغِ في أي وقت. دفع آمن عبر Stripe.",
+    "genericError": "حدث خطأ. يُرجى المحاولة مجدداً.",
+    "success": {
+      "title": "مرحباً بك في Mony Pro",
+      "processing": "تم استلام دفعتك. يجري تفعيل اشتراكك — ستصبح حالة Pro نشطة بعد قليل.",
+      "returnHint": "عُد إلى تطبيق Mony للاستمتاع بمزاياك.",
+      "dashboardLink": "عرض لوحة التحكم الخاصة بي"
+    },
+    "canceled": {
+      "title": "تم إلغاء الدفع",
+      "body": "لم يتم خصم أي مبلغ. يمكنك المحاولة مجدداً في أي وقت.",
+      "retry": "العودة إلى الخيارات"
+    }
   },
   "dashboard": {
     "title": "لوحة التحكم",

@@ -1,30 +1,41 @@
-import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { redirect, Link } from '@/i18n/routing';
+import {
+  getTranslations,
+  setRequestLocale,
+} from 'next-intl/server';
+import { redirect } from '@/i18n/routing';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getCurrency } from '@/i18n/getCurrency';
+import { Container } from '@/components/ui/Container';
+import { UpgradeForm } from '@/components/upgrade/UpgradeForm';
 
 /**
- * Upgrade — H.6 placeholder, locale-aware (H.7.1).
+ * /upgrade — real Stripe Checkout entry point (H.8).
  *
- * Auth-gated. Unauthenticated visitors are redirected to `/` (in
- * the current locale) rather than shown a sign-in form — sign-in
- * for the web side happens via the magic-link bounce from the
- * mobile app (issue-web-session → /auth/callback).
+ * Replaces H.6's "shipping soon" placeholder. Auth-gated (per
+ * H.6 discipline — getUser() not getSession() for cryptographic
+ * verification). Locale-aware (H.7.1) + currency-aware (H.7.3)
+ * via the server-side helpers below.
  *
- * `getUser()` (not `getSession()`) is the correct gate —
- * `getUser()` revalidates the JWT cryptographically, while
- * `getSession()` only reads from cookies which a determined user
- * can tamper. Auth-gated pages MUST use `getUser()`.
+ * Force-dynamic because the page reads:
+ *   - Auth cookies via `getSupabaseServer().auth.getUser()`
+ *   - Currency cookie via `getCurrency()`
+ *   - Locale param via `setRequestLocale(locale)`
  *
- * The real Stripe Checkout integration lands in H.8. H.6's
- * placeholder body — translated copy + the user's email — stays
- * for now, confirming the magic-link auth-bridge is end-to-end
- * working through the locale router.
+ * The actual Checkout Session creation happens server-side in
+ * the API route (`POST /api/stripe/checkout`); this page renders
+ * the form that POSTs to it. No Stripe SDK on the client side —
+ * we redirect via `window.location.href` after receiving the
+ * session URL.
  *
- * Note: this route is currently dynamic-rendered (auth-gated; the
- * `getUser()` call uses request cookies). `setRequestLocale` is
- * still called for symmetry and to be future-proof if the auth
- * gate ever moves to the layout.
+ * Race-condition note: the Stripe payment confirmation does NOT
+ * mutate `public.subscriptions`. The H.9 webhook is the writer.
+ * So the success page (linked from `success_url`) shows
+ * "processing" copy, not "you are now Pro" — the row may not
+ * exist yet when the user lands there. Webhook latency is
+ * typically < 2s in Stripe test mode.
  */
+export const dynamic = 'force-dynamic';
+
 export default async function UpgradePage({
   params,
 }: {
@@ -37,34 +48,39 @@ export default async function UpgradePage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // next-intl's `redirect()` throws (returns `never`) but the
-  // signature TypeScript sees from the type re-export doesn't
-  // always carry that, so we capture the email up-front while
-  // user is in scope as the narrowed branch.
   if (!user) {
     redirect({ href: '/', locale });
   }
   const email = user?.email ?? '';
 
+  const currency = await getCurrency();
   const t = await getTranslations('upgrade');
+  const tPricing = await getTranslations(`pricing.${currency}`);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md space-y-6 rounded-xl border border-border bg-surface-elevated p-8">
-        <h1 className="font-display text-xxxl font-semibold text-text-primary">
-          {t('title')}
-        </h1>
-        <p className="text-text-secondary">
-          {t('welcomeWith', { email })} {t('comingSoonBody')}
-        </p>
-        <Link
-          href="/dashboard"
-          className="inline-block text-brand underline underline-offset-4"
-        >
-          {t('goToDashboard')}
-        </Link>
-      </div>
+    <main className="min-h-screen bg-background py-16 text-text-primary">
+      <Container>
+        <div className="mx-auto max-w-md space-y-8">
+          <header className="space-y-3 text-center">
+            <h1 className="font-display text-5xl font-semibold">
+              {t('title')}
+            </h1>
+            <p className="text-text-secondary">{t('sub')}</p>
+          </header>
+
+          <UpgradeForm
+            monthlyPrice={tPricing('priceMonthly')}
+            monthlyCadence={tPricing('cadenceMonthly')}
+            yearlyPrice={tPricing('priceYearly')}
+            yearlyCadence={tPricing('cadenceYearly')}
+            yearlySavings={tPricing('savings')}
+          />
+
+          <footer className="text-center text-sm text-text-tertiary">
+            {t('signedInAs', { email })}
+          </footer>
+        </div>
+      </Container>
     </main>
   );
 }

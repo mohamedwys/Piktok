@@ -6120,3 +6120,160 @@ The Vercel project (if created) requires manual deletion via the Vercel Dashboar
 
 If only the scaffold should go but `.gitignore` / `tsconfig.json` keep the changes (e.g., for a clean re-scaffold attempt), the surgical revert is `git rm -r web/` plus `git checkout HEAD -- .gitignore tsconfig.json`. But the simple `git revert` is preferred unless a re-scaffold is imminent.
 
+---
+
+## Step H.7 Changelog (2026-05-04) — Public Landing Page
+
+Replaces the H.6 "Coming soon" placeholder at [web/src/app/page.tsx](web/src/app/page.tsx) with the real Mony marketing surface — header + hero + features grid + pricing card + FAQ accordion + footer — composed from three new UI primitives and six new landing-section components. SEO + Open Graph metadata expanded. One new dependency (`lucide-react` for the marketing icon set). Two H.6 latent typing bugs surfaced and fixed once `/web` actually had its `node_modules` to type-check against. French-only for v1; EN internationalization is a deliberate follow-up.
+
+> **Audit referenced:** [PRO_AUDIT.md](PRO_AUDIT.md) (single Pro tier @ €19/mo / €190/yr placeholder, feature list, App Store routing posture). [BRAND.md](BRAND.md) (color discipline, typography variants, "generous, never dense", coral as signal).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **H.6 placeholder shape verified.** [web/src/app/page.tsx](web/src/app/page.tsx) was a 21-line "Mony / Coming soon" centered block — full replacement with no carry-over. The H.6 scaffold's Inter + Fraunces wiring at [web/src/app/layout.tsx](web/src/app/layout.tsx) is already in place via `next/font/google`, exposing `--font-inter` / `--font-fraunces` CSS variables consumed by the Tailwind `fontFamily` extension.
+- **Tailwind token names are kebab-case.** The H.7 spec used camelCase (`brandText`, `brandPressed`, `borderStrong`) but [web/tailwind.config.ts:20-46](web/tailwind.config.ts#L20) ships kebab-case names (`brand-text`, `brand-pressed`, `border-strong`). All H.7 components use the actual H.6 names — `bg-brand`, `text-brand-text`, `hover:bg-brand-pressed`, `border-border-strong`, `bg-surface-elevated`, etc.
+- **Font-size scale sufficient.** H.6 added custom keys (`xs/sm/md/lg/xl/xxl/xxxl/hero` mirroring mobile theme) under `extend.fontSize`; Tailwind's defaults (`2xl`–`9xl`) remain available alongside since `extend` merges. Marketing hero uses `text-5xl md:text-6xl lg:text-7xl` (48 / 60 / 72px) which fits without further extension. **No Tailwind config edit required.**
+- **`lucide-react` confirmed absent.** Single new dep. The npm semver range was a footgun — `lucide-react@latest` resolved to legacy `1.14.0` from 2020 (the package restarted versioning at 0.x). Manually pinned to `^0.460.0` in [web/package.json](web/package.json) to get the modern API. All required icons present in `node_modules/lucide-react/dist/esm/icons/`: `zap`, `globe`, `shield-check`, `sparkles`, `check`, `chevron-down`.
+
+### Latent H.6 bugs caught + fixed
+
+H.6 didn't run `npx tsc --noEmit` against `/web` because `node_modules/` didn't exist yet. Once H.7's `npm install` populated deps, two implicit-`any` errors surfaced in the Supabase SSR cookie adapters:
+
+- [web/src/lib/supabase/server.ts:33](web/src/lib/supabase/server.ts#L33) — `setAll(cookiesToSet)` parameter implicitly `any`.
+- [web/src/middleware.ts:45](web/src/middleware.ts#L45) — same shape.
+
+Fix: imported `CookieOptions` from `@supabase/ssr` and explicitly typed the parameter as `{ name: string; value: string; options: CookieOptions }[]`. Drop-in additive change; no behavior shift.
+
+### Files added (9)
+
+#### UI primitives (3)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/components/ui/Button.tsx](web/src/components/ui/Button.tsx) | Pill-shaped `forwardRef` button. Three variants (`primary` brand-coral, `outline` border-strong, `ghost` no-chrome) × two sizes (`md` / `lg`). Focus-visible ring uses brand color over background offset for WCAG-friendly keyboard nav. |
+| [web/src/components/ui/Container.tsx](web/src/components/ui/Container.tsx) | `max-w-6xl` centered horizontal container with responsive padding (`px-6 lg:px-8`). The page-wide horizontal rhythm. |
+| [web/src/components/ui/Section.tsx](web/src/components/ui/Section.tsx) | Vertical-rhythm wrapper (`py-20 md:py-28`). Optional `id` for anchor scrolling. |
+
+#### Landing sections (6)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/components/landing/Header.tsx](web/src/components/landing/Header.tsx) | Sticky top nav with backdrop blur. `Mony` wordmark (Fraunces 2xl), three anchor links (`#features`, `#pricing`, `#faq`), single outline "Connexion" CTA pointing at `/upgrade`. |
+| [web/src/components/landing/Hero.tsx](web/src/components/landing/Hero.tsx) | Full-viewport hero. Two-line Fraunces headline ("Vendez. Découvrez. Connectez-vous.") with the third clause in coral, Inter subhead, twin CTAs ("Découvrir Mony Pro" → `#pricing`, "Télécharger l'app" → `#download`). Decorative twin radial gradients (coral + violet) form the backdrop — pure CSS, no asset dependency. |
+| [web/src/components/landing/Features.tsx](web/src/components/landing/Features.tsx) | Four-card grid. Each card: `bg-surface-elevated`, `border-border`, `rounded-xl`, `p-8`, lucide icon in coral, Fraunces title, Inter body. Cards: Vidéo first / Local et mondial / Paiement sécurisé / Communauté. |
+| [web/src/components/landing/Pricing.tsx](web/src/components/landing/Pricing.tsx) | Single-tier "Mony Pro" card. Coral `RECOMMANDÉ` pill, "19 €" big-display + "/mois" + "ou 190 € / an" subnote, five-feature checklist with lucide `Check` icons in coral, full-width primary CTA, "open the app to upgrade" subcopy + placeholder App Store / Play Store badges (anchored to `#download` until apps publish). |
+| [web/src/components/landing/FAQ.tsx](web/src/components/landing/FAQ.tsx) | Seven-question accordion using native `<details>` / `<summary>`. Pure CSS rotation on the chevron via Tailwind's `group-open:rotate-180`. No JS, full SEO indexing, native a11y. |
+| [web/src/components/landing/Footer.tsx](web/src/components/landing/Footer.tsx) | Three link columns (Produit / Légal / Contact) + brand block. `bg-surface` (one elevation step DOWN from sections above) anchors page bottom. © 2026 line. |
+
+### Files modified (3)
+
+| Path | Change |
+| --- | --- |
+| [web/src/app/page.tsx](web/src/app/page.tsx) | H.6 placeholder fully replaced. Server Component composes Header + Hero + Features + Pricing + FAQ + Footer. |
+| [web/src/app/layout.tsx](web/src/app/layout.tsx) | `lang="en"` → `lang="fr"`. Metadata expanded from minimal `{title, description}` to full SEO payload: `title`, `description`, `metadataBase`, `openGraph` (title, description, url, siteName, images, locale `fr_FR`, type), `twitter` (`summary_large_image` card with same image). |
+| [web/next.config.ts](web/next.config.ts) | Added `outputFileTracingRoot: path.join(__dirname)` to silence the multi-lockfile warning (the repo has both `/package-lock.json` for mobile and `/web/package-lock.json` for web; the trace root pin tells Next.js the web build only needs `/web/`'s graph). |
+| [web/src/lib/supabase/server.ts](web/src/lib/supabase/server.ts) | Imported `CookieOptions` type; explicitly typed the `setAll` parameter. H.6 latent-any fix. |
+| [web/src/middleware.ts](web/src/middleware.ts) | Same H.6 latent-any fix. |
+| [web/package.json](web/package.json) | Added `lucide-react: ^0.460.0` to dependencies. (npm auto-pinned to `1.14.0` first; manually corrected to `0.460.x` modern line.) |
+| [web/package-lock.json](web/package-lock.json) | Auto-generated by `npm install` (committed). |
+
+### FR-only locale decision
+
+The H.7 landing ships in French only. Two reasons:
+
+1. **Mobile precedent.** The mobile app's primary i18n surface is FR (with EN as the secondary). The web companion mirroring this skews the brand toward the launch market — France + francophone EU.
+2. **Translation cost vs. v1 reach.** Half the landing copy is marketing language — careful EN translation of brand voice (the BRAND.md "premium-marketplace, not corporate-sterile" tone) is non-trivial work. v1 ships FR; EN follows when there's enough signal that anglophone visitors land here directly (referral analytics > 10–15% EN locale would justify the translation pass).
+
+Internationalization-readiness pre-staged in two places for the future EN flip:
+
+- `<html lang="fr">` + `openGraph.locale: 'fr_FR'` are explicit values, not defaults — flipping to a multi-locale build means adding `next-intl` or App Router's `[locale]` segment alongside, not retrofitting.
+- All copy strings are plain JSX text (no string concatenation that would resist extraction); a future `next-intl` migration is mechanical.
+
+### Pricing CTA decision: routes to "open in app", not /upgrade
+
+The Pricing card's CTA is `<a href="#download">` (anchor scrolls to placeholder store badges) rather than `/upgrade`. Rationale:
+
+`/upgrade` is auth-gated. An unauthenticated visitor — which is who lands on the marketing page from social/search/ads — would hit the H.6 redirect-to-`/`, ending up back on the same page. Confusing loop.
+
+The correct path to upgrade is the mobile app's `useUpgradeFlow` (H.5), which mints a magic link and lands the user on `/upgrade` already-authed. The Pricing card's subcopy makes this explicit: *"Ouvrez l'app Mony et touchez « Passer Pro » dans votre profil."* Combined with the placeholder store badges, the message communicates "this is a mobile-first product" and avoids the dead-end loop.
+
+### Open Graph image deferred
+
+The metadata references `/og-image.png` (1200×630) at [web/src/app/layout.tsx](web/src/app/layout.tsx) but H.7 does not ship the asset. Two paths to close it post-H.7:
+
+| Path | Work | Trade-off |
+| --- | --- | --- |
+| Static asset | Commit `web/public/og-image.png` (1200×630, brand mark on dark stack). | Static, cached, fastest. No dynamic per-page personalization. |
+| Dynamic via `next/og` | New route at `app/api/og/route.tsx` that returns an `ImageResponse` with the brand mark. | Per-page customization possible (e.g., `/api/og?title=...`). Slightly slower first-paint of share preview. |
+
+Until either lands, share previews on Twitter / LinkedIn / iMessage fall back to a plain link card with title + description (no hero image). Not a launch blocker.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0 (after the H.6 latent-any fixes).
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/` prerenders as **static**, 3.46 kB page + 106 kB First Load JS.
+  - `/auth/error` static, 131 B.
+  - `/auth/callback`, `/dashboard`, `/upgrade` server-rendered on demand (auth-gated).
+  - Middleware 88.3 kB.
+- **Mobile `tsc --noEmit`** → exit 0 (mobile is byte-identical; the `web/**` exclude from H.6 holds).
+- **Mobile codebase changes outside /web** → zero. `git diff --name-only HEAD | grep -v "^web/"` returns empty (the line-ending CRLF warnings shown by git are harmless OS artifacts, not file modifications).
+- **No new mobile dependencies.** `package.json` (root) untouched.
+- **Manual / runtime (deferred to user):**
+  - `cd web && npm run dev` → boots on `http://localhost:3000`. Real landing renders with header sticky, hero radial gradients, four feature cards, pricing tier card, seven-question FAQ accordion, footer.
+  - Resize to phone width → grid collapses to 1 column, header nav links hide (only logo + Connexion remain), pricing card stays centered.
+  - Click any FAQ summary → details opens, chevron rotates 180°. Works without JS (verifiable via DevTools "Disable JavaScript").
+  - Push to GitHub → Vercel auto-redeploys → live at `mony.vercel.app`.
+
+### Phase H mobile/web status (post-H.7)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1 | ✓ | Audit (PRO_AUDIT.md) |
+| H.2 | ✓ | `subscriptions` table + trigger |
+| H.3 | ✓ | `useIsPro` / `useListingCap` / cap enforcement |
+| H.4 | ✓ | Three banner placements |
+| H.5 | ✓ | Magic-link Edge Function + real `useUpgradeFlow` |
+| H.6 | ✓ | Web scaffold + auth bridge + placeholders |
+| **H.7** | **✓ this step** | **Real public landing** |
+| H.8 | next | Stripe Checkout integration on `/upgrade` |
+| H.10 | future | Real `/dashboard` + Customer Portal link |
+| H.11 | future | `/admin/subscriptions` |
+| H.12 | future | `/api/stripe/webhook` |
+
+### H.8 handoff
+
+H.8 ships the real Stripe Checkout integration on `/upgrade`. Concrete pieces:
+
+1. **Stripe Dashboard prep (manual setup).**
+   - Create a `Mony Pro` Product.
+   - Create two Prices on it: monthly (€19) and yearly (€190).
+   - Capture the price IDs (`price_1...`) for the env vars.
+2. **Env vars (Vercel + local).**
+   - `STRIPE_SECRET_KEY` (server-side, NOT `NEXT_PUBLIC`).
+   - `STRIPE_PUBLISHABLE_KEY` (`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` for the client SDK if needed).
+   - `STRIPE_PRICE_MONTHLY` / `STRIPE_PRICE_YEARLY`.
+3. **Server-side: `app/api/stripe/checkout/route.ts`.**
+   - POST handler. Verifies caller's auth via `getSupabaseServer().auth.getUser()`.
+   - Creates a `mode: 'subscription'` Checkout session with `line_items: [{ price: STRIPE_PRICE_MONTHLY, quantity: 1 }]`, `customer_email: user.email`, `metadata: { user_id, seller_id }`, `success_url: ${origin}/dashboard?session_id={CHECKOUT_SESSION_ID}`, `cancel_url: ${origin}/upgrade`.
+   - Returns `{ url }`.
+4. **Client-side: `/upgrade` page upgrade.** Replace the H.6 placeholder with: heading + price chooser (monthly/yearly toggle) + a `<form action={...}>` that POSTs to `/api/stripe/checkout` and redirects to `session.url`. Stays auth-gated (existing `getUser()` redirect to `/`).
+5. **Test mode for v1.** Use Stripe test keys + test prices. Live-mode flip is a separate H.14 step alongside DNS / production go-live.
+
+The H.12 webhook handler is a pre-existing future step — shipped separately so subscription state syncs to `subscriptions` (the H.2 trigger handles `is_pro` mirroring automatically).
+
+### Reversion
+
+```bash
+git revert <H.7 commit>
+```
+
+Removes:
+- 9 new files (3 UI primitives, 6 landing components).
+- The `lucide-react` dependency from `package.json` + lockfile.
+- The H.7 modifications to `page.tsx`, `layout.tsx`, `next.config.ts`, `server.ts`, `middleware.ts`.
+
+After revert, `cd web && npm install` re-resolves the dependency graph without `lucide-react`. The H.6 placeholder returns at `/`. Both H.6's auth bridge and the H.7-fixed Supabase SSR types stay intact (they were strict improvements not coupled to the landing).
+
+If only the landing UI should be removed but the H.6 latent-any fixes should stay, the surgical revert is `git checkout HEAD -- web/src/app/page.tsx web/src/app/layout.tsx` plus `rm -r web/src/components/landing web/src/components/ui` plus `npm uninstall lucide-react`. But the simple `git revert` is preferred unless that surgical state is specifically wanted.
+

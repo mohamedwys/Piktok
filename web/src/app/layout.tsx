@@ -31,9 +31,57 @@ const fraunces = Fraunces({
   weight: ['400', '500', '600'],
 });
 
+/**
+ * Site-wide metadata — SEO + Open Graph + Twitter Card.
+ *
+ * `metadataBase` is required by Next.js to resolve absolute URLs
+ * for OG image references; it points at the production deploy.
+ * If the Vercel URL changes (e.g., custom brand domain lands),
+ * update here in lockstep with the mobile-side `WEB_BASE_URL`
+ * constant and the Supabase secret of the same name.
+ *
+ * The OG image (`/og-image.png`) is a TODO — H.7 references the
+ * path but does not ship the asset. Two paths to close it:
+ *   (a) Static asset committed to /web/public/og-image.png
+ *       (1200×630, brand mark on the dark stack).
+ *   (b) Dynamic generation via next/og at /api/og.
+ * Both are post-H.7 work. Until one lands, share previews on
+ * Twitter / LinkedIn / iMessage will fall back to a plain link
+ * card with the title + description.
+ *
+ * Locale: French only for v1 (matches mobile's primary market).
+ * `lang="fr"` and `locale: 'fr_FR'` for OG. English alternates
+ * land when Phase F or H.X internationalizes the site.
+ */
 export const metadata: Metadata = {
-  title: 'Mony',
-  description: 'Mony — modern marketplace.',
+  title: 'Mony — Marketplace vidéo',
+  description:
+    "Vendez et achetez sur Mony, la marketplace vidéo. Vendeurs Pro avec paiement direct, mise en avant hebdomadaire et frais réduits.",
+  metadataBase: new URL('https://mony.vercel.app'),
+  openGraph: {
+    title: 'Mony — Marketplace vidéo',
+    description:
+      'Marketplace vidéo. Vendez, découvrez, connectez-vous.',
+    url: 'https://mony.vercel.app',
+    siteName: 'Mony',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Mony',
+      },
+    ],
+    locale: 'fr_FR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Mony — Marketplace vidéo',
+    description:
+      'Marketplace vidéo. Vendez, découvrez, connectez-vous.',
+    images: ['/og-image.png'],
+  },
 };
 
 export default function RootLayout({
@@ -43,7 +91,7 @@ export default function RootLayout({
 }) {
   return (
     <html
-      lang="en"
+      lang="fr"
       className={`dark ${inter.variable} ${fraunces.variable}`}
     >
       <body>{children}</body>

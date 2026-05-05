@@ -20,3 +20,22 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Legal pages prose */
+.legal-prose h1 { @apply text-3xl font-bold mb-6; }
+.legal-prose h2 { @apply text-xl font-semibold mt-10 mb-3; }
+.legal-prose h3 { @apply text-lg font-semibold mt-6 mb-2; }
+.legal-prose p  { @apply leading-relaxed mb-4; }
+.legal-prose ul { @apply list-disc pl-6 mb-4; }
+.legal-prose ol { @apply list-decimal pl-6 mb-4; }
+.legal-prose a  { @apply text-[#FF5A5C] underline; }
+.legal-prose strong { @apply font-semibold; }
+.legal-prose em { @apply italic; }
+.legal-prose table { @apply w-full text-sm my-6; }
+.legal-prose th,
+.legal-prose td { @apply border border-zinc-300 dark:border-zinc-700 px-3 py-2; }
+.legal-prose hr { @apply my-8 border-zinc-200 dark:border-zinc-800; }
+.legal-prose blockquote { @apply border-l-4 border-zinc-600 pl-4 italic text-zinc-400 my-4; }
+[dir="rtl"] .legal-prose ul,
+[dir="rtl"] .legal-prose ol { @apply pr-6 pl-0; }
+[dir="rtl"] .legal-prose blockquote { @apply border-l-0 border-r-4 pl-0 pr-4; }

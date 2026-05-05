@@ -231,5 +231,13 @@
     "views30d": "Views (30d)",
     "upgradeTeaser": "Upgrade to Pro to see who's viewing your listings.",
     "upgradeCta": "View analytics"
+  },
+  "legal": {
+    "backHome": "Back to Mony",
+    "footer": {
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "childSafety": "Child Safety"
+    }
   }
 }

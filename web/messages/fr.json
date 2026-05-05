@@ -231,5 +231,13 @@
     "views30d": "Vues (30j)",
     "upgradeTeaser": "Passez Pro pour voir qui consulte vos annonces.",
     "upgradeCta": "Voir les statistiques"
+  },
+  "legal": {
+    "backHome": "Retour à Mony",
+    "footer": {
+      "privacy": "Confidentialité",
+      "terms": "Conditions",
+      "childSafety": "Sécurité des enfants"
+    }
   }
 }

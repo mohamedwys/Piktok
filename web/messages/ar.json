@@ -232,5 +232,14 @@
     "views30d": "المشاهدات (30 يومًا)",
     "upgradeTeaser": "ترقَّ إلى Pro لرؤية من يطّلع على إعلاناتك.",
     "upgradeCta": "عرض الإحصائيات"
+  },
+  "legal": {
+    "_arNote": "DRAFT — pending native-speaker review",
+    "backHome": "العودة إلى Mony",
+    "footer": {
+      "privacy": "الخصوصية",
+      "terms": "الشروط",
+      "childSafety": "سلامة الأطفال"
+    }
   }
 }

@@ -7882,3 +7882,15 @@ commit;
 Then run `npm run gen:types` to drop `product_views` + `track_product_view` + `get_product_analytics` from the mobile `Database` types.
 
 
+
+## H.15 — Legal pages
+- Three new routes: /legal/{privacy,terms,child-safety}, locale-aware (en/fr/ar)
+- Markdown content at web/src/content/legal/*.{en,fr,ar}.md, rendered via react-markdown + remark-gfm
+- Shared LegalLayout (web/src/app/[locale]/legal/layout.tsx) with .legal-prose Tailwind styles (LTR + RTL-aware) in globals.css
+- Footer updated: real locale-aware Link components replace placeholder <a href="#"> for Terms, Privacy, Child Safety (linkChildSafety replaces linkCookies slot — no cookies page yet)
+- Sitemap (web/src/app/sitemap.ts) includes 9 legal URLs (3 slugs × 3 locales); robots.txt created at web/public/robots.txt
+- Mobile Settings (src/app/(protected)/(tabs)/profile.tsx): Legal section with 3 AccountRow entries — Privacy Policy, Terms of Use, Child Safety Standards — each launching WebBrowser.openBrowserAsync to the corresponding web URL
+- i18n keys added: web legal.{backHome,footer.*} in all 3 locales; mobile settings.legal.* in en + fr
+- Contact email throughout: Support@app-mony.com
+- DRAFT: AR translations are placeholder stubs linking to EN; native-speaker review needed before UAE public launch
+- Pending placeholders in EN/FR content: [LEGAL ENTITY NAME], [REGISTERED ADDRESS], [LICENSE NUMBER], [DATE] — fill once UAE entity is incorporated and counsel approves copy

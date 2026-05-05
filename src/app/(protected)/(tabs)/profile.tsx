@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { WEB_BASE_URL } from '@/lib/web/constants';
 import {
   setLanguage,
   SUPPORTED_LANGUAGES,
@@ -680,6 +682,31 @@ export default function ProfileScreen(): React.ReactElement {
             </Surface>
           </View>
         ) : null}
+
+        <View style={styles.section}>
+          <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+            {t('settings.legal.title')}
+          </Text>
+          <Surface variant="surfaceElevated" radius="lg" border>
+            <AccountRow
+              icon="document-text-outline"
+              label={t('settings.legal.privacy')}
+              onPress={() => WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/legal/privacy`)}
+              showDivider
+            />
+            <AccountRow
+              icon="document-text-outline"
+              label={t('settings.legal.terms')}
+              onPress={() => WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/legal/terms`)}
+              showDivider
+            />
+            <AccountRow
+              icon="shield-checkmark-outline"
+              label={t('settings.legal.childSafety')}
+              onPress={() => WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/legal/child-safety`)}
+            />
+          </Surface>
+        </View>
       </ScrollView>
     </View>
   );

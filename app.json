@@ -11,7 +11,7 @@
       "icon": "./assets/logoo.png",
       "bundleIdentifier": "com.pictok.client",
       "supportsTablet": true,
-      "buildNumber": "6",
+      "buildNumber": "7",
       "requireFullScreen": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

@@ -232,6 +232,15 @@
     "upgradeTeaser": "Upgrade to Pro to see who's viewing your listings.",
     "upgradeCta": "View analytics"
   },
+  "signIn": {
+    "title": "Sign in to Mony",
+    "sub": "We'll email you a magic link — no password needed.",
+    "emailLabel": "Email",
+    "cta": "Send magic link",
+    "sending": "Sending…",
+    "checkEmailTitle": "Check your email",
+    "checkEmailBody": "We've sent a magic link to {email}. Click it to sign in."
+  },
   "legal": {
     "backHome": "Back to Mony",
     "footer": {

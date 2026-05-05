@@ -11,6 +11,8 @@
 
 html {
   color-scheme: dark;
+  scroll-padding-top: 5rem; /* offset sticky 64px header + breathing room */
+  scroll-behavior: smooth;
 }
 
 body {

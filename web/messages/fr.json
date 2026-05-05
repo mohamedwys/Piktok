@@ -232,6 +232,15 @@
     "upgradeTeaser": "Passez Pro pour voir qui consulte vos annonces.",
     "upgradeCta": "Voir les statistiques"
   },
+  "signIn": {
+    "title": "Connexion à Mony",
+    "sub": "Nous vous enverrons un lien magique — aucun mot de passe requis.",
+    "emailLabel": "Email",
+    "cta": "Envoyer le lien",
+    "sending": "Envoi…",
+    "checkEmailTitle": "Vérifiez votre boîte mail",
+    "checkEmailBody": "Nous avons envoyé un lien magique à {email}. Cliquez dessus pour vous connecter."
+  },
   "legal": {
     "backHome": "Retour à Mony",
     "footer": {

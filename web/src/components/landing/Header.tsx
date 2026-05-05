@@ -64,7 +64,7 @@ export async function Header() {
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
           <CurrencyPicker initial={currency} />
-          <Link href="/upgrade" className="ms-2">
+          <Link href="/sign-in" className="ms-2">
             <Button variant="outline" size="md">
               {t('signIn')}
             </Button>

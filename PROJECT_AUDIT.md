@@ -7894,3 +7894,21 @@ Then run `npm run gen:types` to drop `product_views` + `track_product_view` + `g
 - Contact email throughout: Support@app-mony.com
 - DRAFT: AR translations are placeholder stubs linking to EN; native-speaker review needed before UAE public launch
 - Pending placeholders in EN/FR content: [LEGAL ENTITY NAME], [REGISTERED ADDRESS], [LICENSE NUMBER], [DATE] — fill once UAE entity is incorporated and counsel approves copy
+
+## Bugfix — auth bridge (BUG-001 / BUG-002 / BUG-003 / BUG-004)
+
+**Files created:**
+- `web/src/app/[locale]/sign-in/page.tsx` — magic-link sign-in page (server component, locale-aware, redirects already-authed users)
+- `web/src/components/auth/SignInForm.tsx` — client component; calls `signInWithOtp` → "check email" confirmation state
+- `AUTH_FIX_AUDIT.md` — full root-cause analysis, fix log, and Supabase Dashboard instructions
+
+**Files modified:**
+- `supabase/functions/issue-web-session/index.ts` — `redirectTo` now routes through `/auth/callback?next=<path>` so `@supabase/ssr` can set session cookies; fallback `WEB_BASE_URL` default corrected to `mony-psi.vercel.app`
+- `web/src/components/landing/Header.tsx` — "Sign in" button now links to `/sign-in` instead of `/upgrade`
+- `web/src/app/globals.css` — added `scroll-padding-top: 5rem; scroll-behavior: smooth` so `#pricing` / `#features` / `#faq` anchors aren't obscured by the sticky header
+- `web/messages/{en,fr,ar}.json` — added `signIn` namespace (title, sub, emailLabel, cta, sending, checkEmailTitle, checkEmailBody)
+
+**User-facing behavior changes:**
+- "Sign in" in the landing header now opens a real `/sign-in` form instead of bouncing silently
+- The mobile "Upgrade to Pro" magic-link flow now lands on `/upgrade` with an active session
+- Pricing / Features / FAQ anchor scrolls now land with section heading visible below the header

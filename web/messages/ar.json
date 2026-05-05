@@ -233,6 +233,16 @@
     "upgradeTeaser": "ترقَّ إلى Pro لرؤية من يطّلع على إعلاناتك.",
     "upgradeCta": "عرض الإحصائيات"
   },
+  "signIn": {
+    "_arNote": "DRAFT — pending native-speaker review",
+    "title": "تسجيل الدخول إلى Mony",
+    "sub": "سنرسل لك رابطًا سحريًا — لا حاجة لكلمة مرور.",
+    "emailLabel": "البريد الإلكتروني",
+    "cta": "إرسال الرابط السحري",
+    "sending": "جارٍ الإرسال…",
+    "checkEmailTitle": "تحقق من بريدك الإلكتروني",
+    "checkEmailBody": "لقد أرسلنا رابطًا سحريًا إلى {email}. انقر عليه لتسجيل الدخول."
+  },
   "legal": {
     "_arNote": "DRAFT — pending native-speaker review",
     "backHome": "العودة إلى Mony",

@@ -87,8 +87,12 @@ Deno.serve(async (req) => {
       // Empty / invalid JSON body is fine — fall back to the default path.
     }
 
-    const webBaseUrl = Deno.env.get('WEB_BASE_URL') ?? 'https://mony.vercel.app';
-    const fullRedirect = new URL(redirectPath, webBaseUrl).toString();
+    const webBaseUrl = Deno.env.get('WEB_BASE_URL') ?? 'https://mony-psi.vercel.app';
+    // Route through /auth/callback so @supabase/ssr can exchange the
+    // token_hash for a cookie-based session before forwarding to `next`.
+    const callbackUrl = new URL('/auth/callback', webBaseUrl);
+    callbackUrl.searchParams.set('next', redirectPath);
+    const fullRedirect = callbackUrl.toString();
 
     // 3. Generate the magic link. `type: 'magiclink'` issues a single-use,
     //    time-limited (1h default) link signed by Supabase Auth. The

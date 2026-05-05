@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -24,13 +24,20 @@ export function RailProductCard({
   onPress,
   distanceKm,
 }: RailProductCardProps): React.ReactElement {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const title = getLocalized(product.title, lang);
   const fmt = useFormatDisplayPrice();
   const imageUri = product.media.thumbnailUrl ?? product.media.url;
   const showDistance =
     typeof distanceKm === 'number' && Number.isFinite(distanceKm);
+  // H.12: a listing is currently featured iff its `featured_until` is in
+  // the future. Cards anywhere in the app can opt-in to the badge by
+  // simply having a Product with this field populated; no parent flag
+  // required.
+  const isFeatured =
+    !!product.featuredUntil
+    && new Date(product.featuredUntil).getTime() > Date.now();
 
   return (
     <Pressable
@@ -41,12 +48,26 @@ export function RailProductCard({
       accessibilityRole="button"
     >
       <GlassCard variant="dark" radius="lg" border>
-        <Image
-          source={{ uri: imageUri }}
-          style={{ width: CARD_WIDTH, height: CARD_IMAGE_HEIGHT }}
-          contentFit="cover"
-          transition={150}
-        />
+        <View>
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: CARD_WIDTH, height: CARD_IMAGE_HEIGHT }}
+            contentFit="cover"
+            transition={150}
+          />
+          {isFeatured ? (
+            <View style={styles.featuredBadge}>
+              <Ionicons name="sparkles" size={10} color={colors.brand} />
+              <Text
+                variant="caption"
+                weight="semibold"
+                style={styles.featuredBadgeText}
+              >
+                {t('feed.featured')}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <View style={{ padding: spacing.sm, gap: 2 }}>
           <Text variant="caption" weight="semibold" numberOfLines={1}>
             {title}
@@ -82,5 +103,24 @@ export function RailProductCard({
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  featuredBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  featuredBadgeText: {
+    color: colors.brand,
+    fontSize: 11,
+  },
+});
 
 export default RailProductCard;

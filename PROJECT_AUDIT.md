@@ -7458,3 +7458,427 @@ Removes the five new files + reverts the dashboard page + the catalog extensions
 
 If only the Customer Portal API route should be removed but the dashboard kept (e.g., to swap to a custom billing UI), the surgical edit is to delete just `app/api/stripe/portal/route.ts` + `components/dashboard/ManageSubscriptionButton.tsx`, then update SubscriptionSummaryCard to render a different action. The status pill, layout, and empty state survive.
 
+---
+
+## Step H.11 Changelog (2026-05-04) — Admin Dashboard for Subscription Oversight
+
+Mixed schema + JS step. Adds the `is_admin` flag on `public.sellers` (one new migration, REVOKE'd from user UPDATE per the B.1.5 lineage), then ships the admin counterpart to H.10's seller dashboard: subscription list with search + status filter, detail page with destructive actions, two API routes for cancel + refund. Defense-in-depth gate at every layer (page + API). Mobile codebase byte-identical.
+
+> **Audit referenced:** PRO_AUDIT.md §10 open-question 15 (admin role storage — defaulted to a separate `admins` table; H.11 lands on a column on `sellers` for v1 simplicity, with a documented upgrade path if multi-role admin becomes necessary). The H.10 changelog's H.11 handoff list (this implements it).
+
+### Reconnaissance findings (re-confirmed before authoring)
+
+- **Latest migration timestamp** is `20260522_subscriptions_schema_and_trigger.sql` (H.2). Next slot is `20260523`.
+- **`getSupabaseAdmin()`** from H.9 ([web/src/lib/supabase/admin.ts](web/src/lib/supabase/admin.ts)) is the service-role client. Reused for cross-user subscription reads — RLS would block these via `subscriptions_self_select`, so service-role is correct here.
+- **`stripe` singleton** from H.8 ([web/src/lib/stripe.ts](web/src/lib/stripe.ts)) reused for cancel + refund Stripe API calls.
+- **Web has no Dialog/Modal primitive.** H.11 uses HTML5 native `<dialog>` + `<form method="dialog">` for typed-confirmation flows on destructive actions. Built-in browser support: Escape-close, scrim, keyboard nav for free.
+- **Stripe Invoice.payment_intent migration in API dahlia.** Stripe API `2026-04-22.dahlia` (stripe@22's pinned version) moved `payment_intent` off the `Invoice` type onto the `InvoicePayment` sub-resource. H.11's spec used `invoice.payment_intent` directly, which would fail typecheck. **Reconciled** by switching the refund flow to `stripe.charges.list({ customer, limit: 1 })` + `stripe.refunds.create({ charge: charge.id, ... })` — Charge is unchanged in dahlia and refundable directly.
+- **Web has no generated Supabase types** (`npm run gen:types` documented but not enforced; H.10 noted this and used a local `SubRow` type). H.11 follows the same pattern — local types for the join shape with documented casts.
+- **Existing admin.* keys** — none. H.11 introduces the namespace.
+
+### Files added (8)
+
+#### Schema migration (1)
+
+| Path | Purpose |
+| --- | --- |
+| [supabase/migrations/20260523_add_is_admin_to_sellers.sql](supabase/migrations/20260523_add_is_admin_to_sellers.sql) | `is_admin boolean NOT NULL DEFAULT false` on `public.sellers` + partial index `WHERE is_admin = true`. System-managed via B.1.5's positive-list grant pattern (no grant changes needed). Idempotent + reversible. |
+
+#### Helpers (1)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/lib/admin/auth.ts](web/src/lib/admin/auth.ts) | `requireAdmin(locale)` for Server Component pages — locale-aware redirect to `/` for non-admins. `requireAdminApi()` for Route Handlers — returns `{ ok: false, response }`. Both use the cookie-authed SSR client (NOT admin) for the `is_admin` lookup. |
+
+#### Pages (2)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/app/[locale]/admin/page.tsx](web/src/app/[locale]/admin/page.tsx) | Admin home — subscription list. `requireAdmin` first, then service-role query reads `subscriptions` joined with `sellers`. Filters via `?q=&status=`. v1 cap: 100 rows + in-memory search. |
+| [web/src/app/[locale]/admin/subscriptions/[id]/page.tsx](web/src/app/[locale]/admin/subscriptions/[id]/page.tsx) | Detail page. Seller card + state card + Stripe IDs (truncated) + AdminActions panel. |
+
+#### Components (2)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/components/admin/AdminSubscriptionTable.tsx](web/src/components/admin/AdminSubscriptionTable.tsx) | Server Component. Filter form (`<form method="get">`) + table with avatar / name / email / status pill (reused from H.10) / renewal date / "Open" link. |
+| [web/src/components/admin/AdminActions.tsx](web/src/components/admin/AdminActions.tsx) | Client Component. Three buttons: cancel-period-end (single click), cancel-immediate (typed `CANCEL` confirm), refund-last-charge (typed `REFUND` confirm). HTML5 `<dialog>` for typed confirmations. Inline result panel + auto-reload after success. |
+
+#### API routes (2)
+
+| Path | Purpose |
+| --- | --- |
+| [web/src/app/api/admin/cancel-subscription/route.ts](web/src/app/api/admin/cancel-subscription/route.ts) | POST. `requireAdminApi` → `stripe.subscriptions.update(id, { cancel_at_period_end: true })` (period_end) or `stripe.subscriptions.cancel(id)` (immediate). No DB write — H.9 webhook syncs. |
+| [web/src/app/api/admin/refund-last-charge/route.ts](web/src/app/api/admin/refund-last-charge/route.ts) | POST. `requireAdminApi` → `stripe.charges.list({ customer, limit: 1 })` → guards (no charges / not succeeded / already refunded) → `stripe.refunds.create({ charge, reason: 'requested_by_customer', metadata: { refunded_by_admin } })`. |
+
+### Files modified (3)
+
+- [web/messages/en.json](web/messages/en.json) — added `admin.*` namespace (~30 keys: title, total interpolation, search/filter, table columns, detail-page sections, action buttons, typed-confirmation prompts, success/error toasts, status enum mapping)
+- [web/messages/fr.json](web/messages/fr.json) — French mirror
+- [web/messages/ar.json](web/messages/ar.json) — Arabic mirror (best-effort, pending professional review per H.7.1)
+
+### Schema decision: `is_admin` column on `sellers` vs. separate `admins` table
+
+| Choice | Pro | Con |
+| --- | --- | --- |
+| **Column on `sellers`** (H.11 choice) | One less join. One less RLS policy. Existing B.1.5 column-level grants cover it. | Couples admin-ness to having a seller row. Single-role today. |
+| Separate `admins` table | Cleaner separation. Multi-role expansion is a column add. | Extra join on every admin gate. New RLS policy. |
+
+H.11 chose the column for v1 simplicity. Upgrade path documented (widen to enum or migrate to dedicated table).
+
+### Defense-in-depth (3-layer admin gate)
+
+```
+Layer 1: Page-level gate (Server Component)
+  /admin            → requireAdmin(locale) → redirect to / on miss
+  /admin/subs/[id]  → requireAdmin(locale) → redirect to / on miss
+
+Layer 2: API-level gate (Route Handler)
+  /api/admin/cancel-subscription  → requireAdminApi() → 403 on miss
+  /api/admin/refund-last-charge   → requireAdminApi() → 403 on miss
+
+Layer 3: Service-role usage (privileged data + Stripe API)
+  Only AFTER layers 1-2 pass.
+```
+
+A direct curl POST to `/api/admin/*` from an unauth'd session gets a 401 from Layer 2 even if Layer 1's page were misconfigured.
+
+### Refund flow: `stripe.charges.list` (not invoice indirection)
+
+In Stripe API `2026-04-22.dahlia`, `payment_intent` moved off `Invoice` onto `InvoicePayment` (same migration pattern that affected `current_period_*` per H.9). Switched to charges-then-refund — `Charge` is unchanged. Edge cases handled: `no_charges` 404, `charge_not_succeeded` 400, `already_refunded` 400. Refund's `metadata.refunded_by_admin` records which admin triggered it.
+
+### Typed confirmations for destructive actions
+
+| Action | Reversible? | Friction |
+| --- | --- | --- |
+| Cancel at period end | Yes (Stripe portal "Don't cancel") | Single click |
+| Cancel immediately | No | Type `CANCEL` to confirm |
+| Refund last charge | No | Type `REFUND` to confirm |
+
+HTML5 `<dialog>` + `<form method="dialog">` — browser-native modal with Escape-close, scrim, keyboard navigation. Submit button stays disabled until typed phrase exactly matches (case-sensitive).
+
+### Single-writer invariant preserved
+
+H.11's API routes do NOT write to `public.subscriptions`. They call Stripe API methods which fire webhook events; H.9 receives those events, upserts into the table, and the H.2 trigger updates `is_pro`. Single-writer (the H.9 webhook) preserved.
+
+Refunds don't currently propagate to `public.subscriptions` — refunds are charge-level events. H.X could extend H.9 to handle `charge.refunded` events into a `refunds` audit table if support tickets warrant.
+
+### Verification
+
+- **`cd web && npx tsc --noEmit`** → exit 0.
+- **JSON parse** for all three message catalogs → OK.
+- **`cd web && npx next build`** → succeeds. Build output:
+  - `/[locale]/admin` (●, /en, /fr, /ar): 186 B per locale.
+  - `/[locale]/admin/subscriptions/[id]` (ƒ, dynamic): 2.01 kB → 121 kB First Load JS (AdminActions Client Component bundles dialog logic).
+  - `/api/admin/cancel-subscription` (ƒ): 186 B.
+  - `/api/admin/refund-last-charge` (ƒ): 186 B.
+  - All previous routes unchanged.
+- **Mobile `tsc --noEmit`** → exit 0. Mobile codebase byte-identical (no `/src/` changes).
+
+### Manual setup required (one-time, in lockstep)
+
+1. **Apply the migration:**
+   ```powershell
+   cd C:\Users\MwL\Desktop\hubb
+   npm run db:push
+   ```
+2. **Regenerate mobile types** (the new `is_admin` column appears in the generated `Database` types):
+   ```powershell
+   npm run gen:types
+   git add src/types/supabase.ts
+   git commit -m "chore(types): regenerate after H.11 (is_admin)"
+   ```
+3. **Designate the first admin** via Supabase SQL Editor (Dashboard → SQL Editor):
+   ```sql
+   -- Look up your auth user id:
+   select id, email from auth.users;
+
+   -- Make yourself admin:
+   update public.sellers
+      set is_admin = true
+    where user_id = '<your_auth_user_id>';
+   ```
+4. **No new env vars** — H.11 reuses H.8's Stripe + H.9's service-role keys.
+
+### Manual / runtime verification
+
+- Visit `/admin` while logged in as a non-admin → redirects to `/`.
+- Visit `/admin` after the SQL update → admin list renders.
+- Filter `?status=active` / search `?q=...` → server re-renders.
+- Click "Open" → detail page.
+- Click "Cancel at period end" → POST → ~5s later (after H.9 webhook) reload shows `cancel_at_period_end = true`.
+- Click "Cancel immediately" → typed `CANCEL` → POST → reload shows `status = canceled`.
+- Click "Refund last charge" → typed `REFUND` → POST → success message + Stripe Dashboard reflects the refund.
+- Repeat in `/fr/admin` + `/ar/admin` to verify locale-aware copy.
+
+### Phase H mobile/web status (post-H.11)
+
+| Step | Status | Surface |
+| --- | --- | --- |
+| H.1–H.5 | ✓ | Mobile feature-complete |
+| H.6 | ✓ | Web scaffold + auth bridge |
+| H.7 | ✓ | Real public landing |
+| H.7.1 | ✓ | i18n EN/FR/AR |
+| H.7.2 | ✓ | RTL polish for AR |
+| H.7.3 | ✓ | Multi-currency EUR/USD/AED |
+| Op.3 | ✓ | WEB_BASE_URL → mony-psi.vercel.app |
+| H.8 | ✓ | Multi-currency Stripe Checkout |
+| H.9 | ✓ | Stripe webhook handler |
+| H.10 | ✓ | Real Pro dashboard + Customer Portal |
+| **H.11** | **✓ this step** | **Admin dashboard — subscription oversight** |
+| H.12 | next | Pro feature gates (transaction fee discount, featured boost, analytics) |
+| H.14 | future | Stripe live-mode flip + production go-live |
+
+Phase H seller-side AND admin-side surfaces are both complete in test mode.
+
+### H.12 handoff (Pro feature gates)
+
+H.12 ships the actual Pro perks beyond ProBadge + listing-cap removal:
+
+1. **Reduced transaction fee** — when a Pro seller's product is purchased, apply ~4% application fee instead of ~7%. Implementation likely in `supabase/functions/create-checkout-session/index.ts`: read `sellers.is_pro`, set `application_fee_amount` accordingly. Requires Stripe Connect (currently dormant per PRO_AUDIT.md §2.4) — H.12 may need to ship Connect onboarding first OR apply the fee at platform level (since Connect isn't wired, all funds go to the platform; "fee discount" becomes a platform-side bookkeeping number).
+2. **Featured-listing boost** — 1 boosted listing per week per Pro seller. New column `products.featured_at timestamptz` + RPC `boost_listing(product_id)` that checks `sellers.is_pro` AND no boost in the last 7 days. Marketplace feed sorts featured-then-newest.
+3. **Analytics stub** — basic view counts per listing. New `product_views` table with RLS scoped to seller. Mobile `useProductAnalytics(productId)` hook. v1 stays simple (just view counts).
+
+### Reversion
+
+```bash
+git revert <H.11 commit>
+```
+
+Removes all 8 new files + reverts the catalog extensions. The migration revert requires manual SQL execution if applied:
+
+```sql
+begin;
+  drop index if exists public.sellers_is_admin_idx;
+  alter table public.sellers drop column if exists is_admin;
+commit;
+```
+
+Then run `npm run gen:types` to drop `is_admin` from the mobile `Database` types.
+
+If only the admin pages should be removed but the schema kept, the surgical edit is to delete just the `/web/src/app/[locale]/admin/` tree + `/web/src/app/api/admin/` tree + `/web/src/components/admin/` tree + `/web/src/lib/admin/auth.ts`, leaving the migration and the column in place.
+
+## Step H.12 Changelog (2026-05-05) — Featured Listing Boost
+
+Pro perk H.12: Pro sellers can boost ONE of their listings per 7-day window. Boosted listings render with an "À la une" / "Featured" badge anywhere they appear and surface on a dedicated rail at the top of the Categories page during their boost window. This step gives the Pro subscription its first **visible operational** benefit beyond the badge + unlimited listings.
+
+### Reconnaissance
+
+Before writing code I read:
+
+- `src/features/marketplace/hooks/useTrendingProducts.ts` and `src/features/marketplace/hooks/useNewestProducts.ts` for the rail-data hook pattern. Both wrap `useQuery` with a `['marketplace', 'products', '<rail>', ...]` cache key, a 60-300s `staleTime`, and a service helper that returns a typed list. `useFeaturedProducts` mirrors this exactly with the key `['marketplace', 'featured', 'list', LIMIT]`.
+- `src/components/categories/CategoryRail.tsx` and `src/components/categories/RailProductCard.tsx` so the new Featured rail could compose `<CategoryRail>` directly with no new wrapper component. The badge overlay lives inside `RailProductCard` rather than as a new component — a single-purpose rendering primitive that activates whenever a `Product.featuredUntil` is in the future, no parent flag required.
+- `src/features/marketplace/components/ProductDetailSheet.tsx` for the own-listing detection pattern. The sheet did not previously read the caller's seller row; H.12 introduces `useMySeller(isAuthenticated)` and an `isOwn = mySeller?.id === product.seller.id` guard.
+- `src/features/marketplace/services/products.ts` for the existing `select('*, seller:sellers(*)')` query shape. The new `listFeaturedProducts(limit)` reuses this shape and adds `.gt('featured_until', now)` + `.order('featured_until', { ascending: false })` so the partial index `products_featured_until_idx` is the planner's chosen path. `featureProduct(productId)` is a thin RPC wrapper that re-throws Postgres errors verbatim so call sites can pattern-match (`'not_pro'`, `'cooldown_active'`, `'not_owner_or_product_missing'`).
+- The migration convention from H.2 / D.2: `uuid_generate_v4()` (uuid-ossp from 20260501) over `gen_random_uuid()` (pgcrypto), `BEGIN`/`COMMIT`-wrapped, idempotent guards (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`), inline rollback SQL at top.
+
+### Files created
+
+- **`supabase/migrations/20260524_featured_listings.sql`** — 1 column on `public.products` (`featured_until timestamptz nullable`), 1 column on `public.sellers` (`last_boost_at timestamptz nullable`), 1 partial BTREE index on `products(featured_until DESC) WHERE featured_until IS NOT NULL`, 1 SECURITY DEFINER RPC `feature_product(uuid) returns jsonb`. The RPC verifies Pro state + ownership + cooldown atomically, then writes both timestamps and returns a JSON payload `{ product_id, featured_until, next_available_at }`. `revoke all from public` + `grant execute to authenticated` locks the function down.
+- **`src/features/marketplace/hooks/useFeaturedProducts.ts`** — read-side hook. `useQuery` with key `['marketplace', 'featured', 'list', LIMIT=10]` and `staleTime: 60_000`.
+- **`src/features/marketplace/hooks/useFeatureProductMutation.ts`** — write-side hook. Plain mutation (no optimistic state — the boost is server-validated, there is no useful local approximation). On success invalidates `['marketplace', 'featured']`, `['marketplace', 'products', 'byId', productId]`, and `['marketplace', 'my-seller']` (the latter so `lastBoostAt` refreshes for the cooldown countdown).
+- **`src/components/feed/BoostButton.tsx`** — Pro-perk CTA. Five-state machine in priority order: `loading` → `gate` (non-Pro, routes to `useUpgradeFlow`) → `featured` (currently boosted, disabled) → `cooldown` (within 7d of last boost, disabled with localized next-date) → `idle` (tappable, opens confirm Alert). Errors map to upgrade flow / cooldown Alert / generic Alert as belt-and-suspenders against the UI gate.
+
+### Files modified
+
+- **`src/features/marketplace/types/product.ts`** — added `featuredUntil?: string | null` to `Product`.
+- **`src/features/marketplace/services/products.ts`** — added `featured_until` to `ProductRow`, propagated through `rowToProduct`. New exports: `featureProduct`, `listFeaturedProducts`, type `FeatureProductResult`. The `featureProduct` RPC call uses an `as never` cast on the function name + args and an `as unknown as FeatureProductResult` cast on the return — documented exception until `npm run gen:types` registers `feature_product` in `Database['public']['Functions']`. Same precedent as E.2's `incrementShareCount` cast.
+- **`src/features/marketplace/services/sellers.ts`** — added `last_boost_at` to `SellerRow` and `lastBoostAt: string | null` to `SellerProfile`. Propagated through `rowToSeller`.
+- **`src/components/categories/RailProductCard.tsx`** — added the `isFeatured` derivation and the absolute-positioned badge overlay on top of the image (top-left corner, `position: absolute`, sparkle icon + "À la une" text in `colors.brand`).
+- **`src/features/marketplace/components/ProductFeedItem.tsx`** — added the same badge overlay above `SellerPill` in the swipe feed. Positioned with absolute `left: spacing.lg` and `top: topRowTop - 28` so it sits just above the SellerPill row.
+- **`src/app/(protected)/(tabs)/friends.tsx`** — wired `useFeaturedProducts()`. The Featured rail renders ABOVE the Tendances rail and **only** when there are featured products (or the query is loading); when the query resolves to `[]` the section disappears entirely so we don't show a "no featured products" placeholder for the (early-launch) common case.
+- **`src/features/marketplace/components/ProductDetailSheet.tsx`** — mounted `<BoostButton/>` after the `sellerCard` block, gated by `isOwn = mySeller?.id === product.seller.id`. Imports `useMySeller`, `useAuthStore`, `BoostButton`. Did not modify the footer or any non-owner action.
+- **`src/i18n/locales/en.json`** + **`src/i18n/locales/fr.json`** — new keys: `feed.featured`, `categories.featuredRailTitle`, and a new `boost.*` namespace with 12 keys (`buttonIdle`, `buttonFeatured`, `buttonCooldown`, `buttonProGate`, `confirmTitle`, `confirmBody`, `confirmAction`, `successTitle`, `successBody`, `errorNotPro`, `errorCooldown`, `errorGeneric`).
+
+### SECURITY DEFINER rationale (cite B.1.5 + C.2 + D.1.5 + E.2)
+
+`featured_until` is a NEW column on `public.products`. D.1.5 (`20260519_tighten_products_update_grants.sql`) revoked the table-wide UPDATE grant on `products` and re-granted column-level UPDATE only on the user-controlled allowlist; H.12 deliberately does NOT extend that allowlist. Likewise `last_boost_at` is a new column on `public.sellers` and B.1.5 (`20260515_tighten_sellers_update_grants.sql`) restricts UPDATE on sellers to user-controlled columns only. Either column is therefore unwritable to `authenticated`.
+
+The boost RPC must run as the migration owner to bypass both column-grant allowlists. SECURITY DEFINER + `set search_path = public, pg_catalog` defeats the classic shadow-object hijack vector — same shape and same justification as E.2's `increment_share_count` and D.2's `handle_comment_change`. The function additionally enforces `auth.uid() IS NULL` → exception, joins sellers↔products on `seller_id` filtered by `sellers.user_id = auth.uid()` for ownership, and re-checks `is_pro` in-function. A compromised mobile build that bypassed the BoostButton state machine would still hit `RAISE EXCEPTION 'not_pro'` or `'cooldown_active'`.
+
+### Cooldown model: 7-day window from last boost START
+
+Boost duration = 7 days. Cooldown = 7 days. The cooldown is computed FROM `sellers.last_boost_at`, not from `products.featured_until`. Because durations match, `last_boost_at + cooldown` is exactly the moment the current boost expires — there is no dead time and there is no second boost mid-window. One Pro perk per week, period. The mobile `BoostButton` derives its disabled-with-countdown state from `lastBoostAt + 7d`; the server independently re-checks `now < last_boost_at + interval '7 days'`.
+
+The model is deliberately simple. A "boost when current expires" or "rolling 7d from completion" model would invite re-boosting the same listing perpetually and dilute the rail. We accept the simplicity tradeoff of exactly-one-boost-per-week.
+
+### Pro gate (defense in depth)
+
+The `BoostButton`'s `state.kind === 'gate'` branch routes non-Pro taps through `useUpgradeFlow` (the same hook the H.4 cap-modal / sell-flow banner / profile pitch banner / action-rail checkout-gate use). The RPC re-checks `is_pro` and raises `'not_pro'` if the seller is not Pro — error-handler maps that error back through `useUpgradeFlow` so the caller still gets the upgrade affordance even if the UI gate was bypassed.
+
+### Reduced fee + analytics deferred
+
+Reduced transaction fee: not implemented in this step. Reduced fees are a payment-flow concern (Stripe `application_fee_amount` plumbing through H.8's `create-checkout-session` Edge Function) that should be tackled with the rest of the post-launch fee-tier work, not with the visible boost perk. **Deferred to post-launch.**
+
+Analytics: not implemented in this step. The natural next step is a `boost_events` table populated from `feature_product` (audit trail: who boosted what, when, with what RPC outcome), surfaced in the admin web tooling. **Deferred to H.13.**
+
+### Verification
+
+- **`npx tsc --noEmit`** → exit 0. Mobile codebase type-clean against the new `Product.featuredUntil`, `SellerProfile.lastBoostAt`, `featureProduct` / `listFeaturedProducts` services, and the BoostButton state machine.
+- **JSON parse** for both `src/i18n/locales/en.json` and `src/i18n/locales/fr.json` → OK. No structural drift; the 12 new `boost.*` keys + 2 new top-level keys (`feed.featured`, `categories.featuredRailTitle`) are present in both locales.
+- **Migration parse**: `BEGIN`/`COMMIT` balance verified, idempotent guards on every DDL (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`), inline rollback SQL block at top.
+- **Manual / runtime (deferred to user — requires applying the migration + admin granting self Pro for testing):**
+  - As Pro: open own product → "Boost listing" button visible. Tap → confirm → success Alert with localized expiration. Listing card immediately gains the "À la une" badge.
+  - Visit Categories → "À la une" rail renders the boosted product above Tendances.
+  - Wait < 7 days → BoostButton shows "Prochain boost {date}" with the cooldown expiration date.
+  - Wait 7 days → BoostButton re-enables.
+  - As non-Pro: BoostButton shows "Booster (Pro)" → tap = upgrade flow.
+  - As another seller viewing the boosted listing: badge visible; no boost button.
+
+### Manual setup required (one-time, in lockstep)
+
+1. **Apply the migration:**
+   ```powershell
+   cd C:\Users\MwL\Desktop\hubb
+   npm run db:push
+   ```
+2. **Regenerate mobile types** (registers `featured_until`, `last_boost_at`, and the `feature_product` Function in the generated `Database` types — at which point the documented `as unknown as FeatureProductResult` cast in `featureProduct` can be replaced with the generated function-return type):
+   ```powershell
+   npm run gen:types
+   git add src/types/supabase.ts
+   git commit -m "chore(types): regenerate after H.12 (featured_until / last_boost_at / feature_product)"
+   ```
+3. **No new env vars** — H.12 reuses the existing Supabase connection.
+
+### Phase H feature-gate matrix (post-H.12)
+
+| Perk | Status | Surface |
+| --- | --- | --- |
+| Listing cap (free 5 / Pro unlimited) | ✓ H.3 | Mobile sell flow + `newPost.tsx` cap modal |
+| "PRO" badge on listings + profile | ✓ existing | Mobile (`SellerPill`, profile header) |
+| Acheter direct (direct-checkout gate) | ✓ existing | Mobile `ProductDetailSheet` Buy now button |
+| **Featured listing boost (1× per 7d)** | **✓ H.12** | **Mobile (BoostButton, badge, Categories rail)** |
+| Reduced transaction fee | ⏸ deferred post-launch | Stripe `application_fee_amount` |
+| Analytics dashboard (incl. boost outcomes) | ⏸ H.13 | TBD |
+
+### Reversion command
+
+```powershell
+git revert <h12-commit-sha>
+```
+
+…then run the documented rollback SQL from the migration's header to drop the columns + index + RPC. The mobile codebase is fully reverted by the `git revert`; the database needs the manual rollback because migrations are forward-only by convention.
+
+```sql
+begin;
+  revoke execute on function public.feature_product(uuid) from authenticated;
+  drop function if exists public.feature_product(uuid);
+  drop index    if exists public.products_featured_until_idx;
+  alter table   public.sellers  drop column if exists last_boost_at;
+  alter table   public.products drop column if exists featured_until;
+commit;
+```
+
+Then run `npm run gen:types` to drop `featured_until` / `last_boost_at` / `feature_product` from the mobile `Database` types.
+
+## Step H.13 Changelog (2026-05-05) — Pro-gated Product-View Analytics
+
+H.13 turns the Pro perk story from "boost + badge" into "boost + badge + visibility into who's looking." A Pro seller opening their own listing now sees a 3-tile analytics card (24h / 7d / 30d view counts). A free-tier seller sees a soft Pro-upsell teaser in the same slot. Anonymous and authenticated views are tracked; owner self-views are filtered out server-side.
+
+**Audit-first deliverable:** `ANALYTICS_AUDIT.md` at the repo root captures the design decisions and the deviations from the literal H.13 prompt (which referenced symbols that don't exist in this repo verbatim). The summary below is intentionally brief; the full rationale lives there.
+
+### Reconnaissance
+
+- `src/hooks/useUpgradeFlow.ts` and `src/features/marketplace/hooks/useIsPro.ts` are reused as-is (same hooks the H.4 cap-modal / banner / action-rail and the H.12 BoostButton consume). The H.13 prompt's destructured `{ data: isPro } = useIsPro()` form is wrong — the hook returns a plain `boolean`.
+- `src/components/marketplace/ProUpgradeBanner.tsx` already accepts `emphasis="soft"|"urgent"` plus title / body / ctaLabel / onPressCta. The H.13 teaser slot reuses it without modification.
+- The H.13 prompt suggested `gen_random_uuid()` (pgcrypto). The codebase convention is `uuid_generate_v4()` (uuid-ossp from 20260501); H.13 follows the convention so no new extension dependency is introduced. Captured in ANALYTICS_AUDIT.md §2.4.
+- The H.13 prompt referenced `useSupabase()`. The codebase has no such hook — every service file imports the `supabase` singleton directly from `@/lib/supabase`. H.13 matches the existing pattern. Captured in ANALYTICS_AUDIT.md §2.1.
+- `web/messages/{en,fr,ar}.json` use ICU placeholders (`{message}`) under next-intl; mobile uses i18next (`{{date}}`). H.13's web copy has no placeholders so the difference is moot, but it's worth recording for future parity work.
+
+### Files created
+
+- **`ANALYTICS_AUDIT.md`** (repo root) — design audit. Schema, RPC contract, hook semantics, UI state machine, i18n key table, open questions / handoffs.
+- **`supabase/migrations/20260605_product_views.sql`** — `public.product_views` append-only event log (cascade-on-product-delete, set-null-on-viewer-delete), composite index `(product_id, viewed_at DESC)`, RLS enabled with **no policies** (table is locked to service-role + SECURITY DEFINER RPCs only), plus two RPCs:
+  - `track_product_view(uuid)` — anon-callable, owner-self-view excluded server-side. Granted to `anon, authenticated`.
+  - `get_product_analytics(uuid)` — authed-only, ownership-gated. Returns `(views_24h, views_7d, views_30d)` as a single-row table. Pro state is NOT checked server-side (gated client-side; cf. ANALYTICS_AUDIT.md §2.8). Granted to `authenticated`.
+- **`src/features/marketplace/services/analytics.ts`** — `trackProductView(productId)` (silent, fire-and-forget) and `getProductAnalytics(productId)` (re-throws RPC errors so React Query can transition to `isError`). Both use the documented `as never` RPC-name + args casts pending `npm run gen:types`. Same pattern as H.12's `featureProduct`.
+- **`src/features/marketplace/hooks/useTrackProductView.ts`** — effect-based, fires once per `productId` per app session via a `useRef<Set<string>>` dedup. No return value.
+- **`src/features/marketplace/hooks/useProductAnalytics.ts`** — `useQuery` with three-way enable gate (`!!productId && isOwner && isPro`), 60s `staleTime`, returns `UseQueryResult<ProductAnalytics, Error>`.
+- **`src/components/marketplace/AnalyticsCard.tsx`** — owner-only / Pro-gated UI. Returns `null` for non-owners (mount-anywhere safety), renders `<ProUpgradeBanner emphasis="soft"/>` for free-tier owners, and renders 3 stat tiles for Pro owners. Errors fall through to `—` placeholders rather than surfacing an Alert.
+
+### Files modified
+
+- **`src/features/marketplace/components/ProductDetailSheet.tsx`** — added `useTrackProductView(productId)` (fires unconditionally on every product-id change) and mounted `<AnalyticsCard productId isOwner={isOwn}/>` inside the existing `isOwn` block, directly below the H.12 BoostButton.
+- **`src/i18n/locales/en.json`** + **`src/i18n/locales/fr.json`** — new `analytics.*` namespace (6 keys: `title`, `views24h`, `views7d`, `views30d`, `upgradeTeaser`, `upgradeCta`).
+- **`web/messages/{en,fr,ar}.json`** — same `analytics.*` namespace added on the web side for parity (the namespace is ready for a future H.14 / admin console without a second i18n PR; H.13 itself ships no new web UI). The Arabic block carries an `_arNote` flag noting it is pending native-speaker review (same caveat as H.7.1).
+
+### SECURITY DEFINER + RLS rationale
+
+`product_views` has RLS enabled with **no policies** plus an explicit `revoke all from anon, authenticated, public` on the table grants. Effect: the table is unreachable from PostgREST regardless of any future policy authoring mistakes. The only writers are the SECURITY DEFINER RPCs (which run as the migration owner and bypass RLS), the service_role (Edge Functions, admin), and direct DB superuser access.
+
+`set search_path = public, pg_catalog` on both functions defeats the classic SECURITY DEFINER hijack vector — same shape as C.2's `handle_follow_change`, D.2's `handle_comment_change`, E.2's `increment_share_count`, and H.12's `feature_product`.
+
+### Owner-self-view exclusion via SECURITY DEFINER
+
+`track_product_view` resolves the caller's `seller.id` from `auth.uid()`, looks up the product owner, and returns without inserting if they match. Anonymous callers (`auth.uid() IS NULL`) cannot match by definition. This is server-side enforcement — a compromised mobile build that skipped the dedup ref would still be filtered out at the database layer.
+
+### Pro gate enforced two ways: client (useIsPro) + server (RPC ownership check)
+
+The Pro check on the analytics view itself is **deliberately client-side**. The `get_product_analytics` RPC verifies *ownership* (you can only read counts for products you own) but not Pro state. Aggregates on a public listing are not legally sensitive — the perk is the polished in-app surface, not the raw integer. A free seller hitting the RPC from a Supabase shell gets numbers back; they still don't get the in-app Pro UI. Removing the server-side Pro check keeps the RPC stable across future Pro/free-tier rule changes (grandfathering, regional pricing) without migration churn. Cf. ANALYTICS_AUDIT.md §2.8.
+
+### Verification
+
+- **Mobile `npx tsc --noEmit`** → exit 0. Type-clean against the new service helpers, hooks, AnalyticsCard, and the ProductDetailSheet wiring.
+- **Web `cd web && npx tsc --noEmit`** → exit 0. The web codebase is byte-identical except for the three locale files; tsc confirms the JSON imports remain valid.
+- **JSON parse** for all five locale files (`src/i18n/locales/{en,fr}.json`, `web/messages/{en,fr,ar}.json`) → OK.
+- **Migration parse**: `BEGIN`/`COMMIT` balance verified, every DDL idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`), inline rollback SQL block at top.
+- **Manual / runtime (deferred to user — requires applying the migration + admin granting self Pro for testing):**
+  - Open another seller's product detail → `select count(*) from public.product_views where product_id = ...` increments by 1.
+  - Open your own product detail → no row inserted (owner self-view excluded).
+  - As free-tier seller on your own product → soft teaser banner with "View analytics" CTA → magic-link upgrade flow.
+  - Resubscribe to Pro → reload product detail → 24h / 7d / 30d numbers render (likely 0/0/0 unless you triggered scenario #1 from another account).
+  - As Pro, attempt `select * from public.get_product_analytics('<not-your-product-id>')` from a Supabase shell → `not_authorized` error.
+  - Anon tracking: log out / use an incognito client, open a product, confirm `viewer_seller_id IS NULL` and the row exists.
+
+### Manual setup required (one-time, in lockstep)
+
+1. **Apply the migration:**
+   ```powershell
+   cd C:\Users\MwL\Desktop\hubb
+   npm run db:push
+   ```
+2. **Regenerate mobile types** (registers `product_views` Table + the two new Functions in the generated `Database` types — at which point the documented `as never` casts in `analytics.ts` can be replaced with the generated function-arg / function-return types):
+   ```powershell
+   npm run gen:types
+   git add src/types/supabase.ts
+   git commit -m "chore(types): regenerate after H.13 (product_views + analytics RPCs)"
+   ```
+3. **No new env vars** — H.13 reuses the existing Supabase connection.
+
+### Phase H feature-gate matrix (post-H.13)
+
+| Perk | Status | Surface |
+| --- | --- | --- |
+| Listing cap (free 5 / Pro unlimited) | ✓ H.3 | Mobile sell flow + cap modal |
+| "PRO" badge on listings + profile | ✓ existing | Mobile (`SellerPill`, profile header) |
+| Acheter direct (direct-checkout gate) | ✓ existing | Mobile `ProductDetailSheet` Buy now button |
+| Featured listing boost (1× per 7d) | ✓ H.12 | Mobile (BoostButton, badge, Categories rail) |
+| **Product-view analytics (24h/7d/30d)** | **✓ H.13** | **Mobile (`AnalyticsCard` in ProductDetailSheet)** |
+| Reduced transaction fee | ⏸ deferred post-launch | Stripe `application_fee_amount` |
+| Charts / breakdowns / click-through | ⏸ later phase | TBD |
+| Web admin analytics surface | ⏸ later phase | i18n keys ready (`analytics.*`); no UI yet |
+
+### Reversion command
+
+```powershell
+git revert <h13-commit-sha>
+```
+
+…then run the documented rollback SQL from the migration's header to drop the table + indexes + RPCs. The mobile codebase is fully reverted by `git revert`; the database needs the manual rollback because migrations are forward-only by convention.
+
+```sql
+begin;
+  revoke execute on function public.get_product_analytics(uuid)
+    from authenticated;
+  drop function if exists public.get_product_analytics(uuid);
+  revoke execute on function public.track_product_view(uuid)
+    from anon, authenticated;
+  drop function if exists public.track_product_view(uuid);
+  drop index if exists public.product_views_product_id_viewed_at_idx;
+  drop table if exists public.product_views;
+commit;
+```
+
+Then run `npm run gen:types` to drop `product_views` + `track_product_view` + `get_product_analytics` from the mobile `Database` types.
+
+

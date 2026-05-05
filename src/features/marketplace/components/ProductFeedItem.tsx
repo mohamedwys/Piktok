@@ -5,16 +5,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, type Href } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
 import ProductBottomPanel from '@/features/marketplace/components/ProductBottomPanel';
 import SellerPill, { type SellerPillSeller } from '@/components/feed/SellerPill';
 import PriceCard from '@/components/feed/PriceCard';
+import { Text } from '@/components/ui';
 import { MARKETPLACE_HEADER_ROW_HEIGHT } from '@/components/feed/MarketplaceHeader';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { useRequireAuth } from '@/stores/useRequireAuth';
-import { spacing, zIndex as zIndexTokens } from '@/theme';
+import { colors, spacing, zIndex as zIndexTokens } from '@/theme';
 
 type ProductFeedItemProps = {
   item: Product;
@@ -68,10 +71,17 @@ export default function ProductFeedItem({
     }
   }, [isActive, isVideo, player]);
 
+  const { t } = useTranslation();
   const { data: engagement } = useUserEngagement();
   const isSaved = engagement?.bookmarkedIds.has(item.id) ?? false;
   const toggleBookmark = useToggleBookmark(item.id);
   const { requireAuth } = useRequireAuth();
+  // H.12: render the "À la une" badge on top of the media when the
+  // listing's boost is still live. Positioned in the top-left
+  // corner above SellerPill.
+  const isFeatured =
+    !!item.featuredUntil
+    && new Date(item.featuredUntil).getTime() > Date.now();
 
   const onToggleSave = (): void => {
     if (!requireAuth()) return;
@@ -106,6 +116,21 @@ export default function ProductFeedItem({
           style={StyleSheet.absoluteFillObject}
         />
       </View>
+      {isFeatured ? (
+        <View
+          style={[styles.featuredBadge, { top: topRowTop - 28 }]}
+          pointerEvents="none"
+        >
+          <Ionicons name="sparkles" size={11} color={colors.brand} />
+          <Text
+            variant="caption"
+            weight="semibold"
+            style={styles.featuredBadgeText}
+          >
+            {t('feed.featured')}
+          </Text>
+        </View>
+      ) : null}
       <View style={[styles.topRow, { top: topRowTop }]} pointerEvents="box-none">
         <View style={styles.topRowLeft} pointerEvents="box-none">
           <SellerPill
@@ -161,5 +186,21 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     alignItems: 'flex-end',
+  },
+  featuredBadge: {
+    position: 'absolute',
+    left: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    zIndex: zIndexTokens.overlay,
+  },
+  featuredBadgeText: {
+    color: colors.brand,
+    fontSize: 11,
   },
 });

@@ -4,11 +4,11 @@
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/logoo.png",
     "scheme": "client",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/logoo.png",
       "bundleIdentifier": "com.pictok.client",
       "supportsTablet": true,
       "buildNumber": "6",
@@ -39,7 +39,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/logoo.png"
     },
     "plugins": [
       "expo-router",

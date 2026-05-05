@@ -44,7 +44,8 @@
   },
   "feed": {
     "forYou": "For you",
-    "marketplace": "Marketplace"
+    "marketplace": "Marketplace",
+    "featured": "Featured"
   },
   "marketplace": {
     "loadError": "Couldn't load the marketplace.",
@@ -172,6 +173,7 @@
     "subtitle": "Explore by theme",
     "trending": "Trending",
     "newest": "New",
+    "featuredRailTitle": "Featured",
     "allCategories": "All categories",
     "noProducts": "No products",
     "emptyHint": "Coming soon. Category browsing is in the works."
@@ -401,5 +403,27 @@
     "upgradeCta": "Upgrade to Pro",
     "upgradeErrorTitle": "Couldn't open upgrade",
     "upgradeErrorBody": "Please try again in a moment."
+  },
+  "boost": {
+    "buttonIdle": "Boost listing",
+    "buttonFeatured": "Featured ✓",
+    "buttonCooldown": "Next boost {{date}}",
+    "buttonProGate": "Boost (Pro)",
+    "confirmTitle": "Boost this listing?",
+    "confirmBody": "Your listing will be featured for 7 days.",
+    "confirmAction": "Boost",
+    "successTitle": "Listing boosted!",
+    "successBody": "Featured until {{date}}.",
+    "errorNotPro": "Pro sellers only.",
+    "errorCooldown": "You've already boosted this week.",
+    "errorGeneric": "Boost failed. Try again."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "views24h": "Views (24h)",
+    "views7d": "Views (7d)",
+    "views30d": "Views (30d)",
+    "upgradeTeaser": "Upgrade to Pro to see who's viewing your listings.",
+    "upgradeCta": "View analytics"
   }
 }

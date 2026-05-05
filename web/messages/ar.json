@@ -177,5 +177,60 @@
   "languageSwitcher": {
     "label": "اللغة",
     "ariaLabel": "تغيير اللغة"
+  },
+  "admin": {
+    "title": "الاشتراكات",
+    "total": "{count} اشتراكات",
+    "searchPlaceholder": "ابحث بالاسم أو البريد الإلكتروني",
+    "applyFilters": "تطبيق",
+    "filterAll": "جميع الحالات",
+    "emptyResults": "لا توجد اشتراكات تطابق هذه الفلاتر.",
+    "cancelingFlag": "إلغاء في نهاية الفترة",
+    "columns": {
+      "seller": "البائع",
+      "status": "الحالة",
+      "renews": "التجديد",
+      "actions": ""
+    },
+    "openDetail": "فتح",
+    "backToList": "العودة إلى القائمة",
+    "detailTitle": "تفاصيل الاشتراك",
+    "sectionSeller": "البائع",
+    "sectionState": "حالة الاشتراك",
+    "sectionStripe": "مراجع Stripe",
+    "sectionActions": "الإجراءات",
+    "fieldStarted": "بداية الفترة",
+    "fieldCanceledAt": "ملغى في",
+    "fieldTrialEnd": "نهاية الفترة التجريبية",
+    "fieldSubscriptionId": "معرّف الاشتراك",
+    "fieldCustomerId": "معرّف العميل",
+    "fieldPriceId": "معرّف السعر",
+    "renewsOnLabel": "يُجدَّد في",
+    "cancelsOnLabel": "يُلغى في",
+    "cancelingNoticeAdmin": "سيُلغى هذا الاشتراك في نهاية الفترة. يمكن للمستخدم إعادة تفعيله عبر بوابة عملاء Stripe.",
+    "actionCancelPeriodEnd": "إلغاء في نهاية الفترة",
+    "actionCancelImmediate": "إلغاء فوري",
+    "actionRefundLast": "استرداد آخر دفعة",
+    "confirmCancelImmediate": "سيؤدي هذا إلى إنهاء الاشتراك فوراً وإلغاء وصول Pro. اكتب CANCEL للتأكيد.",
+    "confirmRefund": "سيؤدي هذا إلى استرداد آخر دفعة إلى بطاقة العميل. اكتب REFUND للتأكيد.",
+    "confirmCancel": "إلغاء",
+    "success": "تم تنفيذ الإجراء.",
+    "error": "فشل الإجراء: {message}",
+    "status": {
+      "active": "نشط",
+      "trialing": "تجريبي",
+      "past_due": "متأخر",
+      "canceled": "ملغى",
+      "unpaid": "غير مدفوع"
+    }
+  },
+  "analytics": {
+    "_arNote": "Pending native-speaker review (same caveat as H.7.1).",
+    "title": "الإحصائيات",
+    "views24h": "المشاهدات (24 ساعة)",
+    "views7d": "المشاهدات (7 أيام)",
+    "views30d": "المشاهدات (30 يومًا)",
+    "upgradeTeaser": "ترقَّ إلى Pro لرؤية من يطّلع على إعلاناتك.",
+    "upgradeCta": "عرض الإحصائيات"
   }
 }

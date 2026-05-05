@@ -20,12 +20,17 @@ import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import Avatar from '@/components/GenericComponents/Avatar';
+import BoostButton from '@/components/feed/BoostButton';
+import { AnalyticsCard } from '@/components/marketplace/AnalyticsCard';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
 import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { useStartConversation } from '@/features/marketplace/hooks/useStartConversation';
 import { useCreateCheckoutSession } from '@/features/marketplace/hooks/useCreateCheckoutSession';
+import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
+import { useTrackProductView } from '@/features/marketplace/hooks/useTrackProductView';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { StripeNotConfiguredError } from '@/features/marketplace/services/orders';
 import { sendMessage as sendMessageDirect } from '@/features/marketplace/services/messaging';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
@@ -97,6 +102,9 @@ export default function ProductDetailSheet(): React.ReactElement {
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['50%', '90%'], []);
   const { data: product, isLoading, isError } = useProduct(productId);
+  // H.13: fire one product-view event per productId per app session.
+  // Owner self-views are filtered server-side by track_product_view.
+  useTrackProductView(productId);
   const fmt = useFormatDisplayPrice();
   const { data: engagement } = useUserEngagement();
   const isBookmarked = product
@@ -106,6 +114,17 @@ export default function ProductDetailSheet(): React.ReactElement {
   const { requireAuth } = useRequireAuth();
   const startConv = useStartConversation();
   const checkout = useCreateCheckoutSession();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: mySeller } = useMySeller(isAuthenticated);
+  // H.12: surface the boost CTA only on the viewer's own listing.
+  // The SECURITY DEFINER RPC re-checks ownership server-side, so this
+  // gate is purely a UX affordance — a compromised client that
+  // mounted the button regardless would still hit
+  // RAISE EXCEPTION 'not_owner_or_product_missing'.
+  const isOwn =
+    !!product
+    && !!mySeller
+    && mySeller.id === product.seller.id;
 
   const handleSheetChange = useCallback(
     (index: number) => {
@@ -403,6 +422,17 @@ export default function ProductDetailSheet(): React.ReactElement {
               </Text>
             </Pressable>
           </View>
+
+          {isOwn ? (
+            <View style={styles.ownerActions}>
+              <BoostButton
+                productId={product.id}
+                featuredUntil={product.featuredUntil ?? null}
+                lastBoostAt={mySeller?.lastBoostAt ?? null}
+              />
+              <AnalyticsCard productId={product.id} isOwner={isOwn} />
+            </View>
+          ) : null}
         </View>
       </BottomSheetScrollView>
     );
@@ -573,6 +603,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  ownerActions: {
+    marginTop: 12,
   },
   ctaContainer: {
     paddingHorizontal: 16,

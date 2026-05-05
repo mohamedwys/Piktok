@@ -177,5 +177,59 @@
   "languageSwitcher": {
     "label": "Language",
     "ariaLabel": "Change language"
+  },
+  "admin": {
+    "title": "Subscriptions",
+    "total": "{count} subscriptions",
+    "searchPlaceholder": "Search by name or email",
+    "applyFilters": "Apply",
+    "filterAll": "All statuses",
+    "emptyResults": "No subscriptions match these filters.",
+    "cancelingFlag": "Canceling at period end",
+    "columns": {
+      "seller": "Seller",
+      "status": "Status",
+      "renews": "Renews",
+      "actions": ""
+    },
+    "openDetail": "Open",
+    "backToList": "Back to list",
+    "detailTitle": "Subscription detail",
+    "sectionSeller": "Seller",
+    "sectionState": "Subscription state",
+    "sectionStripe": "Stripe references",
+    "sectionActions": "Actions",
+    "fieldStarted": "Period started",
+    "fieldCanceledAt": "Canceled at",
+    "fieldTrialEnd": "Trial ends",
+    "fieldSubscriptionId": "Subscription ID",
+    "fieldCustomerId": "Customer ID",
+    "fieldPriceId": "Price ID",
+    "renewsOnLabel": "Renews on",
+    "cancelsOnLabel": "Cancels on",
+    "cancelingNoticeAdmin": "This subscription is scheduled to cancel at period end. The user can reactivate via the Stripe Customer Portal.",
+    "actionCancelPeriodEnd": "Cancel at period end",
+    "actionCancelImmediate": "Cancel immediately",
+    "actionRefundLast": "Refund last charge",
+    "confirmCancelImmediate": "This ends the subscription immediately and revokes Pro access. Type CANCEL to confirm.",
+    "confirmRefund": "This refunds the most recent charge to the customer's card. Type REFUND to confirm.",
+    "confirmCancel": "Cancel",
+    "success": "Action completed.",
+    "error": "Action failed: {message}",
+    "status": {
+      "active": "Active",
+      "trialing": "Trial",
+      "past_due": "Past due",
+      "canceled": "Canceled",
+      "unpaid": "Unpaid"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "views24h": "Views (24h)",
+    "views7d": "Views (7d)",
+    "views30d": "Views (30d)",
+    "upgradeTeaser": "Upgrade to Pro to see who's viewing your listings.",
+    "upgradeCta": "View analytics"
   }
 }

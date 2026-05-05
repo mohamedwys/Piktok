@@ -44,7 +44,8 @@
   },
   "feed": {
     "forYou": "Pour toi",
-    "marketplace": "Marketplace"
+    "marketplace": "Marketplace",
+    "featured": "À la une"
   },
   "marketplace": {
     "loadError": "Impossible de charger le marketplace.",
@@ -172,6 +173,7 @@
     "subtitle": "Explorez par thème",
     "trending": "Tendances",
     "newest": "Nouveautés",
+    "featuredRailTitle": "À la une",
     "allCategories": "Toutes les catégories",
     "noProducts": "Aucun produit",
     "emptyHint": "Bientôt disponible. Parcours des catégories en préparation."
@@ -401,5 +403,27 @@
     "upgradeCta": "Passer Pro",
     "upgradeErrorTitle": "Échec de l'ouverture",
     "upgradeErrorBody": "Veuillez réessayer dans un instant."
+  },
+  "boost": {
+    "buttonIdle": "Booster cette annonce",
+    "buttonFeatured": "À la une ✓",
+    "buttonCooldown": "Prochain boost {{date}}",
+    "buttonProGate": "Booster (Pro)",
+    "confirmTitle": "Booster cette annonce ?",
+    "confirmBody": "Votre annonce sera mise en avant pendant 7 jours.",
+    "confirmAction": "Booster",
+    "successTitle": "Annonce boostée !",
+    "successBody": "À la une jusqu'au {{date}}.",
+    "errorNotPro": "Réservé aux vendeurs Pro.",
+    "errorCooldown": "Vous avez déjà boosté cette semaine.",
+    "errorGeneric": "Erreur lors du boost. Réessayez."
+  },
+  "analytics": {
+    "title": "Statistiques",
+    "views24h": "Vues (24h)",
+    "views7d": "Vues (7j)",
+    "views30d": "Vues (30j)",
+    "upgradeTeaser": "Passez Pro pour voir qui consulte vos annonces.",
+    "upgradeCta": "Voir les statistiques"
   }
 }

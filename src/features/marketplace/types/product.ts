@@ -80,4 +80,13 @@ export type Product = {
    * Surfaced on the bottom info panel by Step 6; resolves the G.7 deferral.
    */
   distanceKm?: number | null;
+  /**
+   * Boost expiration timestamp (ISO-8601). When `featuredUntil > now()` the
+   * listing is currently boosted (H.12) and renders with the "À la une"
+   * badge + surfaces in the Categories Featured rail. NULL or past values
+   * mean the listing is not currently featured. Set by the
+   * `feature_product` SECURITY DEFINER RPC; users cannot write the
+   * underlying column directly (excluded from D.1.5's UPDATE allowlist).
+   */
+  featuredUntil?: string | null;
 };

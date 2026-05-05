@@ -62,6 +62,7 @@ export type ProductRow = {
   shares_count: number;
   bookmarks_count: number;
   created_at: string;
+  featured_until: string | null;
   seller: SellerRow;
 };
 
@@ -108,6 +109,7 @@ export function rowToProduct(row: ProductRow): Product {
       bookmarks: row.bookmarks_count,
     },
     createdAt: row.created_at,
+    featuredUntil: row.featured_until ?? null,
   };
 }
 
@@ -488,4 +490,72 @@ export async function shareProduct(input: ShareProductInput): Promise<void> {
       : `Découvrez ${input.title} à ${input.priceLabel} sur Marqe`;
 
   await Share.share({ message, url });
+}
+
+// ---------------------------------------------------------------------------
+// Featured-listing boost (Phase H.12)
+//
+// `featureProduct` calls the `feature_product` SECURITY DEFINER RPC defined
+// by supabase/migrations/20260524_featured_listings.sql. The RPC does the
+// Pro / ownership / cooldown checks atomically and writes both
+// `products.featured_until` and `sellers.last_boost_at`. The JS client
+// cannot UPDATE either column directly because B.1.5 (sellers grants) and
+// D.1.5 (products grants) deliberately exclude both from the user-writable
+// allowlist.
+//
+// Errors are re-thrown with the Postgres message intact so call sites can
+// pattern-match against substrings ("not_pro", "cooldown_active",
+// "not_owner_or_product_missing"). The mobile UI gates already prevent the
+// first two from firing in normal use; the RPC re-checks as defense in
+// depth.
+//
+// Return-type cast: until `npm run gen:types` runs against an environment
+// where this migration is applied, the function does not appear in
+// `Database['public']['Functions']`. The documented `as` cast on the
+// return value is the single exception to mobile TypeScript strictness for
+// this step; replace with the generated type after regen.
+//
+// `listFeaturedProducts` is the read-side companion. The Categories-page
+// Featured rail consumes it through `useFeaturedProducts`. The
+// `gt('featured_until', now)` filter is index-backed by
+// `products_featured_until_idx` (partial; only currently-featured rows
+// are indexed). The DESC ordering surfaces the most-recently boosted
+// listings first, which matches the intended discovery experience.
+// ---------------------------------------------------------------------------
+
+export type FeatureProductResult = {
+  product_id: string;
+  featured_until: string;
+  next_available_at: string;
+};
+
+export async function featureProduct(
+  productId: string,
+): Promise<FeatureProductResult> {
+  const { data, error } = await supabase.rpc(
+    'feature_product' as never,
+    { p_product_id: productId } as never,
+  );
+  if (error) {
+    // Re-throw with the Postgres error message intact so call sites can
+    // pattern-match (cooldown_active vs not_pro vs not_owner_*).
+    throw error;
+  }
+  // Documented escape per missing gen:types update — replace with the
+  // generated function-return type after `npm run gen:types`.
+  return data as unknown as FeatureProductResult;
+}
+
+export async function listFeaturedProducts(opts?: {
+  limit?: number;
+}): Promise<Product[]> {
+  const limit = opts?.limit ?? 10;
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, seller:sellers(*)')
+    .gt('featured_until', new Date().toISOString())
+    .order('featured_until', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data as unknown as ProductRow[]) ?? []).map(rowToProduct);
 }

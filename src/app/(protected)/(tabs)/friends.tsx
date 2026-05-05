@@ -12,6 +12,7 @@ import NearbyProductsRail from '@/components/categories/NearbyProductsRail';
 import { CATEGORIES } from '@/features/marketplace/data/categories';
 import { useTrendingProducts } from '@/features/marketplace/hooks/useTrendingProducts';
 import { useNewestProducts } from '@/features/marketplace/hooks/useNewestProducts';
+import { useFeaturedProducts } from '@/features/marketplace/hooks/useFeaturedProducts';
 import { useMarketplaceFilters } from '@/stores/useMarketplaceFilters';
 import { useMainTabStore } from '@/stores/useMainTabStore';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
@@ -32,6 +33,14 @@ export default function CategoriesScreen(): React.ReactElement {
 
   const trendingQuery = useTrendingProducts();
   const newestQuery = useNewestProducts();
+  const featuredQuery = useFeaturedProducts();
+  // The Featured rail (H.12) is the discovery surface for boosted Pro
+  // listings. Hide it entirely when there are no featured products
+  // rather than showing a "no results" placeholder — keeps the page
+  // clean for the (common, early-launch) zero-boost case.
+  const featuredProducts = featuredQuery.data ?? [];
+  const showFeaturedRail =
+    featuredQuery.isLoading || featuredProducts.length > 0;
 
   const onPressCategory = (id: string): void => {
     void mediumHaptic();
@@ -73,6 +82,15 @@ export default function CategoriesScreen(): React.ReactElement {
             {t('categories.subtitle')}
           </Text>
         </View>
+
+        {showFeaturedRail ? (
+          <CategoryRail
+            title={t('categories.featuredRailTitle')}
+            products={featuredProducts}
+            loading={featuredQuery.isLoading}
+            onPressItem={onPressProduct}
+          />
+        ) : null}
 
         <CategoryRail
           title={t('categories.trending')}

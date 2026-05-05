@@ -21,6 +21,13 @@ export type SellerProfile = {
   longitude: number | null;
   locationText: string | null;
   locationUpdatedAt: string | null;
+  /**
+   * Timestamp of the seller's most recent boost (H.12). NULL if they have
+   * never used the perk. The boost cooldown is computed FROM this
+   * timestamp: `lastBoostAt + 7 days` is the next-available-boost moment.
+   * BoostButton derives its disabled-with-countdown state from this field.
+   */
+  lastBoostAt: string | null;
 };
 
 type SellerRow = {
@@ -42,6 +49,7 @@ type SellerRow = {
   longitude: number | null;
   location_text: string | null;
   location_updated_at: string | null;
+  last_boost_at: string | null;
 };
 
 function rowToSeller(row: SellerRow): SellerProfile {
@@ -64,6 +72,7 @@ function rowToSeller(row: SellerRow): SellerProfile {
     longitude: row.longitude ?? null,
     locationText: row.location_text ?? null,
     locationUpdatedAt: row.location_updated_at ?? null,
+    lastBoostAt: row.last_boost_at ?? null,
   };
 }
 

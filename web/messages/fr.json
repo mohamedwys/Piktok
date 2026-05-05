@@ -177,5 +177,59 @@
   "languageSwitcher": {
     "label": "Langue",
     "ariaLabel": "Changer de langue"
+  },
+  "admin": {
+    "title": "Abonnements",
+    "total": "{count} abonnements",
+    "searchPlaceholder": "Rechercher par nom ou email",
+    "applyFilters": "Appliquer",
+    "filterAll": "Tous les statuts",
+    "emptyResults": "Aucun abonnement ne correspond à ces filtres.",
+    "cancelingFlag": "Annulation en fin de période",
+    "columns": {
+      "seller": "Vendeur",
+      "status": "Statut",
+      "renews": "Renouvellement",
+      "actions": ""
+    },
+    "openDetail": "Ouvrir",
+    "backToList": "Retour à la liste",
+    "detailTitle": "Détail de l’abonnement",
+    "sectionSeller": "Vendeur",
+    "sectionState": "État de l’abonnement",
+    "sectionStripe": "Références Stripe",
+    "sectionActions": "Actions",
+    "fieldStarted": "Début de la période",
+    "fieldCanceledAt": "Annulé le",
+    "fieldTrialEnd": "Fin de l’essai",
+    "fieldSubscriptionId": "ID d’abonnement",
+    "fieldCustomerId": "ID client",
+    "fieldPriceId": "ID de tarif",
+    "renewsOnLabel": "Renouvellement le",
+    "cancelsOnLabel": "Annulation le",
+    "cancelingNoticeAdmin": "Cet abonnement sera annulé à la fin de la période. L’utilisateur peut le réactiver via le portail client Stripe.",
+    "actionCancelPeriodEnd": "Annuler en fin de période",
+    "actionCancelImmediate": "Annuler immédiatement",
+    "actionRefundLast": "Rembourser le dernier paiement",
+    "confirmCancelImmediate": "Cela met fin à l’abonnement immédiatement et révoque l’accès Pro. Tapez CANCEL pour confirmer.",
+    "confirmRefund": "Cela rembourse le paiement le plus récent sur la carte du client. Tapez REFUND pour confirmer.",
+    "confirmCancel": "Annuler",
+    "success": "Action effectuée.",
+    "error": "Action échouée : {message}",
+    "status": {
+      "active": "Actif",
+      "trialing": "Essai",
+      "past_due": "En retard",
+      "canceled": "Annulé",
+      "unpaid": "Impayé"
+    }
+  },
+  "analytics": {
+    "title": "Statistiques",
+    "views24h": "Vues (24h)",
+    "views7d": "Vues (7j)",
+    "views30d": "Vues (30j)",
+    "upgradeTeaser": "Passez Pro pour voir qui consulte vos annonces.",
+    "upgradeCta": "Voir les statistiques"
   }
 }

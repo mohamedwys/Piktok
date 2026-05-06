@@ -116,14 +116,23 @@ export async function POST(req: Request) {
 
   let customerId = existingSub?.stripe_customer_id ?? null;
   if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email ?? undefined,
-      metadata: {
-        seller_id: seller.id,
-        user_id: user.id,
-      },
-    });
-    customerId = customer.id;
+    try {
+      const customer = await stripe.customers.create({
+        email: user.email ?? undefined,
+        metadata: {
+          seller_id: seller.id,
+          user_id: user.id,
+        },
+      });
+      customerId = customer.id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      console.error('[checkout] customer.create failed:', message, err);
+      return NextResponse.json(
+        { error: 'stripe_customer_create_failed', details: message },
+        { status: 500 },
+      );
+    }
   }
 
   // ── 6. Locale-aware redirect URLs ────────────────────────────
@@ -165,22 +174,42 @@ export async function POST(req: Request) {
     locale === 'en' || locale === 'fr' ? locale : 'auto';
 
   // ── 9. Create session ────────────────────────────────────────
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    allow_promotion_codes: true,
-    locale: stripeLocale,
-    subscription_data: {
-      metadata: {
-        seller_id: seller.id,
-        user_id: user.id,
-        currency,
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      allow_promotion_codes: true,
+      locale: stripeLocale,
+      subscription_data: {
+        metadata: {
+          seller_id: seller.id,
+          user_id: user.id,
+          currency,
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown';
+    console.error(
+      '[checkout] sessions.create failed:',
+      message,
+      'priceId=',
+      priceId,
+      'currency=',
+      currency,
+      'cadence=',
+      cadence,
+      err,
+    );
+    return NextResponse.json(
+      { error: 'stripe_session_create_failed', details: message },
+      { status: 500 },
+    );
+  }
 
   if (!session.url) {
     return NextResponse.json(

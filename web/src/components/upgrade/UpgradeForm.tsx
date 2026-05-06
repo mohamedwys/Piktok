@@ -67,8 +67,12 @@ export function UpgradeForm(props: Props) {
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
+          details?: string;
         };
-        throw new Error(body.error ?? `Checkout failed (${res.status})`);
+        const msg = body.details
+          ? `${body.error ?? 'error'}: ${body.details}`
+          : (body.error ?? `Checkout failed (${res.status})`);
+        throw new Error(msg);
       }
       const { url } = (await res.json()) as { url?: string };
       if (!url) throw new Error('No checkout URL returned');

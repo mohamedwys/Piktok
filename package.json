@@ -70,5 +70,13 @@
     "supabase": "^2.98.0",
     "typescript": "~5.9.2"
   },
+  "expo": {
+    "install": {
+      "exclude": [
+        "react-native-reanimated",
+        "react-native-worklets"
+      ]
+    }
+  },
   "private": true
 }

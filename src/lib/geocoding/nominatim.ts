@@ -9,7 +9,7 @@ import {
 
 const PROVIDER_NAME = 'nominatim';
 const BASE_URL = 'https://nominatim.openstreetmap.org';
-const USER_AGENT = 'Pictok/1.0 (contact: support@pictok.app)';
+const USER_AGENT = 'Mony/1.0 (contact: Support@app-mony.com)';
 const DEFAULT_LIMIT = 5;
 const DEFAULT_LOCALE = 'en';
 

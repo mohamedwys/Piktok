@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Pictok",
+    "name": "Mony",
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,16 +11,16 @@
       "icon": "./assets/logoo.png",
       "bundleIdentifier": "com.pictok.client",
       "supportsTablet": true,
-      "buildNumber": "7",
+      "buildNumber": "8",
       "requireFullScreen": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
         "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"],
-        "NSCameraUsageDescription": "Pictok uses your camera so you can take photos and videos of items to list on the marketplace.",
-        "NSMicrophoneUsageDescription": "Pictok uses your microphone when you record videos for your marketplace listings.",
-        "NSPhotoLibraryUsageDescription": "Pictok accède à votre bibliothèque photo pour vos annonces et votre photo de profil.",
-        "NSPhotoLibraryAddUsageDescription": "Pictok saves photos and videos you capture in the app to your photo library."
+        "NSCameraUsageDescription": "Mony uses your camera so you can take photos and videos of items to list on the marketplace.",
+        "NSMicrophoneUsageDescription": "Mony uses your microphone when you record videos for your marketplace listings.",
+        "NSPhotoLibraryUsageDescription": "Mony accède à votre bibliothèque photo pour vos annonces et votre photo de profil.",
+        "NSPhotoLibraryAddUsageDescription": "Mony saves photos and videos you capture in the app to your photo library."
       }
     },
     "android": {
@@ -47,8 +47,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Pictok uses your camera so you can take photos and videos of items to list on the marketplace.",
-          "microphonePermission": "Pictok uses your microphone when you record videos for your marketplace listings.",
+          "cameraPermission": "Mony uses your camera so you can take photos and videos of items to list on the marketplace.",
+          "microphonePermission": "Mony uses your microphone when you record videos for your marketplace listings.",
           "recordAudioAndroid": true,
           "barcodeScannerEnabled": true
         }
@@ -56,7 +56,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pictok accède à votre bibliothèque photo pour vos annonces et votre photo de profil."
+          "photosPermission": "Mony accède à votre bibliothèque photo pour vos annonces et votre photo de profil."
         }
       ],
       [

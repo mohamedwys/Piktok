@@ -133,7 +133,7 @@ function StatBlock({
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-  if (!onPress) return content;
+  if (!onPress) return <View style={styles.statPressable}>{content}</View>;
   return (
     <Pressable
       onPress={onPress}

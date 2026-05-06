@@ -1,4 +1,4 @@
-import { AppState } from 'react-native'
+import { AppState, type NativeEventSubscription } from 'react-native'
 import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient, processLock } from '@supabase/supabase-js'
@@ -16,15 +16,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
-// Tells Supabase Auth to continuously refresh the session automatically
-// if the app is in the foreground. When this is added, you will continue
-// to receive `onAuthStateChange` events with the `TOKEN_REFRESHED` or
-// `SIGNED_OUT` event if the user's session is terminated. This should
-// only be registered once.
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh()
-  } else {
-    supabase.auth.stopAutoRefresh()
+// Deferred to a hook lifecycle: registering an AppState listener at
+// module-load triggers a synchronous TurboModule call to RCTAppState
+// during JS bundle parse. On iOS 26 release builds the UIScene is
+// not yet attached at that point and the call throws NSException.
+// Call from a useEffect after mount instead.
+let supabaseAuthAppStateSubscription: NativeEventSubscription | null = null
+export function registerSupabaseAuthAppStateListener(): () => void {
+  if (supabaseAuthAppStateSubscription) return () => {}
+  supabaseAuthAppStateSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      supabase.auth.startAutoRefresh()
+    } else {
+      supabase.auth.stopAutoRefresh()
+    }
+  })
+  return () => {
+    supabaseAuthAppStateSubscription?.remove()
+    supabaseAuthAppStateSubscription = null
   }
-})
+}

@@ -10,15 +10,23 @@ import {
   type PushNotificationData,
 } from '@/services/pushNotifications';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Deferred from module-load: setNotificationHandler triggers a native
+// call into expo-notifications that on iOS 26 release builds can fire
+// before the UIScene is fully attached, contributing to launch crash.
+let notificationHandlerInstalled = false
+function installNotificationHandlerOnce(): void {
+  if (notificationHandlerInstalled) return
+  notificationHandlerInstalled = true
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 function navigateFromData(
   data: PushNotificationData | undefined,
@@ -34,6 +42,10 @@ export function usePushNotifications(): void {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id);
   const handledColdStart = useRef(false);
+
+  useEffect(() => {
+    installNotificationHandlerOnce();
+  }, []);
 
   useEffect(() => {
     if (!userId) return;

@@ -20,6 +20,7 @@ import {
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { initI18n } from "@/i18n"
 import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
+import { registerSupabaseAuthAppStateListener } from "@/lib/supabase"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 import { useExchangeRatesRefresh } from "@/hooks/useExchangeRatesRefresh"
 import { typography } from "@/theme"
@@ -77,11 +78,15 @@ export default function RootLayout() {
 
   const [isI18nReady, setI18nReady] = useState(false)
   useEffect(() => {
+    const cleanupAppState = registerSupabaseAuthAppStateListener()
     Promise.all([initI18n(), syncAuthFromSupabase()]).then(() => {
       setI18nReady(true)
     })
     const unsub = subscribeToAuthChanges()
-    return () => unsub()
+    return () => {
+      cleanupAppState()
+      unsub()
+    }
   }, [])
 
   usePushNotifications()

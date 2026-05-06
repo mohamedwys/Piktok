@@ -88,29 +88,46 @@ Deno.serve(async (req) => {
     }
 
     const webBaseUrl = Deno.env.get('WEB_BASE_URL') ?? 'https://mony-psi.vercel.app';
-    // Route through /auth/callback so @supabase/ssr can exchange the
-    // token_hash for a cookie-based session before forwarding to `next`.
-    const callbackUrl = new URL('/auth/callback', webBaseUrl);
-    callbackUrl.searchParams.set('next', redirectPath);
-    const fullRedirect = callbackUrl.toString();
+    // `redirectTo` only exists for Supabase's allow-list validation at
+    // link-generation time. We DO NOT use the resulting `action_link`
+    // (see comment below). Pointing at /auth/callback keeps the URL
+    // inside the same allow-list entry the web sign-in flow uses.
+    const fullRedirect = new URL('/auth/callback', webBaseUrl).toString();
 
     // 3. Generate the magic link. `type: 'magiclink'` issues a single-use,
-    //    time-limited (1h default) link signed by Supabase Auth. The
-    //    returned `properties.action_link` is the URL the mobile client
-    //    opens in the in-app browser; navigating it logs the user in and
-    //    redirects to `redirectTo`.
+    //    time-limited (1h default) link signed by Supabase Auth.
+    //
+    //    We deliberately ignore `properties.action_link` and use
+    //    `properties.hashed_token` instead. The action_link URL routes
+    //    through Supabase's `/auth/v1/verify` endpoint, which on success
+    //    redirects with the auth payload in the URL **fragment**
+    //    (`#access_token=...&refresh_token=...`) — implicit flow style.
+    //    URL fragments never reach the server, so our Next.js
+    //    `/auth/callback` Route Handler sees only `?next=/upgrade` and
+    //    falls through to the missing-params branch → /auth/error. By
+    //    constructing the callback URL ourselves with `token_hash` +
+    //    `type` as query params, we bypass Supabase's verify endpoint
+    //    entirely. Our handler then exchanges the hashed_token for a
+    //    cookie session via `verifyOtp({type, token_hash})` server-side.
+    //    Single-use semantics + TTL are preserved — Supabase invalidates
+    //    the hashed_token on first server-side verify call.
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: user.email,
       options: { redirectTo: fullRedirect },
     });
 
-    if (linkErr || !linkData?.properties?.action_link) {
+    if (linkErr || !linkData?.properties?.hashed_token) {
       throw new Error(linkErr?.message ?? 'link_generation_failed');
     }
 
+    const finalUrl = new URL('/auth/callback', webBaseUrl);
+    finalUrl.searchParams.set('token_hash', linkData.properties.hashed_token);
+    finalUrl.searchParams.set('type', 'magiclink');
+    finalUrl.searchParams.set('next', redirectPath);
+
     return new Response(
-      JSON.stringify({ url: linkData.properties.action_link }),
+      JSON.stringify({ url: finalUrl.toString() }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

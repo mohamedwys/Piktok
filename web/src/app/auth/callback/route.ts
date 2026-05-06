@@ -5,26 +5,33 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 /**
  * Auth callback — magic-link landing.
  *
- * The H.5 mobile flow:
- *   1. User taps "Upgrade to Pro" in the app.
- *   2. The `issue-web-session` Edge Function mints a Supabase
- *      magic-link with `redirectTo: WEB_BASE_URL + '/upgrade'`.
- *   3. Supabase Auth's email-style link points the browser at
- *      THIS handler with `?token_hash=...&type=magiclink&next=/upgrade`.
- *   4. We call `verifyOtp({ token_hash, type })`, which exchanges
- *      the single-use token for a session. `@supabase/ssr` writes
- *      the session cookie via the server-client adapter.
- *   5. We redirect to `next` (defaulted to `/upgrade`).
+ * Two inbound link formats are supported because Supabase issues
+ * different shapes depending on how the link was generated:
  *
- * Open-redirect discipline: `next` is whitelisted to relative
- * paths (`startsWith('/')` AND not `'//'` — the latter is the
- * scheme-relative trick that bounces off-domain). Mirrors the
- * H.5 Edge Function's `redirect_to` whitelist.
+ *   A. PKCE flow (browser-initiated `signInWithOtp` from
+ *      `@supabase/ssr`'s browser client). Arrives as:
+ *        /auth/callback?code=<...>&next=<path>
+ *      Exchange via `exchangeCodeForSession(code)`.
+ *
+ *   B. OTP flow (server-initiated `auth.admin.generateLink` in the
+ *      `issue-web-session` Edge Function — the mobile bridge).
+ *      Arrives as:
+ *        /auth/callback?token_hash=<...>&type=magiclink&next=<path>
+ *      Exchange via `verifyOtp({ token_hash, type })`.
+ *
+ * Both paths land in the SAME handler and produce the same outcome:
+ * a session cookie set via `@supabase/ssr`'s server-client adapter,
+ * followed by a redirect to `next`.
+ *
+ * Open-redirect discipline: `next` is whitelisted to relative paths
+ * (`startsWith('/')` AND not `'//'` — the scheme-relative trick that
+ * bounces off-domain).
  *
  * Failure modes redirect to `/auth/error?reason=...` rather than
- * surface raw error text mid-flight. The error page is a friendly
- * static placeholder.
+ * surface raw error text mid-flight.
  */
+export const dynamic = 'force-dynamic';
+
 const ALLOWED_OTP_TYPES = new Set<EmailOtpType>([
   'email',
   'magiclink',
@@ -36,6 +43,7 @@ const ALLOWED_OTP_TYPES = new Set<EmailOtpType>([
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const code = url.searchParams.get('code');
   const tokenHash = url.searchParams.get('token_hash');
   const rawType = url.searchParams.get('type');
   const next = url.searchParams.get('next') ?? '/upgrade';
@@ -44,34 +52,52 @@ export async function GET(request: Request) {
   const safeNext =
     next.startsWith('/') && !next.startsWith('//') ? next : '/upgrade';
 
-  if (!tokenHash || !rawType) {
-    return NextResponse.redirect(
-      new URL('/auth/error?reason=missing_params', url.origin),
-    );
-  }
-
-  // Validate `type` against the Supabase-supported OTP types so a
-  // malformed link can't pass arbitrary strings into verifyOtp.
-  if (!ALLOWED_OTP_TYPES.has(rawType as EmailOtpType)) {
-    return NextResponse.redirect(
-      new URL('/auth/error?reason=invalid_type', url.origin),
-    );
-  }
-
   const supabase = await getSupabaseServer();
-  const { error } = await supabase.auth.verifyOtp({
-    type: rawType as EmailOtpType,
-    token_hash: tokenHash,
-  });
 
-  if (error) {
-    return NextResponse.redirect(
-      new URL(
-        `/auth/error?reason=${encodeURIComponent(error.message)}`,
-        url.origin,
-      ),
-    );
+  // --- Path A: PKCE code-exchange (browser /sign-in flow) ---
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error('[auth/callback] exchangeCodeForSession failed:', error.message);
+      return NextResponse.redirect(
+        new URL(
+          `/auth/error?reason=${encodeURIComponent(error.message)}`,
+          url.origin,
+        ),
+      );
+    }
+    return NextResponse.redirect(new URL(safeNext, url.origin));
   }
 
-  return NextResponse.redirect(new URL(safeNext, url.origin));
+  // --- Path B: OTP token_hash (mobile bridge / admin.generateLink) ---
+  if (tokenHash && rawType) {
+    if (!ALLOWED_OTP_TYPES.has(rawType as EmailOtpType)) {
+      return NextResponse.redirect(
+        new URL('/auth/error?reason=invalid_type', url.origin),
+      );
+    }
+
+    const { error } = await supabase.auth.verifyOtp({
+      type: rawType as EmailOtpType,
+      token_hash: tokenHash,
+    });
+
+    if (error) {
+      console.error('[auth/callback] verifyOtp failed:', error.message);
+      return NextResponse.redirect(
+        new URL(
+          `/auth/error?reason=${encodeURIComponent(error.message)}`,
+          url.origin,
+        ),
+      );
+    }
+
+    return NextResponse.redirect(new URL(safeNext, url.origin));
+  }
+
+  // Neither shape — link is malformed.
+  console.error('[auth/callback] missing both code and token_hash params:', url.search);
+  return NextResponse.redirect(
+    new URL('/auth/error?reason=missing_params', url.origin),
+  );
 }

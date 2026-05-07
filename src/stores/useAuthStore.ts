@@ -18,59 +18,43 @@ export const useAuthStore = create<AuthStore>()(
       user: null,
       isAuthenticated: false,
       login: async (email: string, password: string) => {
-        try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          })
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (error) throw error;
+        if (!data.user) throw new Error('Sign-in returned no user.');
 
-          if (data && data.user && !error) {
-            const { user } = data;
-
-            const newUser: User = {
-              id: user.id,
-              email: user.email!,
-              username: user.user_metadata.username
-            }
-
-            set({
-              user: newUser,
-              isAuthenticated: true,
-            })
-          }
-        } catch (error) {
-          throw error;
-        }
+        const { user } = data;
+        set({
+          user: {
+            id: user.id,
+            email: user.email!,
+            username: user.user_metadata.username,
+          },
+          isAuthenticated: true,
+        })
       },
       register: async (email: string, password: string, username: string) => {
-        try {
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                username
-              }
-            }
-          })
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { username },
+          },
+        })
+        if (error) throw error;
+        if (!data.user) throw new Error('Sign-up returned no user.');
 
-          if (data && data.user && !error) {
-            const { user } = data;
-
-            const newUser: User = {
-              id: user.id,
-              email: user.email!,
-              username: user.user_metadata.username
-            }
-
-            set({
-              user: newUser,
-              isAuthenticated: true,
-            })
-          }
-        } catch (error) {
-          throw error;
-        }
+        const { user } = data;
+        set({
+          user: {
+            id: user.id,
+            email: user.email!,
+            username: user.user_metadata.username,
+          },
+          isAuthenticated: true,
+        })
       },
       logout: async () => {
         const { error } = await supabase.auth.signOut();

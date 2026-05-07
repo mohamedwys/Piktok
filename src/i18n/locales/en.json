@@ -33,7 +33,20 @@
     "hasAccount": "Already have an account?",
     "missingFields": "Please fill in all fields.",
     "loginFailed": "Login failed",
-    "registerFailed": "Sign up failed"
+    "registerFailed": "Sign up failed",
+    "emailNotConfirmed": "Please confirm your email before signing in. Check your inbox for the confirmation link.",
+    "verifyTitle": "Check your email",
+    "verifySubtitle": "We sent a confirmation link to",
+    "verifyInstructions": "Tap the link in that email to finish setting up your account. You can close this screen — we'll let you in as soon as you confirm.",
+    "verifyResend": "Resend email",
+    "verifyResendIn": "Resend in {{seconds}}s",
+    "verifyResending": "Sending…",
+    "verifyResendSuccess": "Email sent. Check your inbox.",
+    "verifyWrongEmail": "Wrong email?",
+    "verifyStartOver": "Start over",
+    "callbackPending": "Confirming your account…",
+    "callbackErrorTitle": "Confirmation failed",
+    "callbackReturning": "Returning to sign-in…"
   },
   "tabs": {
     "home": "Home",

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mediumHaptic } from '@/features/marketplace/utils/haptics';
-import { useAuthStore } from '@/stores/useAuthStore';
+import { useAuthStore, EmailNotConfirmedError } from '@/stores/useAuthStore';
 import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContainer';
 import { colors } from '@/theme';
 
@@ -36,7 +36,11 @@ export default function Login(): React.ReactElement {
       await useAuthStore.getState().login(email, password);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : t('common.errorGeneric');
+        error instanceof EmailNotConfirmedError
+          ? t('auth.emailNotConfirmed')
+          : error instanceof Error
+            ? error.message
+            : t('common.errorGeneric');
       Alert.alert(t('auth.loginFailed'), message);
     } finally {
       setLoading(false);

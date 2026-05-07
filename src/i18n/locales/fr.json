@@ -33,7 +33,20 @@
     "hasAccount": "Tu as déjà un compte ?",
     "missingFields": "Merci de remplir tous les champs.",
     "loginFailed": "Échec de la connexion",
-    "registerFailed": "Échec de l'inscription"
+    "registerFailed": "Échec de l'inscription",
+    "emailNotConfirmed": "Confirme ton email avant de te connecter. Regarde dans ta boîte de réception le lien de confirmation.",
+    "verifyTitle": "Vérifie ta boîte mail",
+    "verifySubtitle": "On a envoyé un lien de confirmation à",
+    "verifyInstructions": "Clique sur le lien dans cet email pour finaliser ton compte. Tu peux fermer cet écran — on te laisse entrer dès que c'est confirmé.",
+    "verifyResend": "Renvoyer l'email",
+    "verifyResendIn": "Renvoyer dans {{seconds}}s",
+    "verifyResending": "Envoi…",
+    "verifyResendSuccess": "Email envoyé. Regarde ta boîte de réception.",
+    "verifyWrongEmail": "Mauvais email ?",
+    "verifyStartOver": "Recommencer",
+    "callbackPending": "Confirmation en cours…",
+    "callbackErrorTitle": "Échec de la confirmation",
+    "callbackReturning": "Retour à la connexion…"
   },
   "tabs": {
     "home": "Accueil",

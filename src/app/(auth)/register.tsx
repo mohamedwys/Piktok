@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,6 +20,7 @@ import { colors } from '@/theme';
 
 export default function Register(): React.ReactElement {
   const { t } = useTranslation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -34,7 +35,19 @@ export default function Register(): React.ReactElement {
     }
     try {
       setLoading(true);
-      await useAuthStore.getState().register(email, password, username);
+      const result = await useAuthStore
+        .getState()
+        .register(email, password, username);
+      if (!result.confirmed) {
+        // Replace, not push: back-button shouldn't return to a register
+        // form already submitted to Supabase.
+        router.replace({
+          pathname: '/(auth)/verify-email',
+          params: { email: result.email },
+        });
+      }
+      // result.confirmed === true: (auth) layout's reactive Redirect
+      // handles the navigation into the protected tree.
     } catch (error) {
       const message =
         error instanceof Error ? error.message : t('common.errorGeneric');

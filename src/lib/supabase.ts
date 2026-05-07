@@ -6,6 +6,13 @@ import { createClient, processLock } from '@supabase/supabase-js'
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Deep-link target for email confirmation. Built from the app's
+// custom scheme (see `expo.scheme` in app.json). This URL must be
+// added to Authentication → URL Configuration → Redirect URLs in
+// the Supabase dashboard, otherwise the verify endpoint refuses
+// the redirect_to parameter and falls back to the Site URL.
+export const AUTH_REDIRECT_URL = 'client://auth/callback';
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,

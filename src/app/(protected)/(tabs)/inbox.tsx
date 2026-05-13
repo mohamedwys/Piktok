@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -34,12 +34,19 @@ export default function MessagesScreen(): React.ReactElement {
     router.push('/(auth)/login');
   };
 
-  const renderItem = ({
-    item,
-  }: {
-    item: ConversationItem;
-  }): React.ReactElement => (
-    <ConversationRow item={item} lang={lang} router={router} />
+  const onPressItem = useCallback(
+    (id: string) => {
+      void lightHaptic();
+      router.push(`/(protected)/conversation/${id}` as Href);
+    },
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: ConversationItem }) => (
+      <ConversationRow item={item} lang={lang} onPress={onPressItem} />
+    ),
+    [lang, onPressItem],
   );
 
   const headerPadding = { paddingTop: insets.top + 16 };
@@ -116,26 +123,21 @@ export default function MessagesScreen(): React.ReactElement {
 type ConversationRowProps = {
   item: ConversationItem;
   lang: string;
-  router: ReturnType<typeof useRouter>;
+  onPress: (id: string) => void;
 };
 
-function ConversationRow({
+const ConversationRow = React.memo(function ConversationRow({
   item,
   lang,
-  router,
+  onPress,
 }: ConversationRowProps): React.ReactElement {
-  const onPress = (): void => {
-    void lightHaptic();
-    router.push(`/(protected)/conversation/${item.id}` as Href);
-  };
-
   const productTitle = item.product
     ? getLocalized(item.product.title, lang)
     : '';
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(item.id)}
       style={({ pressed }) => [
         styles.row,
         pressed && styles.rowPressed,
@@ -180,7 +182,7 @@ function ConversationRow({
       <Text style={styles.time}>{timeAgo(item.lastMessageAt, lang)}</Text>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

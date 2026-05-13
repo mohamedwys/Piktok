@@ -107,6 +107,45 @@ export type Database = {
           },
         ]
       }
+      content_reports: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          reason: string
+          reporter_id: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason: string
+          reporter_id: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason?: string
+          reporter_id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           buyer_id: string
@@ -207,6 +246,7 @@ export type Database = {
       messages: {
         Row: {
           body: string
+          client_request_id: string | null
           conversation_id: string
           created_at: string
           id: string
@@ -216,6 +256,7 @@ export type Database = {
         }
         Insert: {
           body: string
+          client_request_id?: string | null
           conversation_id: string
           created_at?: string
           id?: string
@@ -225,6 +266,7 @@ export type Database = {
         }
         Update: {
           body?: string
+          client_request_id?: string | null
           conversation_id?: string
           created_at?: string
           id?: string
@@ -305,17 +347,84 @@ export type Database = {
           },
         ]
       }
+      product_hides: {
+        Row: {
+          created_at: string
+          product_id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_id: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          product_id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_hides_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_views: {
+        Row: {
+          id: string
+          product_id: string
+          viewed_at: string
+          viewer_seller_id: string | null
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          viewed_at?: string
+          viewer_seller_id?: string | null
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          viewed_at?: string
+          viewer_seller_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_views_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_views_viewer_seller_id_fkey"
+            columns: ["viewer_seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           attributes: Json
           bookmarks_count: number
           category: Json
           category_id: string | null
+          client_request_id: string | null
           comments_count: number
           created_at: string
           currency: string
           description: Json
           dimensions: string | null
+          featured_until: string | null
           id: string
           latitude: number | null
           likes_count: number
@@ -342,11 +451,13 @@ export type Database = {
           bookmarks_count?: number
           category: Json
           category_id?: string | null
+          client_request_id?: string | null
           comments_count?: number
           created_at?: string
           currency: string
           description: Json
           dimensions?: string | null
+          featured_until?: string | null
           id?: string
           latitude?: number | null
           likes_count?: number
@@ -373,11 +484,13 @@ export type Database = {
           bookmarks_count?: number
           category?: Json
           category_id?: string | null
+          client_request_id?: string | null
           comments_count?: number
           created_at?: string
           currency?: string
           description?: Json
           dimensions?: string | null
+          featured_until?: string | null
           id?: string
           latitude?: number | null
           likes_count?: number
@@ -439,6 +552,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          bucket: string
+          hits: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          hits?: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          hits?: number
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       sellers: {
         Row: {
           avatar_url: string
@@ -448,7 +582,10 @@ export type Database = {
           followers_count: number
           following_count: number
           id: string
+          interests: Json
+          is_admin: boolean
           is_pro: boolean
+          last_boost_at: string | null
           latitude: number | null
           location_point: unknown
           location_text: string | null
@@ -473,7 +610,10 @@ export type Database = {
           followers_count?: number
           following_count?: number
           id?: string
+          interests?: Json
+          is_admin?: boolean
           is_pro?: boolean
+          last_boost_at?: string | null
           latitude?: number | null
           location_point?: unknown
           location_text?: string | null
@@ -498,7 +638,10 @@ export type Database = {
           followers_count?: number
           following_count?: number
           id?: string
+          interests?: Json
+          is_admin?: boolean
           is_pro?: boolean
+          last_boost_at?: string | null
           latitude?: number | null
           location_point?: unknown
           location_text?: string | null
@@ -596,6 +739,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -770,6 +931,11 @@ export type Database = {
             }
             Returns: string
           }
+      block_user: { Args: { p_user_id: string }; Returns: undefined }
+      check_rate_limit: {
+        Args: { p_bucket: string; p_limit: number; p_window?: string }
+        Returns: undefined
+      }
       delete_my_account: { Args: never; Returns: undefined }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
@@ -804,6 +970,51 @@ export type Database = {
         | { Args: { table_name: string }; Returns: string }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      feature_product: { Args: { p_product_id: string }; Returns: Json }
+      feed_for_you: {
+        Args: {
+          p_cursor?: Json
+          p_lat?: number
+          p_limit?: number
+          p_lng?: number
+          p_radius_km?: number
+        }
+        Returns: {
+          attributes: Json
+          bookmarks_count: number
+          category: Json
+          category_id: string
+          comments_count: number
+          created_at: string
+          currency: string
+          description: Json
+          dimensions: string
+          distance_km: number
+          featured_until: string
+          id: string
+          latitude: number
+          likes_count: number
+          location: string
+          location_point: unknown
+          location_updated_at: string
+          longitude: number
+          media_type: string
+          media_url: string
+          pickup_available: boolean
+          price: number
+          seller: Json
+          seller_id: string
+          shares_count: number
+          shipping_free: boolean
+          shipping_label: Json
+          slice: string
+          stock_available: boolean
+          stock_label: Json
+          subcategory_id: string
+          thumbnail_url: string
+          title: Json
+        }[]
+      }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }
@@ -906,7 +1117,19 @@ export type Database = {
         Args: { p_avatar_url?: string; p_username: string }
         Returns: string
       }
+      get_product_analytics: {
+        Args: { p_product_id: string }
+        Returns: {
+          views_24h: number
+          views_30d: number
+          views_7d: number
+        }[]
+      }
       gettransactionid: { Args: never; Returns: unknown }
+      hide_product: {
+        Args: { p_product_id: string; p_reason?: string }
+        Returns: undefined
+      }
       increment_share_count: {
         Args: { p_product_id: string }
         Returns: undefined
@@ -955,12 +1178,12 @@ export type Database = {
       products_within_radius: {
         Args: {
           p_category_id?: string
+          p_cursor?: Json
           p_latitude?: number
           p_limit?: number
           p_longitude?: number
           p_max_price?: number
           p_min_price?: number
-          p_offset?: number
           p_pickup_only?: boolean
           p_radius_km?: number
           p_search_query?: string
@@ -978,6 +1201,7 @@ export type Database = {
           description: Json
           dimensions: string
           distance_km: number
+          featured_until: string
           id: string
           latitude: number
           likes_count: number
@@ -989,6 +1213,7 @@ export type Database = {
           media_url: string
           pickup_available: boolean
           price: number
+          seller: Json
           seller_id: string
           shares_count: number
           shipping_free: boolean
@@ -1000,6 +1225,16 @@ export type Database = {
           title: Json
         }[]
       }
+      report_content: {
+        Args: {
+          p_notes?: string
+          p_reason: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: string
+      }
+      set_my_interests: { Args: { p_interests: Json }; Returns: undefined }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
@@ -1585,6 +1820,9 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: string
       }
+      track_product_view: { Args: { p_product_id: string }; Returns: undefined }
+      unblock_user: { Args: { p_user_id: string }; Returns: undefined }
+      unhide_product: { Args: { p_product_id: string }; Returns: undefined }
       unlockrows: { Args: { "": string }; Returns: number }
       updategeometrysrid: {
         Args: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,9 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Avatar from '@/components/GenericComponents/Avatar';
+import { Avatar } from '@/components/ui';
 import { useConversation } from '@/features/marketplace/hooks/useConversation';
 import { useMessages } from '@/features/marketplace/hooks/useMessages';
+import type { ChatMessage } from '@/features/marketplace/services/messaging';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useSendMessage } from '@/features/marketplace/hooks/useSendMessage';
 import { getLocalized } from '@/i18n/getLocalized';
@@ -52,6 +53,7 @@ export default function ConversationScreen(): React.ReactElement {
   );
 
   const [draft, setDraft] = useState('');
+  const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const onPressBack = (): void => {
     void lightHaptic();
@@ -62,8 +64,10 @@ export default function ConversationScreen(): React.ReactElement {
     const body = draft.trim();
     if (!body || !id) return;
     void mediumHaptic();
-    sendMutation.mutate({ body });
-    setDraft('');
+    sendMutation.mutate(
+      { body },
+      { onSuccess: () => setDraft('') },
+    );
   };
 
   if (loadingConv) {
@@ -130,9 +134,14 @@ export default function ConversationScreen(): React.ReactElement {
       </View>
 
       <FlatList
+        ref={listRef}
         data={messages ?? []}
         keyExtractor={(m) => m.id}
         inverted={false}
+        onContentSizeChange={() =>
+          listRef.current?.scrollToEnd({ animated: true })
+        }
+        onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
         contentContainerStyle={{ padding: 12, gap: 8 }}
         ListEmptyComponent={
           loadingMsgs ? (

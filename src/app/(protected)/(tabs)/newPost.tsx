@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -44,6 +44,7 @@ import {
 } from '@/features/location/stores/useUserLocation';
 import { useLocationSheetStore } from '@/stores/useLocationSheetStore';
 import { geocodeForSubmit } from '@/lib/geocoding/utils';
+import { toast } from '@/shared/ui/toast';
 
 type MediaType = 'image' | 'video';
 type PickerMode = 'none' | 'category' | 'subcategory';
@@ -74,6 +75,7 @@ export default function SellScreen(): React.ReactElement {
   const [shippingFree, setShippingFree] = useState(false);
   const [pickupAvailable, setPickupAvailable] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
+  const submittingRef = useRef(false);
 
   const hasUserLocation = useHasLocation();
   const userDisplayName = useUserLocation((s) => s.displayName);
@@ -203,6 +205,9 @@ export default function SellScreen(): React.ReactElement {
   };
 
   const onSubmit = async (): Promise<void> => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
     if (!mediaUri || !mediaType) {
       Alert.alert(t('sell.fail'), t('sell.missingMedia'));
       return;
@@ -265,14 +270,14 @@ export default function SellScreen(): React.ReactElement {
         { id: editId, input: updatePayload },
         {
           onSuccess: () => {
-            Alert.alert(
+            toast.success(
               t('sell.updateSuccessTitle'),
               t('sell.updateSuccessMessage'),
             );
             router.back();
           },
           onError: (err) => {
-            Alert.alert(t('sell.updateFail'), err.message || t('common.errorGeneric'));
+            toast.error(t('sell.updateFail'), err.message ?? t('common.errorGeneric'));
           },
         },
       );
@@ -303,7 +308,7 @@ export default function SellScreen(): React.ReactElement {
 
     createListing(payload, {
       onSuccess: () => {
-        Alert.alert(t('sell.success'));
+        toast.success(t('sell.success'));
         setMediaUri(null);
         setMediaType(null);
         setTitle('');
@@ -341,9 +346,12 @@ export default function SellScreen(): React.ReactElement {
           );
           return;
         }
-        Alert.alert(t('sell.fail'), err.message || t('common.errorGeneric'));
+        toast.error(t('sell.fail'), err.message ?? t('common.errorGeneric'));
       },
     });
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   if (!isAuthenticated) {

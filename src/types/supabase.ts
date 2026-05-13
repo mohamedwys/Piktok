@@ -289,11 +289,14 @@ export type Database = {
           amount: number
           application_fee_amount: number | null
           buyer_id: string
+          buyer_name: string | null
+          buyer_phone: string | null
           created_at: string
           currency: string
           id: string
           product_id: string
           seller_id: string
+          shipping_address: Json | null
           status: string
           stripe_charge_id: string | null
           stripe_payment_intent_id: string | null
@@ -304,11 +307,14 @@ export type Database = {
           amount: number
           application_fee_amount?: number | null
           buyer_id: string
+          buyer_name?: string | null
+          buyer_phone?: string | null
           created_at?: string
           currency: string
           id?: string
           product_id: string
           seller_id: string
+          shipping_address?: Json | null
           status?: string
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
@@ -319,11 +325,14 @@ export type Database = {
           amount?: number
           application_fee_amount?: number | null
           buyer_id?: string
+          buyer_name?: string | null
+          buyer_phone?: string | null
           created_at?: string
           currency?: string
           id?: string
           product_id?: string
           seller_id?: string
+          shipping_address?: Json | null
           status?: string
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
@@ -436,6 +445,7 @@ export type Database = {
           media_url: string
           pickup_available: boolean
           price: number
+          purchase_mode: string
           seller_id: string
           shares_count: number
           shipping_free: boolean
@@ -469,6 +479,7 @@ export type Database = {
           media_url: string
           pickup_available?: boolean
           price: number
+          purchase_mode?: string
           seller_id: string
           shares_count?: number
           shipping_free?: boolean
@@ -502,6 +513,7 @@ export type Database = {
           media_url?: string
           pickup_available?: boolean
           price?: number
+          purchase_mode?: string
           seller_id?: string
           shares_count?: number
           shipping_free?: boolean
@@ -598,6 +610,7 @@ export type Database = {
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_payouts_enabled: boolean
+          tos_accepted_at: string | null
           user_id: string | null
           verified: boolean
           website: string | null
@@ -626,6 +639,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
+          tos_accepted_at?: string | null
           user_id?: string | null
           verified?: boolean
           website?: string | null
@@ -654,6 +668,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
+          tos_accepted_at?: string | null
           user_id?: string | null
           verified?: boolean
           website?: string | null
@@ -1002,6 +1017,7 @@ export type Database = {
           media_url: string
           pickup_available: boolean
           price: number
+          purchase_mode: string
           seller: Json
           seller_id: string
           shares_count: number
@@ -1213,6 +1229,7 @@ export type Database = {
           media_url: string
           pickup_available: boolean
           price: number
+          purchase_mode: string
           seller: Json
           seller_id: string
           shares_count: number
@@ -1235,6 +1252,7 @@ export type Database = {
         Returns: string
       }
       set_my_interests: { Args: { p_interests: Json }; Returns: undefined }
+      set_my_tos_accepted: { Args: never; Returns: undefined }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown

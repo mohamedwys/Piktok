@@ -47,10 +47,13 @@ export function useToggleFollow(): UseMutationResult<
       if (ctx?.prev) qc.setQueryData(USER_ENGAGEMENT_QUERY_KEY, ctx.prev);
     },
     onSettled: (_data, _err, vars) => {
-      qc.invalidateQueries({ queryKey: USER_ENGAGEMENT_QUERY_KEY });
-      qc.invalidateQueries({ queryKey: ['seller', 'byId', vars.sellerId] });
-      qc.invalidateQueries({ queryKey: ['social', 'followers', vars.sellerId] });
-      qc.invalidateQueries({ queryKey: ['social', 'following', vars.sellerId] });
+      qc.invalidateQueries({
+        predicate: (q) =>
+          q.queryKey[0] === 'marketplace' && q.queryKey[1] !== 'engagement',
+      });
+      void qc.invalidateQueries({ queryKey: ['seller', 'byId', vars.sellerId] });
+      void qc.invalidateQueries({ queryKey: ['social', 'followers', vars.sellerId] });
+      void qc.invalidateQueries({ queryKey: ['social', 'following', vars.sellerId] });
     },
   });
 }

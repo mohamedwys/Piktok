@@ -39,7 +39,10 @@ export function useToggleLike(
       if (ctx?.prev) qc.setQueryData(USER_ENGAGEMENT_QUERY_KEY, ctx.prev);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['marketplace', 'products', 'list'] });
+      qc.invalidateQueries({
+        predicate: (q) =>
+          q.queryKey[0] === 'marketplace' && q.queryKey[1] !== 'engagement',
+      });
     },
   });
 }

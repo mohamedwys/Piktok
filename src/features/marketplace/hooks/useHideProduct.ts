@@ -21,8 +21,9 @@ type Ctx = {
 
 // Optimistic "Not interested" — removes the product from every cached
 // marketplace-feed page synchronously, calls hide_product, rolls back on
-// error. No onSettled invalidation; the optimistic removal is permanent
-// because the server now hides the product from this user's future fetches.
+// error. onSettled invalidates sibling marketplace queries (e.g. forYou)
+// but skips 'nearby' to preserve the optimistic remove and 'engagement'
+// which is already authoritative client-side.
 export function useHideProduct(): UseMutationResult<void, Error, Vars, Ctx> {
   const qc = useQueryClient();
   return useMutation<void, Error, Vars, Ctx>({
@@ -55,6 +56,14 @@ export function useHideProduct(): UseMutationResult<void, Error, Vars, Ctx> {
       for (const [key, snapshot] of ctx.prev) {
         qc.setQueryData(key, snapshot);
       }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({
+        predicate: (q) =>
+          q.queryKey[0] === 'marketplace'
+          && q.queryKey[1] !== 'engagement'
+          && q.queryKey[1] !== 'nearby',
+      });
     },
   });
 }

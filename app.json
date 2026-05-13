@@ -16,8 +16,13 @@
       "requireFullScreen": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
-        "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown"],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown"
+        ],
         "NSCameraUsageDescription": "Mony uses your camera so you can take photos and videos of items to list on the marketplace.",
         "NSMicrophoneUsageDescription": "Mony uses your microphone when you record videos for your marketplace listings.",
         "NSPhotoLibraryUsageDescription": "Mony accède à votre bibliothèque photo pour vos annonces et votre photo de profil.",
@@ -84,7 +89,8 @@
         {
           "locationWhenInUsePermission": "Cette application utilise votre position pour afficher les annonces près de vous."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

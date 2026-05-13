@@ -1,10 +1,11 @@
 import { AppState, type NativeEventSubscription } from 'react-native'
 import 'react-native-url-polyfill/auto'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient, processLock } from '@supabase/supabase-js'
+import { env } from './env'
+import { secureStorage } from '@shared/storage/secureStorage'
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = env.SUPABASE_URL;
+const supabaseAnonKey = env.SUPABASE_ANON_KEY;
 
 // Deep-link target for email confirmation. Built from the app's
 // custom scheme (see `expo.scheme` in app.json). This URL must be
@@ -15,7 +16,7 @@ export const AUTH_REDIRECT_URL = 'client://auth/callback';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: secureStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

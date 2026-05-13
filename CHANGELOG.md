@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Pin npm resolution mode via project-level .npmrc files (mobile +
+  web) so EAS Build no longer requires the manual lockfile
+  regeneration step before each production build.
+
 ## [1.0.0] — pending submission
 
 Initial production release. Eight phases of development consolidated

@@ -31,14 +31,13 @@ Dashboard → Authentication → Rate Limits → Emails per hour
   - Default 3/hour is too restrictive for active testing; 30/hour is
     typical for early-stage production.
 
-## 5. (Required for EAS Build) Lockfile clean
+## 5. (Resolved) Lockfile clean
 
-Outside the dashboard but reminded here per the project's standing
-carry-forward note:
+No longer a manual step. The repo now ships project-level `.npmrc`
+files at the mobile root and at `web/` that pin
+`legacy-peer-deps=false`, which overrides the developer's global
+`~/.npmrc` for both local `npm install` and EAS Build's `npm ci`. To
+verify before a production build:
 
-    rm package-lock.json
-    rm -rf node_modules
-    npm install --legacy-peer-deps=false
-
-Global ~/.npmrc has legacy-peer-deps=true, which corrupts the lockfile
-in a way that breaks EAS `npm ci`.
+    cat .npmrc        # legacy-peer-deps=false
+    cat web/.npmrc    # legacy-peer-deps=false

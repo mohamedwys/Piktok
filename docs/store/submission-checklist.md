@@ -5,10 +5,7 @@ or Play Console. Each unchecked item is a known rejection risk.
 
 ## 0. Lockfile + Dependencies
 
-- [ ] `Remove-Item package-lock.json; Remove-Item -Recurse -Force node_modules; npm install --legacy-peer-deps=false`
-      (Global `~/.npmrc` has `legacy-peer-deps=true` which corrupts the
-      lockfile such that EAS `npm ci` fails. This step is required
-      before every production build.)
+- [ ] `cat .npmrc` shows `legacy-peer-deps=false` (project-pinned)
 - [ ] `npx tsc --noEmit` is clean
 - [ ] `cd web && npx tsc --noEmit && cd ..` is clean
 - [ ] `npx expo-doctor` is acceptable (the React 19.2 / RN 0.81.6 drift

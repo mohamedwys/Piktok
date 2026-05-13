@@ -35,7 +35,7 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-type ConversationRow = {
+export type ConversationRow = {
   id: string;
   product_id: string;
   buyer_id: string;
@@ -60,7 +60,7 @@ type SellerLookup = {
   is_pro: boolean;
 };
 
-type MessageRow = {
+export type MessageRow = {
   id: string;
   conversation_id: string;
   sender_id: string;
@@ -230,18 +230,39 @@ export async function startOrGetConversation(productId: string): Promise<string>
   return data as string;
 }
 
-export function subscribeToConversations(onChange: () => void) {
+export type ConversationsRTEvent =
+  | {
+      kind: 'conversation_changed';
+      eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+      row: ConversationRow;
+    }
+  | { kind: 'message_inserted'; row: MessageRow };
+
+export function subscribeToConversations(
+  onEvent: (event: ConversationsRTEvent) => void,
+) {
   const channel = supabase
     .channel('conversations:user')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'conversations' },
-      () => onChange(),
+      (payload) => {
+        const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
+        const row = (
+          eventType === 'DELETE' ? payload.old : payload.new
+        ) as ConversationRow;
+        onEvent({ kind: 'conversation_changed', eventType, row });
+      },
     )
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages' },
-      () => onChange(),
+      (payload) => {
+        onEvent({
+          kind: 'message_inserted',
+          row: payload.new as MessageRow,
+        });
+      },
     )
     .subscribe();
   return () => {

@@ -13,3 +13,13 @@ export function useUserEngagement(): UseQueryResult<UserEngagement, Error> {
     staleTime: 5 * 60_000,
   });
 }
+
+export function useIsLiked(productId: string): boolean {
+  const { data } = useUserEngagement();
+  return data?.likedIds.has(productId) ?? false;
+}
+
+export function useIsBookmarked(productId: string): boolean {
+  const { data } = useUserEngagement();
+  return data?.bookmarkedIds.has(productId) ?? false;
+}

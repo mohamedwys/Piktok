@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { mmkvStorage } from '@shared/storage/mmkv';
 import {
   CURRENCY_RATES_CACHE_KEY,
   CURRENCY_RATES_VERSION,
@@ -62,7 +62,7 @@ export const useExchangeRates = create<ExchangeRatesStore>()(
     {
       name: CURRENCY_RATES_CACHE_KEY,
       version: CURRENCY_RATES_VERSION,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvStorage),
       // Persist only the cached snapshot — `loading` and `error`
       // are runtime state and should not survive restarts.
       partialize: (state) => ({ snapshot: state.snapshot }),

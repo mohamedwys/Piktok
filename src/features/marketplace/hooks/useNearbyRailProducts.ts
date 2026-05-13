@@ -46,7 +46,7 @@ export function useNearbyRailProducts(): UseNearbyRailProductsResult {
         location: { latitude, longitude, radiusKm },
         sort: 'distance',
         limit: RAIL_LIMIT,
-        offset: 0,
+        cursor: null,
       }),
     enabled: isEnabled,
     staleTime: 60_000,

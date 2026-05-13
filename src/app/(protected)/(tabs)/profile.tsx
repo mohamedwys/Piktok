@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
@@ -57,7 +57,7 @@ const ORDER_STATUS_PILL: Record<
   OrderStatus,
   { bg: string; fg: string; key: string }
 > = {
-  pending: { bg: '#FFC83D', fg: '#1a1100', key: 'orders.statusPending' },
+  pending: { bg: colors.feedback.gold, fg: '#1a1100', key: 'orders.statusPending' },
   paid: { bg: '#33D17A', fg: '#062817', key: 'orders.statusPaid' },
   failed: { bg: 'rgba(243,97,97,0.85)', fg: '#fff', key: 'orders.statusFailed' },
   cancelled: { bg: 'rgba(243,97,97,0.85)', fg: '#fff', key: 'orders.statusCancelled' },
@@ -89,6 +89,8 @@ function OrderRow({
           <Image
             source={{ uri: order.productThumbnail }}
             style={styles.orderThumb}
+            transition={120}
+            cachePolicy="memory-disk"
           />
         ) : null}
       </View>
@@ -447,7 +449,7 @@ export default function ProfileScreen(): React.ReactElement {
               <View style={styles.metaRow}>
                 {seller.rating > 0 ? (
                   <View style={styles.metaItem}>
-                    <Ionicons name="star" size={14} color="#FFC83D" />
+                    <Ionicons name="star" size={14} color={colors.feedback.gold} />
                     <Text variant="caption" weight="semibold" color="secondary">
                       {seller.rating.toFixed(1)}
                     </Text>
@@ -666,6 +668,16 @@ export default function ProfileScreen(): React.ReactElement {
                 icon="create-outline"
                 label={t('profile.editProfile')}
                 onPress={onPressEditSeller}
+                showDivider
+              />
+              <AccountRow
+                icon="heart-outline"
+                label={t('onboarding.editTitle')}
+                onPress={() =>
+                  // as Href: brand-new route, the typed-routes manifest
+                  // catches up on next dev-server start.
+                  router.push('/(protected)/onboarding?edit=1' as Href)
+                }
                 showDivider
               />
               {seller ? (

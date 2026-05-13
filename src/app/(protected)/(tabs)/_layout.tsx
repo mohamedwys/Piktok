@@ -5,10 +5,13 @@ import CustomTabBar, {
   BAR_BOTTOM_MARGIN,
   TAB_BAR_HEIGHT,
 } from '@/components/navigation/CustomTabBar';
+import { useUnreadConversationsCount } from '@/features/marketplace/hooks/useUnreadConversationsCount';
 
 export default function TabsLayout() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const unreadCount = useUnreadConversationsCount();
+  const hasUnread = unreadCount > 0;
 
   return (
     <Tabs
@@ -29,7 +32,7 @@ export default function TabsLayout() {
           backgroundColor: 'transparent',
         },
       }}
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => <CustomTabBar {...props} unreadMessages={hasUnread} />}
     >
       <Tabs.Screen name="index" options={{ title: t('tabs.home') }} />
       <Tabs.Screen name="friends" options={{ title: t('tabs.categories') }} />

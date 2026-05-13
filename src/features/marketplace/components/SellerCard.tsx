@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import { colors } from '@/theme';
 
 type SellerCardProps = {
   seller: Product['seller'];
@@ -52,7 +53,7 @@ export default function SellerCard({
             ) : null}
           </View>
           <View style={styles.row}>
-            <Ionicons name="star" size={11} color="#FFC83D" />
+            <Ionicons name="star" size={11} color={colors.feedback.gold} />
             <Text style={styles.metaText} numberOfLines={1}>
               {` ${seller.rating.toFixed(1)} (${formatCount(seller.salesCount)}) · ${formatCount(seller.salesCount)} ${t('marketplace.salesUnit', { count: seller.salesCount })}`}
             </Text>

@@ -33,7 +33,7 @@ function toMiniCardSeller(seller: Product['seller']): SellerMiniCardSeller {
   };
 }
 
-export default function ProductBottomPanel({
+function ProductBottomPanel({
   product,
   tabBarHeight = 0,
 }: ProductBottomPanelProps): React.ReactElement {
@@ -145,4 +145,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: spacing.xs,
   },
+});
+
+export default React.memo(ProductBottomPanel, (prev, next) => {
+  return (
+    prev.product.id === next.product.id &&
+    prev.tabBarHeight === next.tabBarHeight
+  );
 });

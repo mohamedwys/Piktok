@@ -61,9 +61,9 @@ export const CURRENCY_RATES_CACHE_KEY = 'currency-rates-v1';
 
 export const CURRENCY_PREFERENCE_KEY = 'display-currency-v1';
 
-export const CURRENCY_PREFERENCE_VERSION = 1;
+export const CURRENCY_PREFERENCE_VERSION = 2;
 
-export const CURRENCY_RATES_VERSION = 1;
+export const CURRENCY_RATES_VERSION = 2;
 
 export const DEFAULT_CURRENCY = 'EUR';
 

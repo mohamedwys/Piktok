@@ -2,6 +2,13 @@ import { supabase } from '@/lib/supabase';
 import { rowToProduct, type ProductRow } from './products';
 import type { Product } from '@/features/marketplace/types/product';
 
+// TODO(types): remove the `as unknown as SetMyInterestsRpc` cast after the
+// next `npm run gen:types` against a database with 20260612 applied.
+type SetMyInterestsRpc = (
+  fn: 'set_my_interests',
+  args: { p_interests: string[] },
+) => Promise<{ error: { message: string } | null }>;
+
 export type SellerProfile = {
   id: string;
   name: string;
@@ -28,6 +35,13 @@ export type SellerProfile = {
    * BoostButton derives its disabled-with-countdown state from this field.
    */
   lastBoostAt: string | null;
+  /**
+   * Category IDs the user picked at onboarding (or via "Edit interests").
+   * Empty array means "not set" — onboarding hasn't run or was skipped.
+   * Mutated via `set_my_interests` RPC; client never writes the column
+   * directly (B.1.5 sellers UPDATE allowlist excludes it).
+   */
+  interests: string[];
 };
 
 type SellerRow = {
@@ -50,7 +64,15 @@ type SellerRow = {
   location_text: string | null;
   location_updated_at: string | null;
   last_boost_at: string | null;
+  // interests is jsonb in DB; typed as unknown because the regenerated
+  // types may lag the 20260612 migration. Validated in rowToSeller.
+  interests?: unknown;
 };
+
+function parseInterests(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === 'string');
+}
 
 function rowToSeller(row: SellerRow): SellerProfile {
   return {
@@ -73,6 +95,7 @@ function rowToSeller(row: SellerRow): SellerProfile {
     locationText: row.location_text ?? null,
     locationUpdatedAt: row.location_updated_at ?? null,
     lastBoostAt: row.last_boost_at ?? null,
+    interests: parseInterests(row.interests),
   };
 }
 
@@ -163,4 +186,20 @@ export async function updateMySeller(
     .single();
   if (error) throw error;
   return rowToSeller(data as SellerRow);
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding interests (Phase 5 / A4 + B7)
+//
+// `set_my_interests` is a SECURITY DEFINER RPC defined by
+// supabase/migrations/20260612_seller_interests.sql. The mobile client calls
+// it from the onboarding screen and from the "Edit interests" entry in
+// profile settings. Errors with sqlerrm containing 'invalid_interests' are
+// re-thrown verbatim so call sites can pattern-match if needed; the v0 UI
+// just surfaces a generic toast.
+// ---------------------------------------------------------------------------
+export async function setMyInterests(interests: string[]): Promise<void> {
+  const rpc = supabase.rpc as unknown as SetMyInterestsRpc;
+  const { error } = await rpc('set_my_interests', { p_interests: interests });
+  if (error) throw new Error(error.message);
 }

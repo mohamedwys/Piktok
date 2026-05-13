@@ -2,13 +2,13 @@ import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
@@ -148,6 +148,8 @@ const ConversationRow = React.memo(function ConversationRow({
           <Image
             source={{ uri: item.product.thumbnailUrl }}
             style={styles.thumbImage}
+            transition={120}
+            cachePolicy="memory-disk"
           />
         ) : null}
       </View>

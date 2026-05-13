@@ -94,7 +94,7 @@ export default function SellerProfileScreen(): React.ReactElement {
       <Text style={styles.memberSince}>{t('seller.memberSince', { date: memberSince })}</Text>
       <View style={styles.statsRow}>
         <View style={styles.statBlock}>
-          <Ionicons name="star" size={14} color="#FFC83D" />
+          <Ionicons name="star" size={14} color={colors.feedback.gold} />
           <Text style={styles.statText}>{` ${seller.rating.toFixed(1)}`}</Text>
         </View>
         <View style={styles.statDot} />

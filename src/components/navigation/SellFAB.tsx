@@ -1,6 +1,6 @@
 import { Platform, View } from 'react-native'
 import { useTranslation } from 'react-i18next'
-import { Feather } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons'
 import { Pressable, Text } from '@/components/ui'
 import { colors, spacing } from '@/theme'
 
@@ -48,7 +48,7 @@ export function SellFAB({ onPress, label, accessibilityLabel }: SellFABProps) {
             }),
           }}
         >
-          <Feather name="plus" size={26} color={colors.brandText} />
+          <Ionicons name="add" size={26} color={colors.brandText} />
         </View>
       </Pressable>
       <Text

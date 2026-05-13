@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mmkvStorage } from '@shared/storage/mmkv';
 
 export type MarketplaceFilters = {
   query: string;
@@ -36,7 +36,8 @@ export const useMarketplaceFilters = create<Store>()(
     }),
     {
       name: 'marketplace-filters',
-      storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      storage: createJSONStorage(() => mmkvStorage),
     },
   ),
 );

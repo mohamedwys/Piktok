@@ -396,6 +396,27 @@
     "likeAriaLabel": "{{count}} likes",
     "unlikeAriaLabel": "Remove like"
   },
+  "actions": {
+    "notInterested": "Not interested",
+    "notInterestedDone": "Won't show again"
+  },
+  "onboarding": {
+    "title": "Choose 3-5 categories you love",
+    "subtitle": "We'll tailor your feed to what you actually want to see.",
+    "continue": "Continue",
+    "save": "Save",
+    "skip": "Skip",
+    "pickMore": "Pick {{count}} more to continue",
+    "pickFewer": "Remove {{count}} to continue",
+    "editTitle": "Edit interests",
+    "saveError": "Couldn't save. Please try again.",
+    "saved": "Saved"
+  },
+  "forYou": {
+    "signInPrompt": "Sign in to get a feed tailored to you.",
+    "empty": "Your For You feed is warming up.",
+    "exploreMarketplace": "Explore the marketplace"
+  },
   "more": {
     "title": "More options",
     "copyLink": "Copy link",

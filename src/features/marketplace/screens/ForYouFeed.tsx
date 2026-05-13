@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,38 +10,36 @@ import {
 } from 'react-native';
 import { FlashList, type ViewToken } from '@shopify/flash-list';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { useNearbyProducts } from '@/features/marketplace/hooks/useNearbyProducts';
+
+import { useForYouFeed } from '@/features/marketplace/hooks/useForYouFeed';
 import ProductFeedItem from '@/features/marketplace/components/ProductFeedItem';
 import { VideoPlayerPool } from '@/features/marketplace/components/VideoPlayerPool';
 import MarketplaceFeedSkeleton from '@/features/marketplace/components/MarketplaceFeedSkeleton';
-import {
-  getProductById,
-  subscribeToNewListings,
-  type ListNearbyResult,
-  type NearbyProduct,
-  type ProductsCursor,
-} from '@/features/marketplace/services/products';
-import { useMarketplaceFilters } from '@/stores/useMarketplaceFilters';
-import { useUserLocation } from '@/features/location/stores/useUserLocation';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useMainTabStore } from '@/stores/useMainTabStore';
-import type { Product } from '@/features/marketplace/types/product';
+import { lightHaptic } from '@/features/marketplace/utils/haptics';
+import type { ForYouProduct } from '@/features/marketplace/services/products';
 import { colors } from '@/theme';
 
-export default function MarketplaceScreen(): React.ReactElement {
+export default function ForYouFeed(): React.ReactElement {
   const { t } = useTranslation();
+  const router = useRouter();
   const { height } = useWindowDimensions();
   const itemHeight = height;
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setMainTab = useMainTabStore((s) => s.setMainTab);
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken<Product>[] }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<ForYouProduct>[] }) => {
       const next = viewableItems[0]?.index ?? 0;
       setCurrentIndex((prev) => {
         if (prev !== next) {
@@ -60,7 +59,7 @@ export default function MarketplaceScreen(): React.ReactElement {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useNearbyProducts();
+  } = useForYouFeed();
 
   const items = useMemo(
     () => data?.pages.flatMap((p) => p.items) ?? [],
@@ -81,84 +80,36 @@ export default function MarketplaceScreen(): React.ReactElement {
     });
   }, [firstPageItems]);
 
-  // Realtime new-listing prepend (Phase 5 / B5). Subscribes only when the
-  // user is on the marketplace tab AND has a location set; otherwise
-  // there is nothing to filter against. Filters are read through a ref
-  // so changing them does not churn the subscription — we just write to
-  // whichever cache key is currently active.
-  const qc = useQueryClient();
-  const mainTab = useMainTabStore((s) => s.mainTab);
-  const filters = useMarketplaceFilters((s) => s.filters);
-  const filtersRef = useRef(filters);
-  filtersRef.current = filters;
-  const latitude = useUserLocation((s) => s.latitude);
-  const longitude = useUserLocation((s) => s.longitude);
-  const radiusKm = useUserLocation((s) => s.radiusKm);
+  const onPressSignIn = (): void => {
+    void lightHaptic();
+    router.push('/(auth)/login');
+  };
 
-  useEffect(() => {
-    if (mainTab !== 'marketplace') return;
-    if (latitude === null || longitude === null || radiusKm === null) return;
-    const userLat = latitude;
-    const userLng = longitude;
-    const userRadius = radiusKm;
+  const onPressExploreMarketplace = (): void => {
+    void lightHaptic();
+    setMainTab('marketplace');
+  };
 
-    const unsub = subscribeToNewListings((row) => {
-      const productLat =
-        typeof row.latitude === 'number' ? row.latitude : null;
-      const productLng =
-        typeof row.longitude === 'number' ? row.longitude : null;
-      if (productLat === null || productLng === null) return;
-
-      // Inline haversine (km). Keep this tight — do not extract.
-      const R = 6371;
-      const toRad = (d: number): number => (d * Math.PI) / 180;
-      const dLat = toRad(productLat - userLat);
-      const dLng = toRad(productLng - userLng);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(userLat)) *
-          Math.cos(toRad(productLat)) *
-          Math.sin(dLng / 2) ** 2;
-      const distanceKm = 2 * R * Math.asin(Math.sqrt(a));
-      if (distanceKm > userRadius) return;
-
-      // Hydrate seller + full row via getProductById, then prepend to the
-      // first page of the currently-active query.
-      void getProductById(row.id).then((product) => {
-        if (!product) return;
-        const key = [
-          'marketplace',
-          'nearby',
-          {
-            lat: userLat,
-            lng: userLng,
-            radiusKm: userRadius,
-            filters: filtersRef.current,
-          },
-        ];
-        qc.setQueryData<InfiniteData<ListNearbyResult, ProductsCursor | null>>(
-          key,
-          (prev) => {
-            if (!prev || prev.pages.length === 0) return prev;
-            if (prev.pages[0].items.some((i) => i.id === product.id)) {
-              return prev;
-            }
-            const newItem: NearbyProduct = { ...product, distanceKm };
-            return {
-              ...prev,
-              pages: [
-                { ...prev.pages[0], items: [newItem, ...prev.pages[0].items] },
-                ...prev.pages.slice(1),
-              ],
-            };
-          },
-        );
-      });
-    });
-    return () => {
-      unsub();
-    };
-  }, [mainTab, latitude, longitude, radiusKm, qc]);
+  // Anon: show sign-in CTA. The hook's `enabled` already suppressed the
+  // fetch; data is undefined and isLoading is false.
+  if (!isAuthenticated) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Ionicons
+          name="sparkles-outline"
+          size={48}
+          color="rgba(255,255,255,0.25)"
+        />
+        <Text style={styles.empty}>{t('forYou.signInPrompt')}</Text>
+        <Pressable
+          onPress={onPressSignIn}
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+        >
+          <Text style={styles.ctaText}>{t('auth.signIn')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (isLoading && !data) {
     return (
@@ -179,7 +130,18 @@ export default function MarketplaceScreen(): React.ReactElement {
   if (items.length === 0) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.message}>{t('marketplace.empty')}</Text>
+        <Ionicons
+          name="sparkles-outline"
+          size={48}
+          color="rgba(255,255,255,0.25)"
+        />
+        <Text style={styles.empty}>{t('forYou.empty')}</Text>
+        <Pressable
+          onPress={onPressExploreMarketplace}
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+        >
+          <Text style={styles.ctaText}>{t('forYou.exploreMarketplace')}</Text>
+        </Pressable>
       </View>
     );
   }
@@ -187,7 +149,7 @@ export default function MarketplaceScreen(): React.ReactElement {
   return (
     <VideoPlayerPool slots={3}>
       <View style={styles.container}>
-          <FlashList<Product>
+        <FlashList<ForYouProduct>
           data={items}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
@@ -233,19 +195,40 @@ export default function MarketplaceScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
   center: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 32,
+    paddingBottom: 80,
   },
   message: {
     color: '#fff',
     fontSize: 14,
     paddingHorizontal: 24,
     textAlign: 'center',
+  },
+  empty: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  cta: {
+    marginTop: 8,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  ctaPressed: {
+    opacity: 0.85,
+  },
+  ctaText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   footer: {
     paddingVertical: 16,

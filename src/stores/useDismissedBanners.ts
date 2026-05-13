@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { mmkvStorage } from '@shared/storage/mmkv';
 
 /**
  * Banner identifiers. Adding a new upsell surface? Extend this union and
@@ -76,7 +76,8 @@ export const useDismissedBanners = create<DismissedBannersState>()(
     }),
     {
       name: 'dismissed-banners-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      storage: createJSONStorage(() => mmkvStorage),
     },
   ),
 );

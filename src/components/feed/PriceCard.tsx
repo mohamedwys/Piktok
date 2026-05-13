@@ -1,3 +1,4 @@
+import React from 'react'
 import { View } from 'react-native'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useTranslation } from 'react-i18next'
@@ -108,4 +109,12 @@ export function PriceCard({
   )
 }
 
-export default PriceCard
+export default React.memo(PriceCard, (prev, next) => {
+  return (
+    prev.amount === next.amount &&
+    prev.currency === next.currency &&
+    prev.inStock === next.inStock &&
+    prev.freeShipping === next.freeShipping &&
+    prev.isSaved === next.isSaved
+  )
+})

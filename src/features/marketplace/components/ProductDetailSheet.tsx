@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +16,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Avatar } from '@/components/ui';
@@ -25,7 +25,7 @@ import BoostButton from '@/components/feed/BoostButton';
 import { AnalyticsCard } from '@/components/marketplace/AnalyticsCard';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
 import { useProduct } from '@/features/marketplace/hooks/useProduct';
-import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useIsBookmarked } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
 import { useStartConversation } from '@/features/marketplace/hooks/useStartConversation';
 import { useCreateCheckoutSession } from '@/features/marketplace/hooks/useCreateCheckoutSession';
@@ -44,7 +44,7 @@ import type { ProductAttribute } from '@/features/marketplace/types/product';
 import { colors } from '@/theme';
 
 const SHEET_BG = '#0a0a0a';
-const BOOKMARK_COLOR = '#FFC83D';
+const BOOKMARK_COLOR = colors.feedback.gold;
 
 function explainStartConvError(err: Error, t: (k: string) => string): string {
   const msg = err.message ?? '';
@@ -107,10 +107,7 @@ export default function ProductDetailSheet(): React.ReactElement {
   // Owner self-views are filtered server-side by track_product_view.
   useTrackProductView(productId);
   const fmt = useFormatDisplayPrice();
-  const { data: engagement } = useUserEngagement();
-  const isBookmarked = product
-    ? (engagement?.bookmarkedIds.has(product.id) ?? false)
-    : false;
+  const isBookmarked = useIsBookmarked(product?.id ?? '');
   const toggleBookmark = useToggleBookmark(product?.id ?? '');
   const { requireAuth } = useRequireAuth();
   const startConv = useStartConversation();
@@ -318,7 +315,9 @@ export default function ProductDetailSheet(): React.ReactElement {
         <Image
           source={{ uri: product.media.thumbnailUrl ?? product.media.url }}
           style={styles.hero}
-          resizeMode="cover"
+          contentFit="cover"
+          transition={120}
+          cachePolicy="memory-disk"
         />
 
         <View style={styles.body}>

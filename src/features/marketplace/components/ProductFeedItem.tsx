@@ -1,12 +1,21 @@
 import React, { useEffect } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { VideoView } from 'expo-video';
+import { usePooledVideoPlayer } from '@/features/marketplace/components/VideoPlayerPool';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  runOnJS,
+} from 'react-native-reanimated';
 import type { Product } from '@/features/marketplace/types/product';
 import ProductActionRail from '@/features/marketplace/components/ProductActionRail';
 import ProductBottomPanel from '@/features/marketplace/components/ProductBottomPanel';
@@ -14,8 +23,9 @@ import SellerPill, { type SellerPillSeller } from '@/components/feed/SellerPill'
 import PriceCard from '@/components/feed/PriceCard';
 import { Text } from '@/components/ui';
 import { MARKETPLACE_HEADER_ROW_HEIGHT } from '@/components/feed/MarketplaceHeader';
-import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useIsBookmarked, useIsLiked } from '@/features/marketplace/hooks/useUserEngagement';
 import { useToggleBookmark } from '@/features/marketplace/hooks/useToggleBookmark';
+import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
 import { useRequireAuth } from '@/stores/useRequireAuth';
 import { colors, spacing, zIndex as zIndexTokens } from '@/theme';
 
@@ -23,6 +33,8 @@ type ProductFeedItemProps = {
   item: Product;
   itemHeight: number;
   isActive: boolean;
+  insetsTop: number;
+  tabBarHeight: number;
 };
 
 function toSellerPillSeller(seller: Product['seller']): SellerPillSeller {
@@ -45,21 +57,21 @@ export default function ProductFeedItem({
   item,
   itemHeight,
   isActive,
+  insetsTop,
+  tabBarHeight,
 }: ProductFeedItemProps): React.ReactElement {
   const isVideo = item.media.type === 'video';
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
-  const topRowTop =
-    insets.top + MARKETPLACE_HEADER_ROW_HEIGHT + spacing.md;
+  const topRowTop = insetsTop + MARKETPLACE_HEADER_ROW_HEIGHT + spacing.md;
 
-  const player = useVideoPlayer(isVideo ? item.media.url : null, (p) => {
-    p.loop = true;
-    p.muted = true;
-  });
+  const player = usePooledVideoPlayer(
+    item.id,
+    isVideo ? item.media.url : null,
+  );
 
   useEffect(() => {
     if (!isVideo) return;
+    if (!player) return;
     try {
       if (isActive) {
         player.play();
@@ -72,8 +84,7 @@ export default function ProductFeedItem({
   }, [isActive, isVideo, player]);
 
   const { t } = useTranslation();
-  const { data: engagement } = useUserEngagement();
-  const isSaved = engagement?.bookmarkedIds.has(item.id) ?? false;
+  const isSaved = useIsBookmarked(item.id);
   const toggleBookmark = useToggleBookmark(item.id);
   const { requireAuth } = useRequireAuth();
   // H.12: render the "À la une" badge on top of the media when the
@@ -92,30 +103,79 @@ export default function ProductFeedItem({
     router.push(`/(protected)/seller/${item.seller.id}` as Href);
   };
 
+  const isLiked = useIsLiked(item.id);
+  const toggleLike = useToggleLike(item.id);
+
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+
+  const triggerLike = (): void => {
+    if (!requireAuth()) return;
+    if (!isLiked) toggleLike.mutate(false);
+  };
+
+  const playBurst = (): void => {
+    'worklet';
+    heartScale.value = 0.6;
+    heartOpacity.value = 0;
+    heartScale.value = withSequence(
+      withSpring(1.2, { damping: 10, stiffness: 200 }),
+      withSpring(0.95, { damping: 14, stiffness: 220 }),
+    );
+    heartOpacity.value = withSequence(
+      withTiming(1, { duration: 120 }),
+      withDelay(380, withTiming(0, { duration: 220 })),
+    );
+  };
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(280)
+    .onEnd(() => {
+      'worklet';
+      playBurst();
+      runOnJS(triggerLike)();
+    });
+
+  const heartStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
+
   return (
     <View style={[styles.container, { height: itemHeight }]}>
-      {isVideo ? (
-        <VideoView
-          player={player}
-          style={StyleSheet.absoluteFillObject}
-          contentFit="cover"
-          nativeControls={false}
-          allowsPictureInPicture={false}
-        />
-      ) : (
-        <Image
-          source={{ uri: item.media.thumbnailUrl ?? item.media.url }}
-          style={StyleSheet.absoluteFillObject}
-          resizeMode="cover"
-        />
-      )}
-      <View style={styles.gradient} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
-          locations={[0, 1]}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
+      <GestureDetector gesture={doubleTap}>
+        <Animated.View style={StyleSheet.absoluteFill}>
+          {isVideo && player ? (
+            <VideoView
+              player={player}
+              style={StyleSheet.absoluteFillObject}
+              contentFit="cover"
+              nativeControls={false}
+              allowsPictureInPicture={false}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.media.thumbnailUrl ?? item.media.url }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          )}
+          <View style={styles.gradient} pointerEvents="none">
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
+              locations={[0, 1]}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </View>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.heartOverlay, heartStyle]}
+          >
+            <Ionicons name="heart" size={120} color={colors.brand} />
+          </Animated.View>
+        </Animated.View>
+      </GestureDetector>
       {isFeatured ? (
         <View
           style={[styles.featuredBadge, { top: topRowTop - 28 }]}
@@ -202,5 +262,14 @@ const styles = StyleSheet.create({
   featuredBadgeText: {
     color: colors.brand,
     fontSize: 11,
+  },
+  heartOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,6 +1,6 @@
 import { useShareProduct } from '@/features/marketplace/hooks/useShareProduct';
 import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
-import { useUserEngagement } from '@/features/marketplace/hooks/useUserEngagement';
+import { useIsLiked } from '@/features/marketplace/hooks/useUserEngagement';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import type { Product } from '@/features/marketplace/types/product';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
@@ -26,13 +26,12 @@ type ProductActionRailProps = {
   tabBarHeight?: number;
 };
 
-export default function ProductActionRail({
+function ProductActionRail({
   product,
   tabBarHeight = 0,
 }: ProductActionRailProps): React.ReactElement {
   const { t, i18n } = useTranslation();
-  const { data: engagement } = useUserEngagement();
-  const isLiked = engagement?.likedIds.has(product.id) ?? false;
+  const isLiked = useIsLiked(product.id);
   const likeCount = product.engagement.likes;
   const toggleLike = useToggleLike(product.id);
   const shareMutation = useShareProduct();
@@ -211,4 +210,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.lg,
   },
+});
+
+export default React.memo(ProductActionRail, (prev, next) => {
+  return (
+    prev.product.id === next.product.id &&
+    prev.product.engagement.likes === next.product.engagement.likes &&
+    prev.product.engagement.comments === next.product.engagement.comments &&
+    prev.product.engagement.shares === next.product.engagement.shares &&
+    prev.product.engagement.bookmarks === next.product.engagement.bookmarks &&
+    prev.tabBarHeight === next.tabBarHeight
+  );
 });

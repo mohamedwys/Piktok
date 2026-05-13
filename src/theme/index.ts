@@ -9,53 +9,10 @@
  * repo root. Tokens added here must be added there too.
  */
 
-const colors = {
-  brand: '#FF5A5C',
-  brandPressed: '#E04547',
-  brandMuted: 'rgba(255, 90, 92, 0.16)',
-  brandText: '#FFFFFF',
+import { useColorScheme } from 'react-native';
+import { dark, light, type Palette } from './palettes';
 
-  background: '#000000',
-  surface: '#0A0A0A',
-  surfaceElevated: '#161616',
-  surfaceOverlay: 'rgba(255,255,255,0.04)',
-
-  border: 'rgba(255,255,255,0.08)',
-  borderStrong: 'rgba(255,255,255,0.16)',
-
-  text: {
-    primary: '#FFFFFF',
-    secondary: 'rgba(255,255,255,0.68)',
-    tertiary: 'rgba(255,255,255,0.42)',
-    inverse: '#000000',
-  },
-
-  overlay: {
-    scrim: 'rgba(0,0,0,0.55)',
-    scrimSoft: 'rgba(0,0,0,0.35)',
-  },
-
-  feedback: {
-    success: '#34D399',
-    warning: '#FBBF24',
-    danger: '#F87171',
-  },
-
-  verified: '#3B82F6',
-  proBadge: '#8B5CF6',
-  proBadgeText: '#FFFFFF',
-
-  glass: {
-    dark: {
-      bg: 'rgba(0, 0, 0, 0.45)',
-      border: 'rgba(255, 255, 255, 0.08)',
-    },
-    darkStrong: {
-      bg: 'rgba(0, 0, 0, 0.6)',
-      border: 'rgba(255, 255, 255, 0.10)',
-    },
-  },
-} as const
+const colors = dark;
 
 const spacing = {
   0: 0,
@@ -233,3 +190,10 @@ export type SpacingKey = keyof typeof spacing
 export type RadiusKey = keyof typeof radii
 export type GlassVariant = keyof typeof colors.glass
 export type BlurIntensityKey = keyof typeof blur.intensity
+
+export function useThemeColors(): Palette {
+  const scheme = useColorScheme();
+  return scheme === 'light' ? light : dark;
+}
+
+export type { Palette };

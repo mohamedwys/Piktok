@@ -1,7 +1,7 @@
 import { Platform, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { colors, radii, spacing } from '@/theme'
 import TabBarItem from './TabBarItem'
@@ -50,18 +50,10 @@ const TAB_CONFIG: Record<string, TabConfig> = {
   index: {
     labelKey: 'tabs.home',
     active: ({ color }) => (
-      <MaterialCommunityIcons
-        name="home-variant"
-        size={ICON_SIZE}
-        color={color}
-      />
+      <Ionicons name="home" size={ICON_SIZE} color={color} />
     ),
     inactive: ({ color }) => (
-      <MaterialCommunityIcons
-        name="home-variant-outline"
-        size={ICON_SIZE}
-        color={color}
-      />
+      <Ionicons name="home-outline" size={ICON_SIZE} color={color} />
     ),
   },
   friends: {

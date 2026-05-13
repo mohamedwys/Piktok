@@ -396,6 +396,27 @@
     "likeAriaLabel": "{{count}} j'aime",
     "unlikeAriaLabel": "Retirer le j'aime"
   },
+  "actions": {
+    "notInterested": "Pas intéressé",
+    "notInterestedDone": "Ne sera plus affiché"
+  },
+  "onboarding": {
+    "title": "Choisissez 3 à 5 catégories qui vous intéressent",
+    "subtitle": "Nous personnaliserons votre fil selon vos goûts.",
+    "continue": "Continuer",
+    "save": "Enregistrer",
+    "skip": "Passer",
+    "pickMore": "Choisissez encore {{count}} pour continuer",
+    "pickFewer": "Retirez {{count}} pour continuer",
+    "editTitle": "Modifier vos intérêts",
+    "saveError": "Impossible d'enregistrer. Réessayez.",
+    "saved": "Enregistré"
+  },
+  "forYou": {
+    "signInPrompt": "Connectez-vous pour obtenir un fil personnalisé.",
+    "empty": "Votre fil Pour Toi se prépare.",
+    "exploreMarketplace": "Explorer la marketplace"
+  },
   "more": {
     "title": "Plus d'options",
     "copyLink": "Copier le lien",

@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mmkvSync } from '@shared/storage/mmkv';
 import fr from './locales/fr.json';
 import en from './locales/en.json';
 
@@ -17,7 +17,7 @@ function detectInitialLanguage(): SupportedLanguage {
 }
 
 export async function initI18n(): Promise<void> {
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
+  const stored = mmkvSync.getString(STORAGE_KEY);
   const initial =
     stored && (SUPPORTED_LANGUAGES as readonly string[]).includes(stored)
       ? (stored as SupportedLanguage)
@@ -33,7 +33,7 @@ export async function initI18n(): Promise<void> {
 }
 
 export async function setLanguage(lang: SupportedLanguage): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, lang);
+  mmkvSync.setString(STORAGE_KEY, lang);
   await i18n.changeLanguage(lang);
 }
 

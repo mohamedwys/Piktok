@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+import { mmkvStorage } from '@shared/storage/mmkv';
 import { geocodeAddress, reverseGeocode } from '@/lib/geocoding';
 import type { GeoCoordinate, GeoLocation } from '@/lib/geocoding/types';
 import {
@@ -152,7 +152,7 @@ export const useUserLocation = create<UserLocationStore>()(
     {
       name: USER_LOCATION_STORAGE_KEY,
       version: USER_LOCATION_STORE_VERSION,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvStorage),
       partialize: (state) => ({
         latitude: state.latitude,
         longitude: state.longitude,

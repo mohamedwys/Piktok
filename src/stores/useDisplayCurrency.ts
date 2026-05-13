@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { mmkvStorage } from '@shared/storage/mmkv';
 import {
   CURRENCY_PREFERENCE_KEY,
   CURRENCY_PREFERENCE_VERSION,
@@ -74,7 +74,7 @@ export const useDisplayCurrency = create<DisplayCurrencyStore>()(
     {
       name: CURRENCY_PREFERENCE_KEY,
       version: CURRENCY_PREFERENCE_VERSION,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvStorage),
       partialize: (state) => ({
         currency: state.currency,
         source: state.source,

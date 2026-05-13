@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -429,7 +429,9 @@ export default function SellScreen(): React.ReactElement {
                   <Image
                     source={{ uri: mediaUri }}
                     style={styles.mediaPreview}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    transition={120}
+                    cachePolicy="memory-disk"
                   />
                 ) : null}
                 {mediaUri && mediaType === 'video' ? (

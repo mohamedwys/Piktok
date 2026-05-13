@@ -1,3 +1,4 @@
+import React from 'react'
 import { View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useTranslation } from 'react-i18next'
@@ -154,4 +155,12 @@ export function SellerPill({ seller, onPress }: SellerPillProps) {
   )
 }
 
-export default SellerPill
+export default React.memo(SellerPill, (prev, next) => {
+  return (
+    prev.seller.id === next.seller.id &&
+    prev.seller.name === next.seller.name &&
+    prev.seller.avatarUrl === next.seller.avatarUrl &&
+    prev.seller.verified === next.seller.verified &&
+    prev.seller.isPro === next.seller.isPro
+  )
+})

@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, Text } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
 import { useMoreActionsSheetStore } from '@/stores/useMoreActionsSheetStore';
+import { useHideProduct } from '@/features/marketplace/hooks/useHideProduct';
+import { toast } from '@/shared/ui/toast';
 
 const SHEET_BG = colors.surface;
 const SNAP_POINTS: (string | number)[] = ['35%'];
@@ -24,6 +26,7 @@ export default function MoreActionsSheet(): React.ReactElement {
   const isOpen = useMoreActionsSheetStore((s) => s.isOpen);
   const productId = useMoreActionsSheetStore((s) => s.productId);
   const close = useMoreActionsSheetStore((s) => s.close);
+  const hideMutation = useHideProduct();
 
   const snapPoints = useMemo(() => SNAP_POINTS, []);
 
@@ -81,6 +84,25 @@ export default function MoreActionsSheet(): React.ReactElement {
     close();
   }, [close, t]);
 
+  const handleNotInterested = useCallback(() => {
+    if (!productId) {
+      close();
+      return;
+    }
+    hideMutation.mutate(
+      { productId },
+      {
+        onSuccess: () => {
+          toast.success(t('actions.notInterestedDone'));
+        },
+        onError: () => {
+          toast.error(t('common.errorGeneric'));
+        },
+      },
+    );
+    close();
+  }, [close, hideMutation, productId, t]);
+
   return (
     <BottomSheet
       ref={sheetRef}
@@ -100,6 +122,21 @@ export default function MoreActionsSheet(): React.ReactElement {
       </View>
 
       <View style={{ paddingBottom: insets.bottom + spacing.md }}>
+        <Pressable
+          haptic="light"
+          onPress={handleNotInterested}
+          style={styles.row}
+          accessibilityRole="button"
+          accessibilityLabel={t('actions.notInterested')}
+        >
+          <Ionicons
+            name="thumbs-down-outline"
+            size={20}
+            color={colors.text.primary}
+          />
+          <Text variant="body">{t('actions.notInterested')}</Text>
+        </Pressable>
+
         <Pressable
           haptic="light"
           onPress={() => {

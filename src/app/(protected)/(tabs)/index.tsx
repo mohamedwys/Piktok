@@ -1,8 +1,7 @@
 import { View, StyleSheet, useWindowDimensions } from 'react-native'
 import React, { useEffect } from 'react'
-// import PostListItem from '@/components/PostListItem'; // Phase 5: real For You feed
-// import posts from "@/data/posts.json" // Phase 5: real For You feed
 import MarketplaceScreen from '@/features/marketplace/screens/MarketplaceScreen';
+import ForYouFeed from '@/features/marketplace/screens/ForYouFeed';
 import MarketplaceFilterSheet from '@/features/marketplace/components/MarketplaceFilterSheet';
 import LocationSheet from '@/components/feed/LocationSheet';
 import CommentsSheet from '@/components/feed/CommentsSheet';
@@ -67,8 +66,7 @@ export default function HomeScreen() {
         style={[styles.tabContent, mainTab === 'pour-toi' ? null : styles.hidden]}
         pointerEvents={mainTab === 'pour-toi' ? 'auto' : 'none'}
       >
-        {/* Phase 5: real For You feed lands here */}
-        <View />
+        <ForYouFeed />
       </View>
 
       <View

@@ -1,48 +1,48 @@
 import {
   useInfiniteQuery,
-  type UseInfiniteQueryResult,
   type InfiniteData,
+  type UseInfiniteQueryResult,
 } from '@tanstack/react-query';
 import {
-  searchNearbyProducts,
-  type ListNearbyResult,
-  type ProductsCursor,
+  feedForYou,
+  type ForYouCursor,
+  type ListForYouResult,
 } from '@/features/marketplace/services/products';
-import { useMarketplaceFilters } from '@/stores/useMarketplaceFilters';
 import { useUserLocation } from '@/features/location/stores/useUserLocation';
+import { useAuthStore } from '@/stores/useAuthStore';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
-export function useNearbyProducts(): UseInfiniteQueryResult<
-  InfiniteData<ListNearbyResult, ProductsCursor | null>,
+export function useForYouFeed(): UseInfiniteQueryResult<
+  InfiniteData<ListForYouResult, ForYouCursor | null>,
   Error
 > {
-  const filters = useMarketplaceFilters((s) => s.filters);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const latitude = useUserLocation((s) => s.latitude);
   const longitude = useUserLocation((s) => s.longitude);
   const radiusKm = useUserLocation((s) => s.radiusKm);
 
   return useInfiniteQuery<
-    ListNearbyResult,
+    ListForYouResult,
     Error,
-    InfiniteData<ListNearbyResult, ProductsCursor | null>,
+    InfiniteData<ListForYouResult, ForYouCursor | null>,
     readonly unknown[],
-    ProductsCursor | null
+    ForYouCursor | null
   >({
     queryKey: [
       'marketplace',
-      'nearby',
-      { lat: latitude, lng: longitude, radiusKm, filters },
+      'forYou',
+      { lat: latitude, lng: longitude, radiusKm },
     ],
     initialPageParam: null,
     queryFn: ({ pageParam }) =>
-      searchNearbyProducts({
-        filters,
+      feedForYou({
         location: { latitude, longitude, radiusKm },
-        limit: PAGE_SIZE,
         cursor: pageParam,
+        limit: PAGE_SIZE,
       }),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: isAuthenticated,
     staleTime: 60_000,
   });
 }

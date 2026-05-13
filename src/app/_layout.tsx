@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { Text as RNText, TextInput as RNTextInput } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import * as SplashScreen from "expo-splash-screen"
+import { StatusBar } from "expo-status-bar"
 import {
   useFonts,
   Inter_400Regular,
@@ -107,6 +108,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
+        <StatusBar style="light" />
         <ThemeProvider value={myTheme}>
           <QueryClientProvider client={queryClient}>
             <Stack screenOptions={{ headerShown: false }} />

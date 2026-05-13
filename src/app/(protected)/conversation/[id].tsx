@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -126,7 +126,9 @@ export default function ConversationScreen(): React.ReactElement {
           <Image
             source={{ uri: conv.product.thumbnailUrl }}
             style={styles.headerProduct}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={120}
+            cachePolicy="memory-disk"
           />
         ) : (
           <View style={{ width: 44 }} />
@@ -262,7 +264,7 @@ const styles = StyleSheet.create({
   bubbleOther: { backgroundColor: BUBBLE_OTHER },
   bubbleOffer: { borderWidth: 1, borderColor: 'rgba(255,200,61,0.6)' },
   offerLabel: {
-    color: '#FFC83D',
+    color: colors.feedback.gold,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,

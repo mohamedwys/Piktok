@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import i18n from '@/i18n';
 import { colors } from '@/theme';
 
 type Props = { children: React.ReactNode };
@@ -13,8 +14,11 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    // eslint-disable-next-line no-console
-    console.warn('[ErrorBoundary]', error.message, info.componentStack);
+    // Phase 9 wires Sentry.captureException(error, { extra: info }) here.
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[ErrorBoundary]', error.message, info.componentStack);
+    }
   }
 
   handleRetry = (): void => this.setState({ error: null });
@@ -23,14 +27,14 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.error) {
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Oops</Text>
-          <Text style={styles.message}>Something went wrong.</Text>
+          <Text style={styles.title}>{i18n.t('error.boundary.title')}</Text>
+          <Text style={styles.message}>{i18n.t('error.boundary.message')}</Text>
           <Text style={styles.detail}>{this.state.error.message}</Text>
           <Pressable
             onPress={this.handleRetry}
             style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
           >
-            <Text style={styles.retryText}>Try again</Text>
+            <Text style={styles.retryText}>{i18n.t('error.boundary.retry')}</Text>
           </Pressable>
         </View>
       );

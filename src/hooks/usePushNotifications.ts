@@ -1,3 +1,9 @@
+// Push permission flow: App-Store-friendly UX is "ask after value", not
+// "ask at sign-in". The hook here only installs the notification handler
+// and the cold-start / response listeners — both passive. The actual OS
+// permission prompt + token save lives in requestAndRegisterPushPermission
+// below, which a caller invokes after the user opts in (settings toggle,
+// first send-message success, etc.).
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -49,22 +55,11 @@ export function usePushNotifications(): void {
 
   useEffect(() => {
     if (!userId) return;
-    let mounted = true;
-
-    void (async () => {
-      const token = await registerForPushNotificationsAsync().catch(() => null);
-      if (!mounted || !token) return;
-      await savePushToken({
-        token,
-        platform: Platform.OS === 'ios' ? 'ios' : 'android',
-        deviceName: Device.deviceName ?? null,
-      });
-    })();
 
     if (!handledColdStart.current) {
       handledColdStart.current = true;
       void Notifications.getLastNotificationResponseAsync().then((resp) => {
-        if (!resp || !mounted) return;
+        if (!resp) return;
         navigateFromData(
           resp.notification.request.content.data as PushNotificationData,
           router,
@@ -80,8 +75,17 @@ export function usePushNotifications(): void {
     });
 
     return () => {
-      mounted = false;
       sub.remove();
     };
   }, [userId, router]);
+}
+
+export async function requestAndRegisterPushPermission(): Promise<void> {
+  const token = await registerForPushNotificationsAsync().catch(() => null);
+  if (!token) return;
+  await savePushToken({
+    token,
+    platform: Platform.OS === 'ios' ? 'ios' : 'android',
+    deviceName: Device.deviceName ?? null,
+  });
 }

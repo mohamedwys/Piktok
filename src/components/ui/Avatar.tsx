@@ -8,8 +8,19 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
 export type AvatarProps = {
   source?: ImageSource | number
+  /**
+   * Legacy convenience prop: a raw image URI string. If provided and
+   * `source` is not, it is wrapped as `{ uri }`. Kept for the migrated
+   * GenericComponents/Avatar call sites.
+   */
+  uri?: string
   name?: string
-  size?: AvatarSize
+  /**
+   * Accepts a token size ('xs' | 'sm' | 'md' | 'lg' | 'xl') or a raw
+   * pixel number (legacy GenericComponents/Avatar shape). Numbers map
+   * to `diameter`.
+   */
+  size?: AvatarSize | number
   /**
    * Optional pixel-precise diameter override. When provided, takes
    * precedence over `size`. Use sparingly — prefer the `size` token
@@ -39,6 +50,7 @@ function initialOf(name: string | undefined): string {
 
 export function Avatar({
   source,
+  uri,
   name,
   size = 'md',
   diameter: diameterOverride,
@@ -48,9 +60,12 @@ export function Avatar({
   testID,
   accessibilityLabel,
 }: AvatarProps) {
-  const d = diameterOverride ?? diameter[size]
+  const sizeIsNumber = typeof size === 'number'
+  const d = diameterOverride ?? (sizeIsNumber ? size : diameter[size])
   const radius = d / 2
-  const hasImage = source !== undefined && source !== null
+  const resolvedSource: ImageSource | number | undefined =
+    source ?? (uri && uri.length > 0 ? { uri } : undefined)
+  const hasImage = resolvedSource !== undefined && resolvedSource !== null
 
   const wrapperStyle: ViewStyle = {
     width: d,
@@ -73,7 +88,7 @@ export function Avatar({
       <View style={wrapperStyle}>
         {hasImage ? (
           <Image
-            source={source}
+            source={resolvedSource}
             style={{ width: d, height: d }}
             contentFit="cover"
           />

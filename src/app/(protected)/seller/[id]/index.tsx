@@ -12,7 +12,7 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Avatar from '@/components/GenericComponents/Avatar';
+import { Avatar } from '@/components/ui';
 import { useSeller } from '@/features/marketplace/hooks/useSeller';
 import { useSellerProducts } from '@/features/marketplace/hooks/useSellerProducts';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';

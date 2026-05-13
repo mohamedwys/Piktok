@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
-import Avatar from '@/components/GenericComponents/Avatar';
+import { Avatar } from '@/components/ui';
 import type { Product } from '@/features/marketplace/types/product';
 import { formatCount } from '@/features/marketplace/utils/formatCount';
 import { lightHaptic } from '@/features/marketplace/utils/haptics';

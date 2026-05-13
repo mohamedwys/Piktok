@@ -2,8 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import Avatar from '@/components/GenericComponents/Avatar';
-import { Pressable, ProBadge, Text, VerifiedCheck } from '@/components/ui';
+import { Avatar, Pressable, ProBadge, Text, VerifiedCheck } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import FollowButton from '@/components/profile/FollowButton';
 

@@ -19,7 +19,8 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import Avatar from '@/components/GenericComponents/Avatar';
+import { Avatar } from '@/components/ui';
+import { toast } from '@/shared/ui/toast';
 import BoostButton from '@/components/feed/BoostButton';
 import { AnalyticsCard } from '@/components/marketplace/AnalyticsCard';
 import { useProductSheetStore } from '@/stores/useProductSheetStore';
@@ -169,7 +170,7 @@ export default function ProductDetailSheet(): React.ReactElement {
           t('checkout.notConfiguredMessage'),
         );
       } else {
-        Alert.alert(t('checkout.errorTitle'), (err as Error).message);
+        toast.error(t('checkout.errorTitle'), (err as Error).message);
       }
     }
   };

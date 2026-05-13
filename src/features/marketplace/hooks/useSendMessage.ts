@@ -42,6 +42,7 @@ export function useSendMessage(
             : vars.body;
         void sendPushNotification({
           recipientUserId: pushTarget.recipientUserId,
+          conversationId,
           title: pushTarget.senderName || 'New message',
           body: preview,
           data: { conversation_id: conversationId },

@@ -159,7 +159,15 @@ export default function ProductDetailSheet(): React.ReactElement {
     try {
       const { url } = await checkout.mutateAsync(id);
       useProductSheetStore.getState().close();
-      await WebBrowser.openBrowserAsync(url);
+      // Phase 6 / C6: openAuthSessionAsync (vs openBrowserAsync) uses
+      // ASWebAuthenticationSession on iOS and CustomTabs with session
+      // isolation on Android. The Stripe Checkout page runs in a
+      // cookie-isolated context so any other session in the system
+      // browser cannot leak into the checkout origin. The return
+      // value's `result.type` is intentionally ignored -- the
+      // stripe-webhook updates the order row regardless of what the
+      // user did inside the sheet.
+      await WebBrowser.openAuthSessionAsync(url, 'client://orders');
     } catch (err) {
       if (err instanceof StripeNotConfiguredError) {
         Alert.alert(

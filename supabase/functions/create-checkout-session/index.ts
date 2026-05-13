@@ -12,13 +12,35 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// Phase 6 / B3: replace `*` with an explicit allow-list. See B3 note in
+// send-push-notification/index.ts for the mobile-vs-browser rationale.
+const ALLOWED_ORIGINS = new Set([
+  'https://mony.app',
+  'https://mony-psi.vercel.app',
+  'http://localhost:3000',
+]);
+
+// Phase 6 / B2: closed allowlist of return_url prefixes. Any client-
+// supplied return_url that does not start with one of these falls back
+// to the default. The previous code echoed whatever the client passed
+// (and used the unowned example.com domain as the fallback, which is a
+// phishing pivot waiting to happen).
+const ALLOWED_RETURN_PREFIXES = [
+  'https://mony.app/',
+  'https://mony-psi.vercel.app/',
+  'client://',
+];
+const DEFAULT_RETURN_BASE = 'https://mony-psi.vercel.app/orders';
 
 Deno.serve(async (req) => {
+  const reqOrigin = req.headers.get('Origin') ?? '';
+  const allowOrigin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : '';
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -41,8 +63,16 @@ Deno.serve(async (req) => {
     }
 
     const productName = (product.title?.fr || product.title?.en || 'Product') as string;
-    const successUrl = `${return_url ?? 'https://example.com/success'}?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${return_url ?? 'https://example.com/cancel'}?cancelled=1`;
+
+    // Validate return_url against the closed allowlist; fall back to the
+    // owned default when missing, non-string, or outside the allowlist.
+    const candidate = typeof return_url === 'string' ? return_url : null;
+    const isAllowed =
+      candidate !== null &&
+      ALLOWED_RETURN_PREFIXES.some((p) => candidate.startsWith(p));
+    const baseUrl = isAllowed ? (candidate as string) : DEFAULT_RETURN_BASE;
+    const successUrl = `${baseUrl}?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}?cancelled=1`;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',

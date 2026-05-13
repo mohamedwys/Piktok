@@ -1,6 +1,7 @@
 import { User } from '@/types/types';
 import { create } from 'zustand';
 import { supabase, AUTH_REDIRECT_URL } from '@/lib/supabase'
+import { clearPushTokenForCurrentUser } from '@/services/pushNotifications';
 
 export type RegisterResult =
   | { confirmed: true }
@@ -96,6 +97,11 @@ export const useAuthStore = create<AuthStore>()(
         return { confirmed: true };
       },
       logout: async () => {
+        // Phase 6 / C1: drop this device's push token BEFORE signOut --
+        // after signOut, auth.uid() is null and the RLS-gated delete
+        // would no-op. Failures are swallowed inside the helper so
+        // logout never blocks on cleanup.
+        await clearPushTokenForCurrentUser();
         const { error } = await supabase.auth.signOut();
         // Clear local state optimistically. The auth listener will reconcile
         // if signOut failed and a session somehow survives.

@@ -28,6 +28,30 @@ function decodeSupabaseError(raw: string): string {
   }
 }
 
+// Phase 6 / C3: gate setSession on the deep link's source. The
+// AUTH_REDIRECT_URL configured in lib/supabase.ts is
+// `client://auth/callback`, so any incoming URL whose scheme + host +
+// path don't match exactly is rejected. Rejected URLs are silently
+// ignored -- they could be a stale link from an older build, a
+// prefetch from another route, or a malicious app pushing a forged
+// token pair into setSession.
+const EXPECTED_SCHEME = 'client:';
+const EXPECTED_HOST = 'auth';
+const EXPECTED_PATH = '/callback';
+
+function isTrustedAuthDeepLink(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === EXPECTED_SCHEME &&
+      u.hostname === EXPECTED_HOST &&
+      u.pathname === EXPECTED_PATH
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function AuthCallback(): React.ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
@@ -39,6 +63,10 @@ export default function AuthCallback(): React.ReactElement {
 
     async function handleUrl(url: string | null): Promise<void> {
       if (!url || cancelled) return;
+      // Phase 6 / C3: trust gate. Silently drop URLs that don't match
+      // the expected client://auth/callback shape -- this is BEFORE any
+      // token parsing or supabase.auth.setSession call.
+      if (!isTrustedAuthDeepLink(url)) return;
       try {
         const params = parseFragmentParams(url);
         const errParam = params.get('error_description') ?? params.get('error');

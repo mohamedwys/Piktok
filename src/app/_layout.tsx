@@ -1,8 +1,8 @@
 import "@/lib/polyfills"
 import { DarkTheme, ThemeProvider } from "@react-navigation/native"
 import { Stack } from "expo-router"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useEffect, useRef, useState } from "react"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { useEffect, useState } from "react"
 import { Text as RNText, TextInput as RNTextInput } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import * as SplashScreen from "expo-splash-screen"
@@ -25,6 +25,7 @@ import { registerSupabaseAuthAppStateListener } from "@/lib/supabase"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 import { useExchangeRatesRefresh } from "@/hooks/useExchangeRatesRefresh"
 import { typography } from "@/theme"
+import { queryClient } from "@/lib/queryClient"
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -41,6 +42,8 @@ const myTheme = {
 // Inter fontFamily on top of itself across reloads.
 let defaultPropsApplied = false
 
+// TODO(phase-3): remove once every <RN Text> usage is migrated to the
+// <Text> primitive in src/components/ui/Text.tsx (which sets fontFamily natively).
 function applyTextDefaultFontFamily() {
   if (defaultPropsApplied) return
   defaultPropsApplied = true
@@ -62,11 +65,6 @@ function applyTextDefaultFontFamily() {
 }
 
 export default function RootLayout() {
-  const queryClientRef = useRef<QueryClient | null>(null)
-  if (queryClientRef.current === null) {
-    queryClientRef.current = new QueryClient()
-  }
-
   const [fontsLoaded, fontsError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -110,7 +108,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={myTheme}>
-          <QueryClientProvider client={queryClientRef.current}>
+          <QueryClientProvider client={queryClient}>
             <Stack screenOptions={{ headerShown: false }} />
           </QueryClientProvider>
         </ThemeProvider>

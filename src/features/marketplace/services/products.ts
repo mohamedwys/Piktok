@@ -1,6 +1,7 @@
 import { Share } from 'react-native';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import { translateSupabaseError } from '@/lib/supabaseErrors';
 import type {
   Product,
   Currency,
@@ -590,7 +591,10 @@ export async function likeProduct(productId: string): Promise<void> {
   const { error } = await supabase
     .from('likes')
     .insert({ user_id: userId, product_id: productId });
-  if (error && error.code !== PG_UNIQUE_VIOLATION) throw error;
+  if (error && error.code !== PG_UNIQUE_VIOLATION) {
+    const e = translateSupabaseError(error);
+    if (e) throw e;
+  }
 }
 
 export async function unlikeProduct(productId: string): Promise<void> {
@@ -600,7 +604,8 @@ export async function unlikeProduct(productId: string): Promise<void> {
     .delete()
     .eq('user_id', userId)
     .eq('product_id', productId);
-  if (error) throw error;
+  const e = translateSupabaseError(error);
+  if (e) throw e;
 }
 
 export async function bookmarkProduct(productId: string): Promise<void> {
@@ -608,7 +613,10 @@ export async function bookmarkProduct(productId: string): Promise<void> {
   const { error } = await supabase
     .from('bookmarks')
     .insert({ user_id: userId, product_id: productId });
-  if (error && error.code !== PG_UNIQUE_VIOLATION) throw error;
+  if (error && error.code !== PG_UNIQUE_VIOLATION) {
+    const e = translateSupabaseError(error);
+    if (e) throw e;
+  }
 }
 
 export async function unbookmarkProduct(productId: string): Promise<void> {
@@ -618,7 +626,8 @@ export async function unbookmarkProduct(productId: string): Promise<void> {
     .delete()
     .eq('user_id', userId)
     .eq('product_id', productId);
-  if (error) throw error;
+  const e = translateSupabaseError(error);
+  if (e) throw e;
 }
 
 // ---------------------------------------------------------------------------

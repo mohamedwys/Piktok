@@ -34,3 +34,25 @@ export class ListingCapReachedError extends Error {
     Object.setPrototypeOf(this, ListingCapReachedError.prototype);
   }
 }
+
+/**
+ * Thrown by services that touch rate-limited tables (likes, bookmarks,
+ * comments, messages, conversations, products) when Phase 6's
+ * `check_rate_limit` trigger raises SQLSTATE '42501' with a non-empty
+ * hint identifying the saturated bucket. Real RLS denials raise the same
+ * SQLSTATE but with no hint — the bucket presence is how we disambiguate.
+ *
+ * The global mutation handler maps this to a localized "slow down" toast.
+ */
+export class RateLimitError extends Error {
+  readonly code = 'rate_limit_exceeded' as const;
+  readonly bucket?: string;
+
+  constructor(bucket?: string) {
+    super(`Rate limit exceeded${bucket ? `: ${bucket}` : ''}`);
+    this.name = 'RateLimitError';
+    this.bucket = bucket;
+    // V8 / Hermes prototype fix — see file header.
+    Object.setPrototypeOf(this, RateLimitError.prototype);
+  }
+}

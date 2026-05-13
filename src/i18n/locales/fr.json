@@ -469,6 +469,12 @@
       "childSafety": "Sécurité des enfants"
     }
   },
+  "errors": {
+    "authRequired": "Connectez-vous pour continuer.",
+    "emailNotConfirmed": "Veuillez confirmer votre email — vérifiez votre boîte de réception.",
+    "rateLimited": "Vous allez un peu vite. Réessayez dans un instant.",
+    "checkoutUnavailable": "Le paiement est indisponible. Réessayez plus tard."
+  },
   "error": {
     "boundary": {
       "title": "Une erreur est survenue",

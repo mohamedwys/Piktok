@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import { AuthRequiredError } from '@/features/marketplace/services/products';
 import { FREE_TIER_LISTING_CAP } from '@/features/marketplace/constants';
 import { ListingCapReachedError } from '@/features/marketplace/errors';
+import { translateSupabaseError } from '@/lib/supabaseErrors';
 import type { LocalizedString } from '@/i18n/getLocalized';
 
 export type CreateProductInput = {
@@ -30,6 +31,14 @@ export type CreateProductInput = {
    */
   latitude?: number | null;
   longitude?: number | null;
+  /**
+   * Per-mutation idempotency key. When set, the (seller_id,
+   * client_request_id) partial unique index added by
+   * 20260630_client_request_id.sql gates retries: a duplicate INSERT
+   * raises 23505 and we re-select the winning row's id so callers
+   * always see the same product id for the same logical create.
+   */
+  clientRequestId?: string;
 };
 
 async function getCurrentUserOrThrow() {
@@ -168,14 +177,30 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
     insertPayload.longitude = input.longitude;
     insertPayload.location_updated_at = new Date().toISOString();
   }
+  if (input.clientRequestId) {
+    insertPayload.client_request_id = input.clientRequestId;
+  }
 
   const { data, error } = await supabase
     .from('products')
     .insert(insertPayload)
     .select('id')
     .single();
-  if (error) throw error;
-  return data.id as string;
+  if (error) {
+    if (error.code === '23505' && input.clientRequestId) {
+      const { data: existing } = await supabase
+        .from('products')
+        .select('id')
+        .eq('seller_id', sellerId)
+        .eq('client_request_id', input.clientRequestId)
+        .single();
+      if (existing) return existing.id as string;
+    }
+    const e = translateSupabaseError(error);
+    if (e) throw e;
+    throw error;
+  }
+  return data!.id as string;
 }
 
 export type UpdateProductInput = Omit<CreateProductInput, 'mediaUri' | 'mediaType'> & {

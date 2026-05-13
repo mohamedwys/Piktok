@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { AuthRequiredError } from '@/features/marketplace/services/products';
+import { translateSupabaseError } from '@/lib/supabaseErrors';
 import type { Database } from '@/types/supabase';
 
 // =============================================================================
@@ -113,7 +114,8 @@ export async function postComment(input: {
     })
     .select(SELECT_WITH_AUTHOR)
     .single();
-  if (error) throw error;
+  const e = translateSupabaseError(error);
+  if (e) throw e;
 
   return data as unknown as CommentWithAuthor;
 }

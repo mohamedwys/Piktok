@@ -469,6 +469,12 @@
       "childSafety": "Child Safety Standards"
     }
   },
+  "errors": {
+    "authRequired": "Sign in to continue.",
+    "emailNotConfirmed": "Please confirm your email — check your inbox.",
+    "rateLimited": "You're doing that too often. Try again in a moment.",
+    "checkoutUnavailable": "Checkout is unavailable right now. Please try again later."
+  },
   "error": {
     "boundary": {
       "title": "Something went wrong",

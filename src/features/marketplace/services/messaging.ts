@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { translateSupabaseError } from '@/lib/supabaseErrors';
 
 export type ConversationOtherParty = {
   userId: string;
@@ -197,17 +198,45 @@ export async function sendMessage(input: {
   body: string;
   kind?: MessageKind;
   offerAmount?: number;
-}): Promise<void> {
+  /**
+   * Per-mutation idempotency key. When set, the (sender_id,
+   * client_request_id) partial unique index added by
+   * 20260630_client_request_id.sql gates retries: a duplicate INSERT raises
+   * 23505 and we re-select the winning row so callers always get the same
+   * ChatMessage for the same logical send.
+   */
+  clientRequestId?: string;
+}): Promise<ChatMessage> {
   const { data: u } = await supabase.auth.getUser();
   if (!u.user) throw new Error('Not authenticated');
-  const { error } = await supabase.from('messages').insert({
+  const payload = {
     conversation_id: input.conversationId,
     sender_id: u.user.id,
     body: input.body,
     kind: input.kind ?? 'text',
     offer_amount: input.kind === 'offer' ? input.offerAmount ?? null : null,
-  });
-  if (error) throw error;
+    client_request_id: input.clientRequestId ?? null,
+  };
+  const { data, error } = await supabase
+    .from('messages')
+    .insert(payload)
+    .select('*')
+    .single();
+  if (error) {
+    if (error.code === '23505' && input.clientRequestId) {
+      const { data: existing } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('sender_id', u.user.id)
+        .eq('client_request_id', input.clientRequestId)
+        .single();
+      if (existing) return rowToMessage(existing as MessageRow);
+    }
+    const e = translateSupabaseError(error);
+    if (e) throw e;
+    throw error;
+  }
+  return rowToMessage(data as MessageRow);
 }
 
 export async function startOrGetConversation(productId: string): Promise<string> {
@@ -226,7 +255,8 @@ export async function startOrGetConversation(productId: string): Promise<string>
   const { data, error } = await supabase.rpc('start_or_get_conversation', {
     p_product_id: productId,
   });
-  if (error) throw error;
+  const e = translateSupabaseError(error);
+  if (e) throw e;
   return data as string;
 }
 

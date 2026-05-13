@@ -9,7 +9,11 @@ import { MY_PRODUCTS_COUNT_KEY } from './useMyProductsCount';
 export function useCreateProduct() {
   const qc = useQueryClient();
   return useMutation<string, Error, CreateProductInput>({
-    mutationFn: createProduct,
+    // One UUID per logical create — preserved across automatic retries so a
+    // 23505 on retry re-selects the winning product id instead of inserting
+    // a duplicate. See 20260630_client_request_id.sql.
+    mutationFn: (input) =>
+      createProduct({ ...input, clientRequestId: globalThis.crypto.randomUUID() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['marketplace', 'products', 'list'] });
       qc.invalidateQueries({ queryKey: MY_PRODUCTS_KEY });

@@ -53,7 +53,7 @@ export async function createCheckoutSession(productId: string): Promise<{
   orderId: string;
 }> {
   const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-    body: { product_id: productId, return_url: 'https://example.com/checkout-return' },
+    body: { product_id: productId },
   });
   if (error) {
     const status = (error as { context?: { status?: number } }).context?.status;

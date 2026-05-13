@@ -1,7 +1,5 @@
 import { User } from '@/types/types';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase, AUTH_REDIRECT_URL } from '@/lib/supabase'
 
 export type RegisterResult =
@@ -33,11 +31,10 @@ type AuthStore = {
 };
 
 export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-      login: async (email: string, password: string) => {
+  (set) => ({
+    user: null,
+    isAuthenticated: false,
+    login: async (email: string, password: string) => {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -100,20 +97,12 @@ export const useAuthStore = create<AuthStore>()(
       },
       logout: async () => {
         const { error } = await supabase.auth.signOut();
-
-        if (!error) {
-          set({
-            user: null,
-            isAuthenticated: false,
-          })
-        }
+        // Clear local state optimistically. The auth listener will reconcile
+        // if signOut failed and a session somehow survives.
+        set({ user: null, isAuthenticated: false });
+        if (error) throw error;
       },
-    }),
-    {
-      name: 'auth-storage',
-      storage: createJSONStorage(() => AsyncStorage)
-    }
-  )
+  })
 )
 
 /**

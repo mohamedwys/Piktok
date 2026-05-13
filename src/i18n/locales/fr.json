@@ -144,6 +144,7 @@
     "signOutTitle": "Se déconnecter",
     "signOutBody": "Vous devrez vous reconnecter pour accéder à votre compte.",
     "signOutConfirm": "Se déconnecter",
+    "signOutError": "Échec de la déconnexion",
     "changeEmailTitle": "Changer l'email",
     "changeEmailNotice": "Vous recevrez un email de confirmation à la nouvelle adresse. Le changement prendra effet une fois confirmé.",
     "changeEmailSuccessTitle": "Email de confirmation envoyé",
@@ -445,6 +446,13 @@
       "privacy": "Politique de confidentialité",
       "terms": "Conditions d'utilisation",
       "childSafety": "Sécurité des enfants"
+    }
+  },
+  "error": {
+    "boundary": {
+      "title": "Une erreur est survenue",
+      "message": "Une erreur inattendue s'est produite. Vous pouvez réessayer ou fermer l'application.",
+      "retry": "Réessayer"
     }
   }
 }

@@ -144,6 +144,7 @@
     "signOutTitle": "Sign out",
     "signOutBody": "You'll need to sign in again to access your account.",
     "signOutConfirm": "Sign out",
+    "signOutError": "Couldn't sign out",
     "changeEmailTitle": "Change email",
     "changeEmailNotice": "You'll receive a confirmation email at the new address. The change takes effect once confirmed.",
     "changeEmailSuccessTitle": "Confirmation email sent",
@@ -445,6 +446,13 @@
       "privacy": "Privacy Policy",
       "terms": "Terms of Use",
       "childSafety": "Child Safety Standards"
+    }
+  },
+  "error": {
+    "boundary": {
+      "title": "Something went wrong",
+      "message": "An unexpected error occurred. You can try again or close the app.",
+      "retry": "Try again"
     }
   }
 }

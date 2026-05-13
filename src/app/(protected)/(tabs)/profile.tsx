@@ -318,8 +318,11 @@ export default function ProfileScreen(): React.ReactElement {
           onPress: async () => {
             try {
               await useAuthStore.getState().logout();
-            } catch {
-              // The auth listener will reconcile state regardless.
+            } catch (err) {
+              Alert.alert(
+                t('profile.signOutError'),
+                err instanceof Error ? err.message : String(err),
+              );
             }
             router.replace('/(protected)/(tabs)');
           },

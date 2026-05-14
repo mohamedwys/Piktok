@@ -201,9 +201,9 @@
       [
         "@sentry/react-native/expo",
         {
-          "url": "https://sentry.io/",
-          "organization": "PLACEHOLDER_SENTRY_ORG",
-          "project": "PLACEHOLDER_SENTRY_PROJECT_MOBILE"
+          "url": "https://de.sentry.io/",
+          "organization": "mony-mobile",
+          "project": "react-native-uw"
         }
       ]
     ],

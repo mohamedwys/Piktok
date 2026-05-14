@@ -51,6 +51,7 @@ import type { Product } from '@/features/marketplace/types/product';
 import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
 import { colors, radii, spacing } from '@/theme';
 import { NotificationOptInModal } from '@/features/notifications/components/NotificationOptInModal';
+import ProOnboardingChecklist from '@/features/pro/components/ProOnboardingChecklist';
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   fr: 'Français',
@@ -665,6 +666,8 @@ export default function ProfileScreen(): React.ReactElement {
             emphasis="soft"
           />
         ) : null}
+
+        {isAuthenticated ? <ProOnboardingChecklist /> : null}
 
         {isAuthenticated ? (
           <View style={styles.section}>

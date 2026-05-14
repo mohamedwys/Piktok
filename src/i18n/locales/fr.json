@@ -449,7 +449,37 @@
     "upgradeCta": "Passer Pro",
     "upgradeErrorTitle": "Échec de l'ouverture",
     "upgradeErrorBody": "Veuillez réessayer dans un instant.",
-    "openWebDashboard": "Ouvrir mon tableau de bord Pro"
+    "openWebDashboard": "Ouvrir mon tableau de bord Pro",
+    "welcome": {
+      "title": "Bienvenue dans Mony Pro",
+      "subhead": "Trois nouveautés vous attendent.",
+      "card1Title": "Boost",
+      "card1Body": "Mettez une annonce en avant chaque semaine en tête de recherche.",
+      "card2Title": "Statistiques",
+      "card2Body": "Voyez qui consulte vos annonces et leurs tendances.",
+      "card3Title": "Achat direct",
+      "card3Body": "Laissez les acheteurs payer directement, sans passer par la messagerie.",
+      "primaryCta": "Compléter mon profil",
+      "secondaryCta": "Plus tard"
+    },
+    "onboarding": {
+      "title": "Profitez pleinement de Pro",
+      "progressLabel": "{{done}} / {{total}}",
+      "step2": {
+        "title": "Complétez votre profil vendeur",
+        "body": "Ajoutez une courte bio et votre localisation pour rassurer les acheteurs."
+      },
+      "step3": {
+        "title": "Activez l'achat direct sur une annonce",
+        "body": "Ouvrez une annonce et passez-la en achat direct pour éviter la discussion.",
+        "skip": "Passer"
+      },
+      "step4": {
+        "title": "Boostez votre meilleure annonce",
+        "body": "Utilisez le boost de la semaine pour mettre une annonce en tête de feed.",
+        "skip": "Passer"
+      }
+    }
   },
   "boost": {
     "buttonIdle": "Booster cette annonce",

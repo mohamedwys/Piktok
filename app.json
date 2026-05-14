@@ -216,6 +216,12 @@
       "eas": {
         "projectId": "3bcee70c-5f94-474a-aebd-ce2ca085a75f"
       }
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3bcee70c-5f94-474a-aebd-ce2ca085a75f"
     }
   }
 }

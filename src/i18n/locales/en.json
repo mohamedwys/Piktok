@@ -46,7 +46,11 @@
     "verifyStartOver": "Start over",
     "callbackPending": "Confirming your account…",
     "callbackErrorTitle": "Confirmation failed",
-    "callbackReturning": "Returning to sign-in…"
+    "callbackReturning": "Returning to sign-in…",
+    "tosAccept": "I agree to the",
+    "tosTerms": "Terms of Service",
+    "tosAnd": "and",
+    "tosPrivacy": "Privacy Policy"
   },
   "tabs": {
     "home": "Home",
@@ -489,5 +493,12 @@
       "message": "An unexpected error occurred. You can try again or close the app.",
       "retry": "Try again"
     }
+  },
+  "notifications": {
+    "optInTitle": "Stay in the loop",
+    "optInBody": "Get notified about new messages and offers on your listings. You can change this anytime in Settings.",
+    "optInAllow": "Allow",
+    "optInLater": "Maybe later",
+    "settingsRow": "Notifications"
   }
 }

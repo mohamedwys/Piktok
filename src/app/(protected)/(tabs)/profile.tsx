@@ -50,6 +50,7 @@ import {
 import type { Product } from '@/features/marketplace/types/product';
 import type { Order, OrderStatus } from '@/features/marketplace/services/orders';
 import { colors, radii, spacing } from '@/theme';
+import { NotificationOptInModal } from '@/features/notifications/components/NotificationOptInModal';
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   fr: 'Français',
@@ -325,6 +326,7 @@ export default function ProfileScreen(): React.ReactElement {
   const mySalesQuery = useMySales(isAuthenticated);
   const mySellerQuery = useMySeller(isAuthenticated);
   const deleteMutation = useDeleteProduct();
+  const [showNotifModal, setShowNotifModal] = useState(false);
 
   const seller = mySellerQuery.data;
   const listingsCount = myProductsQuery.data?.length ?? 0;
@@ -828,6 +830,12 @@ export default function ProfileScreen(): React.ReactElement {
             </Text>
             <Surface variant="surfaceElevated" radius="lg" border>
               <AccountRow
+                icon="notifications-outline"
+                label={t('notifications.settingsRow')}
+                onPress={() => setShowNotifModal(true)}
+                showDivider
+              />
+              <AccountRow
                 icon="create-outline"
                 label={t('profile.editProfile')}
                 onPress={onPressEditSeller}
@@ -894,6 +902,10 @@ export default function ProfileScreen(): React.ReactElement {
           </Surface>
         </View>
       </ScrollView>
+      <NotificationOptInModal
+        visible={showNotifModal}
+        onClose={() => setShowNotifModal(false)}
+      />
     </View>
   );
 }

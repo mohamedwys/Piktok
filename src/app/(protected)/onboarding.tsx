@@ -24,6 +24,10 @@ import { setMyInterests } from '@/features/marketplace/services/sellers';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { toast } from '@/shared/ui/toast';
 import { colors, radii, spacing } from '@/theme';
+import {
+  NotificationOptInModal,
+  isOptInRecentlyDeclined,
+} from '@/features/notifications/components/NotificationOptInModal';
 
 const MIN = 3;
 const MAX = 5;
@@ -100,6 +104,7 @@ export default function Onboarding(): React.ReactElement {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
   const seededRef = useRef(false);
 
   // Seed selection from the existing interests exactly once when the seller
@@ -136,7 +141,12 @@ export default function Onboarding(): React.ReactElement {
       await setMyInterests(Array.from(selected));
       await qc.invalidateQueries({ queryKey: MY_SELLER_KEY });
       toast.success(t('onboarding.saved'));
-      router.replace('/(protected)/(tabs)');
+      // Edit-mode re-entry: skip the notification prompt entirely.
+      if (editMode || isOptInRecentlyDeclined()) {
+        router.replace('/(protected)/(tabs)');
+      } else {
+        setShowNotifModal(true);
+      }
     } catch {
       toast.error(t('onboarding.saveError'));
     } finally {
@@ -240,6 +250,13 @@ export default function Onboarding(): React.ReactElement {
           )}
         </Pressable>
       </View>
+      <NotificationOptInModal
+        visible={showNotifModal}
+        onClose={() => {
+          setShowNotifModal(false);
+          router.replace('/(protected)/(tabs)');
+        }}
+      />
     </View>
   );
 }

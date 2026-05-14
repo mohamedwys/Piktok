@@ -46,7 +46,11 @@
     "verifyStartOver": "Recommencer",
     "callbackPending": "Confirmation en cours…",
     "callbackErrorTitle": "Échec de la confirmation",
-    "callbackReturning": "Retour à la connexion…"
+    "callbackReturning": "Retour à la connexion…",
+    "tosAccept": "J'accepte les",
+    "tosTerms": "Conditions d'utilisation",
+    "tosAnd": "et la",
+    "tosPrivacy": "Politique de confidentialité"
   },
   "tabs": {
     "home": "Accueil",
@@ -489,5 +493,12 @@
       "message": "Une erreur inattendue s'est produite. Vous pouvez réessayer ou fermer l'application.",
       "retry": "Réessayer"
     }
+  },
+  "notifications": {
+    "optInTitle": "Restez informé",
+    "optInBody": "Soyez notifié des nouveaux messages et offres sur vos annonces. Vous pouvez modifier ceci à tout moment dans les paramètres.",
+    "optInAllow": "Autoriser",
+    "optInLater": "Plus tard",
+    "settingsRow": "Notifications"
   }
 }

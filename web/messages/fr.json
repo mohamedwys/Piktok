@@ -325,6 +325,24 @@
       "deleting": "Suppression…",
       "deleteConfirm": "Supprimer cette annonce ? Cette action est irréversible.",
       "deleteError": "Échec de la suppression : {message}"
+    },
+    "success": {
+      "activatingTitle": "Activation de votre abonnement…",
+      "activatingBody": "Nous confirmons votre paiement avec Stripe. Cela prend généralement quelques secondes.",
+      "activatedHeading": "Bienvenue sur Mony Pro",
+      "activatedSubhead": "Votre abonnement est actif. Voici ce qui vous est désormais ouvert.",
+      "card1Title": "Mises en avant",
+      "card1Body": "Propulsez une annonce en tête du fil chaque semaine.",
+      "card2Title": "Tableau de bord analytique",
+      "card2Body": "Visualisez chiffre d'affaires, vues et commandes en un clin d'œil.",
+      "card3Title": "Achat direct",
+      "card3Body": "Permettez aux acheteurs de payer instantanément via Stripe.",
+      "primaryCta": "Ouvrir mon tableau de bord Pro",
+      "secondaryCta": "Retour à l'accueil",
+      "timeoutHeading": "En attente de Stripe",
+      "timeoutBody": "Votre paiement est passé, mais l'activation prend plus de temps que prévu. Actualisez pour réessayer — si le problème persiste, contactez le support.",
+      "refreshButton": "J'ai attendu — actualiser",
+      "supportLink": "Contacter le support"
     }
   },
   "signIn": {

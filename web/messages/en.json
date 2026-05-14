@@ -325,6 +325,24 @@
       "deleting": "Deleting…",
       "deleteConfirm": "Delete this listing? This cannot be undone.",
       "deleteError": "Delete failed: {message}"
+    },
+    "success": {
+      "activatingTitle": "Activating your subscription…",
+      "activatingBody": "We're confirming your payment with Stripe. This usually takes a few seconds.",
+      "activatedHeading": "Welcome to Mony Pro",
+      "activatedSubhead": "Your subscription is live. Here's what's unlocked.",
+      "card1Title": "Featured boosts",
+      "card1Body": "Push one listing to the top of the feed every week.",
+      "card2Title": "Analytics dashboard",
+      "card2Body": "See revenue, views, and orders at a glance.",
+      "card3Title": "Direct purchase",
+      "card3Body": "Let buyers check out instantly with Stripe.",
+      "primaryCta": "Open my Pro dashboard",
+      "secondaryCta": "Take me home",
+      "timeoutHeading": "Still waiting on Stripe",
+      "timeoutBody": "Your payment went through, but activation is taking longer than expected. Refresh to try again — if it persists, contact support.",
+      "refreshButton": "I've waited — refresh",
+      "supportLink": "Contact support"
     }
   },
   "signIn": {

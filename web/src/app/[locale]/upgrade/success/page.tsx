@@ -1,36 +1,26 @@
-import {
-  getTranslations,
-  setRequestLocale,
-} from 'next-intl/server';
-import { CircleCheck } from 'lucide-react';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link, redirect } from '@/i18n/routing';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { Container } from '@/components/ui/Container';
+import { SuccessActivationPoll } from '@/components/upgrade/SuccessActivationPoll';
 
 /**
- * /upgrade/success — Stripe redirects here after a successful
- * Checkout (H.8).
+ * /upgrade/success — Stripe lands the user here after a successful
+ * Checkout. Track 7 redesign: instead of a static "processing" copy
+ * the page now polls for activation and transitions through three
+ * states (polling → activated → timeout) handled by the Client
+ * Component below.
  *
- * Auth-gated. The `?session_id={CHECKOUT_SESSION_ID}` query
- * param is captured for future telemetry (mapping the user's
- * confirmation moment to a specific Checkout Session) but not
- * displayed in v1.
+ * Auth gate uses `getUser` directly (not `requirePro`). At the moment
+ * this page renders, the Stripe webhook may not have flipped
+ * `is_pro=true` yet — using `requirePro` would redirect the user to
+ * /upgrade in a frustrating loop. The user IS authenticated though
+ * (Stripe Checkout enforces it via the customer email), so an
+ * unauthenticated visitor here is a misroute and goes home.
  *
- * **"Processing" copy is deliberate.** This page is reached
- * before the H.9 webhook has necessarily landed — the Stripe
- * `customer.subscription.created` event fires asynchronously
- * after the Checkout Session completes, and the webhook handler
- * upserts into `public.subscriptions`, which then triggers the
- * H.2 SQL trigger that flips `sellers.is_pro = true`. Typical
- * webhook propagation under test mode is under 2 seconds, but
- * we should never claim "you are now Pro" until the database
- * row exists. The "your subscription is being activated" copy
- * communicates the in-flight nature without overpromising.
- *
- * Future polish (H.10+): poll `useMySubscription` from a
- * Client Component on this page to detect the moment
- * `is_pro = true`, then swap copy to "You are now Pro!" with
- * a confetti or similar celebratory beat.
+ * Force-dynamic because every render depends on the auth cookie + a
+ * future activation may require fresh data — Next's static pipeline
+ * would otherwise serve a stale snapshot.
  */
 export const dynamic = 'force-dynamic';
 
@@ -50,28 +40,22 @@ export default async function SuccessPage({
     redirect({ href: '/', locale });
   }
 
-  const t = await getTranslations('upgrade.success');
+  const t = await getTranslations('pro.success');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
       <Container>
-        <div className="mx-auto max-w-md space-y-6 text-center">
-          <CircleCheck
-            className="mx-auto text-feedback-success"
-            size={64}
-            aria-hidden
-          />
-          <h1 className="font-display text-4xl font-semibold text-text-primary">
-            {t('title')}
-          </h1>
-          <p className="text-text-secondary">{t('processing')}</p>
-          <p className="text-sm text-text-tertiary">{t('returnHint')}</p>
-          <Link
-            href="/dashboard"
-            className="inline-block font-semibold text-brand"
-          >
-            {t('dashboardLink')} →
-          </Link>
+        <div className="mx-auto max-w-2xl space-y-8">
+          <SuccessActivationPoll locale={locale} />
+
+          <div className="border-t border-border pt-6 text-center">
+            <Link
+              href="/"
+              className="text-sm font-medium text-text-secondary hover:text-text-primary"
+            >
+              {t('secondaryCta')}
+            </Link>
+          </div>
         </div>
       </Container>
     </main>

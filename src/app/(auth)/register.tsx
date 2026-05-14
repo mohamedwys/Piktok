@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import ConfirmHcaptcha from '@hcaptcha/react-native-hcaptcha';
 import { Link, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -24,7 +25,7 @@ import ResponsiveContainer from '@/components/GenericComponents/ResponsiveContai
 import { colors } from '@/theme';
 
 export default function Register(): React.ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState<string>('');
@@ -32,6 +33,9 @@ export default function Register(): React.ReactElement {
   const [password, setPassword] = useState<string>('');
   const [isLoading, setLoading] = useState<boolean>(false);
   const [tosAccepted, setTosAccepted] = useState<boolean>(false);
+  const captchaRef = useRef<ConfirmHcaptcha>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaVisible, setCaptchaVisible] = useState<boolean>(false);
 
   const handleRegister = async (): Promise<void> => {
     void mediumHaptic();
@@ -42,11 +46,16 @@ export default function Register(): React.ReactElement {
     if (!tosAccepted) {
       return;
     }
+    if (!captchaToken) {
+      captchaRef.current?.show();
+      setCaptchaVisible(true);
+      return;
+    }
     try {
       setLoading(true);
       const result = await useAuthStore
         .getState()
-        .register(email, password, username);
+        .register(email, password, username, captchaToken);
       if (!result.confirmed) {
         // Replace, not push: back-button shouldn't return to a register
         // form already submitted to Supabase.
@@ -67,6 +76,8 @@ export default function Register(): React.ReactElement {
         // protected tree.
       }
     } catch (error) {
+      // Captcha tokens are single-use: clear so retry re-prompts.
+      setCaptchaToken(null);
       const message =
         error instanceof Error ? error.message : t('common.errorGeneric');
       Alert.alert(t('auth.registerFailed'), message);
@@ -163,10 +174,10 @@ export default function Register(): React.ReactElement {
 
           <Pressable
             onPress={handleRegister}
-            disabled={isLoading || !tosAccepted}
+            disabled={isLoading || !tosAccepted || captchaVisible}
             style={({ pressed }) => [
               styles.submitButton,
-              (pressed || isLoading || !tosAccepted) &&
+              (pressed || isLoading || !tosAccepted || captchaVisible) &&
                 styles.pressed,
             ]}
           >
@@ -186,6 +197,31 @@ export default function Register(): React.ReactElement {
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+      <ConfirmHcaptcha
+        ref={captchaRef}
+        siteKey={process.env.EXPO_PUBLIC_HCAPTCHA_SITE_KEY ?? ''}
+        baseUrl="https://mony.app"
+        languageCode={i18n.language === 'fr' ? 'fr' : 'en'}
+        size="invisible"
+        onMessage={(event) => {
+          const message = event.nativeEvent.data;
+          if (message === 'open') {
+            return;
+          }
+          if (
+            message === 'cancel' ||
+            message === 'error' ||
+            message === 'expired'
+          ) {
+            captchaRef.current?.hide();
+            setCaptchaVisible(false);
+            return;
+          }
+          setCaptchaToken(message);
+          captchaRef.current?.hide();
+          setCaptchaVisible(false);
+        }}
+      />
     </ResponsiveContainer>
   );
 }

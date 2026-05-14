@@ -27,6 +27,7 @@ type AuthStore = {
     email: string,
     password: string,
     username: string,
+    captchaToken: string,
   ) => Promise<RegisterResult>;
   logout: () => Promise<void>;
 };
@@ -66,6 +67,7 @@ export const useAuthStore = create<AuthStore>()(
         email: string,
         password: string,
         username: string,
+        captchaToken: string,
       ): Promise<RegisterResult> => {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -73,6 +75,7 @@ export const useAuthStore = create<AuthStore>()(
           options: {
             data: { username },
             emailRedirectTo: AUTH_REDIRECT_URL,
+            captchaToken,
           },
         })
         if (error) throw error;

@@ -34,7 +34,7 @@ export function initEdgeSentry(): void {
   try {
     config = {
       dsn: parseDsn(dsn),
-      environment: Deno.env.get('SUPABASE_ENVIRONMENT') ?? 'production',
+      environment: Deno.env.get('APP_ENVIRONMENT') ?? 'production',
       release: Deno.env.get('SENTRY_RELEASE') ?? 'edge@unknown',
     };
   } catch (err) {

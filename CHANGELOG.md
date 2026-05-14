@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   subscription, product view, upgrade CTA). One feature flag
   (show_for_you_tab) demonstrates the kill-switch pattern. See
   [docs/observability/posthog-setup.md](docs/observability/posthog-setup.md).
+- Operational runbooks: deploy, rollback, incident response, key
+  rotation, backup-restore. See [docs/runbooks/](docs/runbooks/).
 
 ### Changed
 

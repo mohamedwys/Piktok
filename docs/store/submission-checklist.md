@@ -183,8 +183,21 @@ Project Settings → Edge Functions → Secrets:
 - [ ] Google review queue (typical 24-72 hours)
 - [ ] Watch Supabase Dashboard → Logs for any 4xx/5xx surge
 - [ ] Watch Stripe Dashboard for failed webhook deliveries
-- [ ] If rejected: read the rejection notice carefully; rejections in
-      Phase 8 areas (privacy manifest, IAP, EULA, content moderation,
-      permissions) are the highest-probability vectors; the relevant
-      docs in this folder show the declared answers and can be
-      re-submitted with appeal text
+- [ ] Watch Sentry → mony-mobile + mony-edge for new issues
+- [ ] Watch Posthog → Activity for event flow
+
+See [docs/runbooks/](../runbooks/) for full operational procedures:
+- [deploy.md](../runbooks/deploy.md) — shipping a release
+- [rollback.md](../runbooks/rollback.md) — reverting a bad release
+- [incident-response.md](../runbooks/incident-response.md) — when
+  production is broken
+- [key-rotation.md](../runbooks/key-rotation.md) — rotating
+  credentials safely
+- [backup-restore.md](../runbooks/backup-restore.md) — Supabase
+  snapshot recovery
+
+If rejected: read the rejection notice carefully; rejections in
+Phase 8 areas (privacy manifest, IAP, EULA, content moderation,
+permissions) are the highest-probability vectors; the docs in
+[docs/store/](.) show the declared answers and can be re-submitted
+with appeal text.

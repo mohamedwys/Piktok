@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import ProductDetailSheet from "@/features/marketplace/components/ProductDetailSheet";
+import { ProWelcomeModalHost } from "@/features/pro/components/ProWelcomeModalHost";
 
 export default function ProtectedLayout() {
   // Free browsing: no auth gate at the route level.
@@ -8,6 +9,7 @@ export default function ProtectedLayout() {
     <>
       <Stack screenOptions={{ headerShown: false }} />
       <ProductDetailSheet />
+      <ProWelcomeModalHost />
     </>
   );
 }

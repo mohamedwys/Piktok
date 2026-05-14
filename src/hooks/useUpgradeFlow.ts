@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { MY_SUBSCRIPTION_KEY } from '@/features/marketplace/hooks/useMySubscription';
 import { WEB_BASE_URL, WEB_UPGRADE_PATH } from '@/lib/web/constants';
 import { captureEvent } from '@/lib/posthog';
+import { useProWelcome } from '@/stores/useProWelcome';
 
 const PRODUCT_ID = 'mony_pro_monthly';
 
@@ -67,6 +68,12 @@ export function useUpgradeFlow(): () => Promise<void> {
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         await runNativeIapPurchase();
         await qc.invalidateQueries({ queryKey: MY_SUBSCRIPTION_KEY });
+        // Track 6 — Step 1: signal the post-IAP welcome modal. The
+        // host listens to this flag and mounts the modal after a
+        // short delay so the cap-modal (if open) can finish its
+        // dismiss animation. Web's welcome lives on /upgrade/success
+        // and is owned by Track 7, so it stays out of runWebStripeFlow.
+        useProWelcome.getState().show();
       } else {
         await runWebStripeFlow();
       }

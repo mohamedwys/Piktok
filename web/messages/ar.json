@@ -236,9 +236,28 @@
   "pro": {
     "_arNote": "DRAFT — pending native-speaker review",
     "home": {
-      "heading": "لوحة Pro",
-      "subheadPlaceholder": "ستظهر مؤشرات البائع الخاصة بك هنا.",
-      "placeholderCardBody": "نعمل على توسيع هذه اللوحة لتشمل الإيرادات والإعلانات والطلبات ورؤى العملاء. ستُطرح واجهات جديدة هنا خلال الأسابيع المقبلة."
+      "greeting": "مرحبًا بعودتك، {name}",
+      "greetingFallbackName": "صديقي",
+      "kpiGridLabel": "المؤشرات الرئيسية",
+      "recentActivityHeading": "النشاط الأخير",
+      "emptyState": {
+        "heading": "لوحة التحكم جاهزة",
+        "body": "ابدأ بإنشاء إعلان — ستظهر مؤشراتك هنا حالما يكتشف المشترون منتجاتك ويشترونها."
+      }
+    },
+    "kpi": {
+      "revenueAllTime": "الإيرادات (الإجمالية)",
+      "revenue30d": "الإيرادات (30 يومًا)",
+      "salesCount": "المبيعات",
+      "listings": "الإعلانات",
+      "followers": "المتابعون",
+      "views30d": "المشاهدات (30 يومًا)"
+    },
+    "activity": {
+      "orderPaid": "اشترى {buyerName} منتجًا مقابل {amount}",
+      "messageReceived": "رسالة جديدة في محادثة",
+      "buyerNamePlaceholder": "مشترٍ",
+      "empty": "لا يوجد نشاط حديث بعد."
     },
     "tabs": {
       "home": "الرئيسية",

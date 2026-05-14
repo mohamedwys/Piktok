@@ -234,9 +234,28 @@
   },
   "pro": {
     "home": {
-      "heading": "Tableau de bord Pro",
-      "subheadPlaceholder": "Vos indicateurs vendeur apparaîtront ici.",
-      "placeholderCardBody": "Nous enrichissons ce tableau de bord avec le chiffre d'affaires, les annonces, les commandes et la connaissance client. De nouvelles vues seront déployées ici dans les prochaines semaines."
+      "greeting": "Bon retour, {name}",
+      "greetingFallbackName": "à toi",
+      "kpiGridLabel": "Indicateurs clés",
+      "recentActivityHeading": "Activité récente",
+      "emptyState": {
+        "heading": "Votre tableau de bord est prêt",
+        "body": "Commencez par créer une annonce — vos indicateurs apparaîtront ici dès que des acheteurs découvriront et achèteront vos produits."
+      }
+    },
+    "kpi": {
+      "revenueAllTime": "Chiffre d'affaires (total)",
+      "revenue30d": "Chiffre d'affaires (30j)",
+      "salesCount": "Ventes",
+      "listings": "Annonces",
+      "followers": "Abonnés",
+      "views30d": "Vues (30j)"
+    },
+    "activity": {
+      "orderPaid": "{buyerName} a acheté un produit pour {amount}",
+      "messageReceived": "Nouveau message dans une conversation",
+      "buyerNamePlaceholder": "Un acheteur",
+      "empty": "Aucune activité récente pour le moment."
     },
     "tabs": {
       "home": "Accueil",

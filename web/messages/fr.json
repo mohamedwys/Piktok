@@ -326,6 +326,18 @@
       "deleteConfirm": "Supprimer cette annonce ? Cette action est irréversible.",
       "deleteError": "Échec de la suppression : {message}"
     },
+    "onboarding": {
+      "heading": "Finalisez votre compte Pro",
+      "progressLabel": "{done} sur {total} terminés",
+      "step2Title": "Complétez votre profil",
+      "step2Body": "Ajoutez une courte bio et votre localisation pour que les acheteurs sachent à qui ils s'adressent.",
+      "step3Title": "Activez le paiement direct sur une annonce",
+      "step3Body": "Passez une annonce en Achat direct et laissez les acheteurs payer via Stripe en un geste.",
+      "step3Skip": "Passer",
+      "step4Title": "Mettez une annonce en avant",
+      "step4Body": "Propulsez une annonce en tête du fil. La mise en avant est disponible sur l'app mobile.",
+      "step4Skip": "Passer"
+    },
     "success": {
       "activatingTitle": "Activation de votre abonnement…",
       "activatingBody": "Nous confirmons votre paiement avec Stripe. Cela prend généralement quelques secondes.",

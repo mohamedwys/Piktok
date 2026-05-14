@@ -326,6 +326,18 @@
       "deleteConfirm": "Delete this listing? This cannot be undone.",
       "deleteError": "Delete failed: {message}"
     },
+    "onboarding": {
+      "heading": "Finish setting up your Pro account",
+      "progressLabel": "{done} of {total} done",
+      "step2Title": "Complete your profile",
+      "step2Body": "Add a short bio and your location so buyers know who they're dealing with.",
+      "step3Title": "Enable instant checkout on a listing",
+      "step3Body": "Switch a listing to Buy Now and let buyers pay through Stripe in one tap.",
+      "step3Skip": "Skip",
+      "step4Title": "Boost a listing",
+      "step4Body": "Push one listing to the top of the feed. Boost is currently available in the mobile app.",
+      "step4Skip": "Skip"
+    },
     "success": {
       "activatingTitle": "Activating your subscription…",
       "activatingBody": "We're confirming your payment with Stripe. This usually takes a few seconds.",

@@ -6,8 +6,10 @@ import { Container } from '@/components/ui/Container';
 import { HomeKpiTiles } from '@/components/pro/HomeKpiTiles';
 import { RecentActivityFeed } from '@/components/pro/RecentActivityFeed';
 import { ProHomeViewedBeacon } from '@/components/pro/ProHomeViewedBeacon';
+import { ProOnboardingChecklist } from '@/components/pro/ProOnboardingChecklist';
 import {
   fetchDashboardSummary,
+  fetchOnboardingState,
   fetchRecentActivity,
 } from '@/lib/pro/data';
 
@@ -37,17 +39,19 @@ export default async function ProHomePage({
   const { userId, sellerId } = await requirePro(locale);
 
   const supabase = await getSupabaseServer();
-  const [summary, activity, sellerRow, currency, t] = await Promise.all([
-    fetchDashboardSummary(supabase, sellerId),
-    fetchRecentActivity(supabase, sellerId, 10),
-    supabase
-      .from('sellers')
-      .select('name')
-      .eq('id', sellerId)
-      .single(),
-    getCurrency(),
-    getTranslations('pro.home'),
-  ]);
+  const [summary, activity, sellerRow, onboarding, currency, t] =
+    await Promise.all([
+      fetchDashboardSummary(supabase, sellerId),
+      fetchRecentActivity(supabase, sellerId, 10),
+      supabase
+        .from('sellers')
+        .select('name')
+        .eq('id', sellerId)
+        .single(),
+      fetchOnboardingState(supabase, sellerId),
+      getCurrency(),
+      getTranslations('pro.home'),
+    ]);
 
   const sellerName =
     (sellerRow.data?.name as string | undefined) ??
@@ -61,6 +65,12 @@ export default async function ProHomePage({
             {t('greeting', { name: sellerName })}
           </h1>
         </header>
+
+        {onboarding.allServerDone ? null : (
+          <div className="mb-6">
+            <ProOnboardingChecklist initial={onboarding} />
+          </div>
+        )}
 
         <HomeKpiTiles summary={summary} currency={currency} />
 

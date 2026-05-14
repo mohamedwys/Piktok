@@ -380,6 +380,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Health check endpoint for synthetic uptime monitoring (Better Stack
+# etc.). Monitors hit this without a JWT — disable verification so the
+# function is anonymous. Stays here so CI redeploys preserve the setting.
+[functions.health]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

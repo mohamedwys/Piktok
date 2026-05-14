@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import i18n from '@/i18n';
 import { colors } from '@/theme';
+import { captureException } from '@/lib/sentry';
 
 type Props = { children: React.ReactNode };
 type State = { error: Error | null };
@@ -14,11 +15,11 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    // Phase 9 wires Sentry.captureException(error, { extra: info }) here.
     if (__DEV__) {
       // eslint-disable-next-line no-console
       console.warn('[ErrorBoundary]', error.message, info.componentStack);
     }
+    captureException(error, { componentStack: info.componentStack });
   }
 
   handleRetry = (): void => this.setState({ error: null });

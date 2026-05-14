@@ -1,6 +1,9 @@
 // deno-lint-ignore-file
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
+
+initEdgeSentry();
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
   apiVersion: '2024-04-10',
@@ -42,16 +45,21 @@ Deno.serve(async (req) => {
     'Vary': 'Origin',
   };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Hoisted so the catch block can include them in the Sentry capture.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let productId: string | undefined;
   try {
     const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (!auth) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    const { data: { user } } = await supabase.auth.getUser(auth);
+    const authRes = await supabase.auth.getUser(auth);
+    user = authRes.data.user;
     if (!user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
     const { product_id, return_url } = await req.json();
     if (!product_id || typeof product_id !== 'string') {
       return new Response('Missing product_id', { status: 400, headers: corsHeaders });
     }
+    productId = product_id;
 
     const { data: product, error: pErr } = await supabase
       .from('products')
@@ -138,6 +146,11 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('create-checkout-session error', err);
+    await captureEdgeException(err, {
+      function: 'create-checkout-session',
+      user_id: user?.id,
+      product_id: productId,
+    });
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

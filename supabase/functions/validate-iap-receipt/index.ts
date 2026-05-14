@@ -22,6 +22,9 @@
 // See docs/store/iap-setup-checklist.md for the manual setup steps.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
+
+initEdgeSentry();
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -187,10 +190,15 @@ Deno.serve(async (req) => {
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
+  // Hoisted so the catch block can include them in the Sentry capture.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let platform: 'ios' | 'android' | undefined;
+  let productId: string | undefined;
   try {
     const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (!auth) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    const { data: { user } } = await supabase.auth.getUser(auth);
+    const authRes = await supabase.auth.getUser(auth);
+    user = authRes.data.user;
     if (!user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
     const body = await req.json() as {
@@ -201,6 +209,8 @@ Deno.serve(async (req) => {
     if (!body.platform || !body.receipt || !body.product_id) {
       return new Response('Missing fields', { status: 400, headers: corsHeaders });
     }
+    platform = body.platform;
+    productId = body.product_id;
 
     // Resolve seller_id. If the user has no sellers row yet (rare —
     // signup creates one — but possible if account was reset), promote
@@ -300,6 +310,12 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('validate-iap-receipt error', err);
+    await captureEdgeException(err, {
+      function: 'validate-iap-receipt',
+      user_id: user?.id,
+      platform,
+      product_id: productId,
+    });
     return new Response(
       JSON.stringify({ error: 'internal' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

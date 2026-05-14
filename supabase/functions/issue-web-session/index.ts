@@ -43,6 +43,9 @@
 // =============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
+
+initEdgeSentry();
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -73,13 +76,17 @@ Deno.serve(async (req) => {
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
+  // Hoisted so the catch block can include them in the Sentry capture.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let redirectPath = DEFAULT_REDIRECT_PATH;
   try {
     // 1. Verify the caller is authenticated. Refuse anonymous callers
     //    — service-role admin access without auth verification would
     //    let any anonymous request mint magic-links for any email.
     const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (!auth) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    const { data: { user } } = await supabase.auth.getUser(auth);
+    const authRes = await supabase.auth.getUser(auth);
+    user = authRes.data.user;
     if (!user || !user.email) {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders });
     }
@@ -87,7 +94,6 @@ Deno.serve(async (req) => {
     // 2. Resolve the redirect target. `redirect_to` is an optional
     //    relative path; we whitelist by requiring it to start with `/`
     //    so a malicious caller cannot redirect off the web app domain.
-    let redirectPath = DEFAULT_REDIRECT_PATH;
     try {
       const body = await req.json();
       if (typeof body?.redirect_to === 'string' && body.redirect_to.startsWith('/')) {
@@ -142,6 +148,11 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('issue-web-session error', err);
+    await captureEdgeException(err, {
+      function: 'issue-web-session',
+      user_id: user?.id,
+      redirect_path: redirectPath,
+    });
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

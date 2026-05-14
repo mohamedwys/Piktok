@@ -2,6 +2,7 @@ import { User } from '@/types/types';
 import { create } from 'zustand';
 import { supabase, AUTH_REDIRECT_URL } from '@/lib/supabase'
 import { clearPushTokenForCurrentUser } from '@/services/pushNotifications';
+import { setSentryUser } from '@/lib/sentry';
 
 export type RegisterResult =
   | { confirmed: true }
@@ -126,6 +127,7 @@ export async function syncAuthFromSupabase(): Promise<void> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.user) {
     useAuthStore.setState({ user: null, isAuthenticated: false });
+    setSentryUser(null);
     return;
   }
   const u = data.session.user;
@@ -137,6 +139,7 @@ export async function syncAuthFromSupabase(): Promise<void> {
     },
     isAuthenticated: true,
   });
+  setSentryUser({ id: u.id, email: u.email ?? null });
 }
 
 /**
@@ -148,6 +151,7 @@ export function subscribeToAuthChanges(): () => void {
   const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
     if (!session?.user) {
       useAuthStore.setState({ user: null, isAuthenticated: false });
+      setSentryUser(null);
       return;
     }
     const u = session.user;
@@ -159,6 +163,7 @@ export function subscribeToAuthChanges(): () => void {
       },
       isAuthenticated: true,
     });
+    setSentryUser({ id: u.id, email: u.email ?? null });
   });
   return () => sub.subscription.unsubscribe();
 }

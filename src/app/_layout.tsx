@@ -29,6 +29,9 @@ import { typography } from "@/theme"
 import { queryClient } from "@/lib/queryClient"
 import { restoreSubscriptions } from "@/features/iap/services"
 import { MY_SUBSCRIPTION_KEY } from "@/features/marketplace/hooks/useMySubscription"
+import { initSentry } from "@/lib/sentry"
+
+initSentry()
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 

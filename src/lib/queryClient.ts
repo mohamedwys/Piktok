@@ -6,6 +6,7 @@ import { AuthRequiredError } from '@/features/marketplace/services/products';
 import { ListingCapReachedError, RateLimitError } from '@/features/marketplace/errors';
 import { StripeNotConfiguredError } from '@/features/marketplace/services/orders';
 import { EmailNotConfirmedError } from '@/stores/useAuthStore';
+import { captureException } from '@/lib/sentry';
 import i18n from '@/i18n';
 
 onlineManager.setEventListener((setOnline) => {
@@ -50,6 +51,8 @@ function defaultMutationErrorHandler(error: unknown): void {
     toast.error(i18n.t('errors.checkoutUnavailable') || 'Checkout is unavailable right now');
     return;
   }
+  // Unknown / unexpected error — capture for Sentry visibility.
+  captureException(error, { handler: 'globalMutationOnError' });
   const msg = error instanceof Error ? error.message : String(error);
   toast.error(
     i18n.t('common.errorGeneric') || 'Something went wrong',

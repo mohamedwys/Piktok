@@ -1,5 +1,8 @@
 // deno-lint-ignore-file
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
+
+initEdgeSentry();
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -35,10 +38,15 @@ Deno.serve(async (req) => {
     'Vary': 'Origin',
   };
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Hoisted so the catch block can include them in the Sentry capture.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let conversationId: string | undefined;
+  let peer: string | null = null;
   try {
     const auth = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (!auth) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-    const { data: { user } } = await supabase.auth.getUser(auth);
+    const authRes = await supabase.auth.getUser(auth);
+    user = authRes.data.user;
     if (!user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
     const payload = (await req.json()) as PushBody;
@@ -50,6 +58,7 @@ Deno.serve(async (req) => {
     ) {
       return new Response('Missing fields', { status: 400, headers: corsHeaders });
     }
+    conversationId = payload.conversation_id;
 
     // Phase 6 / B1: refuse arbitrary user_id targets. The caller must
     // (a) be a participant of the named conversation, and (b) name the
@@ -72,7 +81,7 @@ Deno.serve(async (req) => {
       return new Response('Not a participant', { status: 403, headers: corsHeaders });
     }
 
-    const peer = conv.buyer_id === me ? conv.seller_user_id : conv.buyer_id;
+    peer = conv.buyer_id === me ? conv.seller_user_id : conv.buyer_id;
     if (peer !== payload.user_id) {
       return new Response('recipient_mismatch', { status: 403, headers: corsHeaders });
     }
@@ -108,6 +117,12 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('send-push-notification error', err);
+    await captureEdgeException(err, {
+      function: 'send-push-notification',
+      user_id: user?.id,
+      conversation_id: conversationId,
+      recipient_user_id: peer,
+    });
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

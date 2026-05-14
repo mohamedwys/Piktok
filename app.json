@@ -197,7 +197,15 @@
         }
       ],
       "expo-secure-store",
-      "expo-iap"
+      "expo-iap",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "PLACEHOLDER_SENTRY_ORG",
+          "project": "PLACEHOLDER_SENTRY_PROJECT_MOBILE"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

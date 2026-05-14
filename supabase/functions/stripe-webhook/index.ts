@@ -1,6 +1,9 @@
 // deno-lint-ignore-file
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
+
+initEdgeSentry();
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
   apiVersion: '2024-04-10',
@@ -14,14 +17,17 @@ const supabase = createClient(
 );
 
 Deno.serve(async (req) => {
+  // Hoisted so the catch block can include them in the Sentry capture.
+  let event: Stripe.Event | undefined;
+  let session: Stripe.Checkout.Session | undefined;
   try {
     const sig = req.headers.get('stripe-signature');
     const whSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
     const payload = await req.text();
-    const event = await stripe.webhooks.constructEventAsync(payload, sig!, whSecret, undefined, cryptoProvider);
+    event = await stripe.webhooks.constructEventAsync(payload, sig!, whSecret, undefined, cryptoProvider);
 
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
+      session = event.data.object as Stripe.Checkout.Session;
       // Phase 8 / Track B: persist shipping_details + customer_details
       // from the completed session. `shipping_details` is widened via
       // assertion because some SDK TS versions don't expose it on
@@ -53,7 +59,7 @@ Deno.serve(async (req) => {
         })
         .eq('stripe_session_id', session.id);
     } else if (event.type === 'checkout.session.expired') {
-      const session = event.data.object as Stripe.Checkout.Session;
+      session = event.data.object as Stripe.Checkout.Session;
       await supabase
         .from('orders')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -71,6 +77,11 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('webhook error', err);
+    await captureEdgeException(err, {
+      function: 'stripe-webhook',
+      event_type: event?.type,
+      session_id: session?.id,
+    });
     return new Response(`Webhook Error: ${(err as Error).message}`, { status: 400 });
   }
 });

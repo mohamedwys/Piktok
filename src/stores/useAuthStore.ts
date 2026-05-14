@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { supabase, AUTH_REDIRECT_URL } from '@/lib/supabase'
 import { clearPushTokenForCurrentUser } from '@/services/pushNotifications';
 import { setSentryUser } from '@/lib/sentry';
+import { identifyUser, captureEvent } from '@/lib/posthog';
 
 export type RegisterResult =
   | { confirmed: true }
@@ -86,6 +87,7 @@ export const useAuthStore = create<AuthStore>()(
         // Don't flip isAuthenticated — the JWT only lands after the
         // user clicks the link.
         if (!data.session) {
+          captureEvent('register_completed', { confirmed: false });
           return { confirmed: false, email: data.user.email ?? email };
         }
 
@@ -98,6 +100,7 @@ export const useAuthStore = create<AuthStore>()(
           },
           isAuthenticated: true,
         })
+        captureEvent('register_completed', { confirmed: true });
         return { confirmed: true };
       },
       logout: async () => {
@@ -128,6 +131,7 @@ export async function syncAuthFromSupabase(): Promise<void> {
   if (error || !data.session?.user) {
     useAuthStore.setState({ user: null, isAuthenticated: false });
     setSentryUser(null);
+    identifyUser(null);
     return;
   }
   const u = data.session.user;
@@ -140,6 +144,7 @@ export async function syncAuthFromSupabase(): Promise<void> {
     isAuthenticated: true,
   });
   setSentryUser({ id: u.id, email: u.email ?? null });
+  identifyUser({ id: u.id, email: u.email ?? null });
 }
 
 /**
@@ -152,6 +157,7 @@ export function subscribeToAuthChanges(): () => void {
     if (!session?.user) {
       useAuthStore.setState({ user: null, isAuthenticated: false });
       setSentryUser(null);
+      identifyUser(null);
       return;
     }
     const u = session.user;
@@ -164,6 +170,7 @@ export function subscribeToAuthChanges(): () => void {
       isAuthenticated: true,
     });
     setSentryUser({ id: u.id, email: u.email ?? null });
+    identifyUser({ id: u.id, email: u.email ?? null });
   });
   return () => sub.subscription.unsubscribe();
 }

@@ -30,6 +30,7 @@ import { queryClient } from "@/lib/queryClient"
 import { restoreSubscriptions } from "@/features/iap/services"
 import { MY_SUBSCRIPTION_KEY } from "@/features/marketplace/hooks/useMySubscription"
 import { initSentry } from "@/lib/sentry"
+import { initPosthog } from "@/lib/posthog"
 
 initSentry()
 
@@ -84,7 +85,7 @@ export default function RootLayout() {
   const [isI18nReady, setI18nReady] = useState(false)
   useEffect(() => {
     const cleanupAppState = registerSupabaseAuthAppStateListener()
-    Promise.all([initI18n(), syncAuthFromSupabase()]).then(() => {
+    Promise.all([initI18n(), syncAuthFromSupabase(), initPosthog()]).then(() => {
       setI18nReady(true)
     })
     const unsub = subscribeToAuthChanges()

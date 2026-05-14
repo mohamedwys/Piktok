@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expo-doctor. Every main push auto-deploys edge functions to the
   production Supabase project. See
   [docs/devops/ci-cd.md](docs/devops/ci-cd.md).
+- Posthog analytics + feature flags wired (EU Cloud). 8 key events
+  instrumented (register, onboarding, listing, message, checkout,
+  subscription, product view, upgrade CTA). One feature flag
+  (show_for_you_tab) demonstrates the kill-switch pattern. See
+  [docs/observability/posthog-setup.md](docs/observability/posthog-setup.md).
 
 ### Changed
 

@@ -21,6 +21,17 @@ or Play Console. Each unchecked item is a known rejection risk.
 - [ ] At least one edge-deploy run has succeeded (verify by editing
       any supabase/functions/**/index.ts with a no-op comment + merging)
 
+## 0.6. Posthog analytics
+
+- [ ] Posthog project provisioned at https://eu.posthog.com (project
+      name: Mony)
+- [ ] EAS Secret `EXPO_PUBLIC_POSTHOG_API_KEY` set
+- [ ] eas.json env `EXPO_PUBLIC_POSTHOG_HOST` populated for all 3 profiles
+- [ ] Feature flag `show_for_you_tab` created with default = true
+- [ ] First production build registers an `Application Opened` event
+      on launch (verify in Posthog -> Activity within 5 minutes of app
+      open)
+
 ## 1. Supabase Production Project
 
 ### Migrations

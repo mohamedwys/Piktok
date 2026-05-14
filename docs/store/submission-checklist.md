@@ -147,6 +147,15 @@ Project Settings → Edge Functions → Secrets:
 - [ ] `eas submit --profile production --platform ios`
 - [ ] `eas submit --profile production --platform android`
 
+## 6.5. EAS Update (post-launch OTA)
+
+- [ ] First production OTA published as a smoke test:
+      `eas update --branch production --message "v1.0.0 smoke test"`
+- [ ] Verified via TestFlight build that the update reached the device
+      on next app launch
+- [ ] Document the workflow with your team (link to
+      [docs/observability/ota-update-workflow.md](../observability/ota-update-workflow.md))
+
 ## 7. Post-submission monitoring
 
 - [ ] Apple review queue (typical 24-48 hours)

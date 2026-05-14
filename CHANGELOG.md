@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- EAS Update (OTA) configured with fingerprint runtimeVersion policy.
+  JS-only fixes can now ship via `eas update --branch production`
+  without an App Store review cycle. See
+  [docs/observability/ota-update-workflow.md](docs/observability/ota-update-workflow.md).
+
 ### Changed
 
 - Pin npm resolution mode via project-level .npmrc files (mobile +

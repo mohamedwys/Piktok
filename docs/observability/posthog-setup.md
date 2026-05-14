@@ -47,13 +47,21 @@ Posthog dashboard -> Insights -> New insight -> Funnels.
 
 ## Feature flags
 
-v1 ships ONE flag as a wiring demonstration:
+The flag inventory:
 
 | Key | Type | Default | Purpose |
 |-----|------|---------|---------|
 | show_for_you_tab | Boolean | true | Kill switch: hide the For-You feed tab if the algorithmic feed is broken |
+| show_pro_customers_tab | Boolean | false | Reveal the Customers tab in the web Pro dashboard. Flip when Track 5 ships. |
+| show_pro_analytics_tab | Boolean | false | Reveal the Analytics tab in the web Pro dashboard. Flip when Track 8 ships. |
 
-### Creating the flag
+Note on env-var namespaces: the web side reads
+`NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST`; the mobile
+side reads `EXPO_PUBLIC_POSTHOG_API_KEY` and `EXPO_PUBLIC_POSTHOG_HOST`.
+Both pairs hold the SAME values — the same Posthog project (Mony EU) —
+but each framework requires its own client-bundle prefix.
+
+### Creating `show_for_you_tab`
 
 1. Posthog -> Feature Flags -> New feature flag
 2. Key: `show_for_you_tab`
@@ -76,6 +84,43 @@ do NOT take down the feature.
 3. Save.
 4. Existing app sessions continue showing the tab; new app launches and
    foreground events pick up the new value (<= 60 seconds).
+
+### Creating `show_pro_customers_tab`
+
+1. Posthog -> Feature Flags -> New feature flag
+2. Key: `show_pro_customers_tab`
+3. Type: Boolean
+4. Default value: `false`
+5. Rollout: 0% true (default-off; flip when Track 5 ships)
+6. Save.
+
+### Creating `show_pro_analytics_tab`
+
+1. Posthog -> Feature Flags -> New feature flag
+2. Key: `show_pro_analytics_tab`
+3. Type: Boolean
+4. Default value: `false`
+5. Rollout: 0% true (default-off; flip when Track 8 ships)
+6. Save.
+
+### Using the Pro tab flags at runtime
+
+The web `/pro` layout reads both flags server-side via
+`getFeatureFlag(name, false, userId)` (`web/src/lib/posthog.ts`). When
+the flag is false the corresponding tab is NOT rendered at all — no
+"Coming soon" placeholder. When `NEXT_PUBLIC_POSTHOG_KEY` /
+`NEXT_PUBLIC_POSTHOG_HOST` are unset (e.g. local dev without the
+PostHog env vars in `web/.env.local`) the fetcher returns the
+`false` fallback, so the tabs stay hidden.
+
+### Flipping a Pro tab live
+
+1. Posthog -> Feature Flags -> show_pro_customers_tab (or
+   show_pro_analytics_tab) -> Edit
+2. Set rollout to 100% true (or a gradual percentage for canary).
+3. Save.
+4. Next request to `/pro/*` picks up the new value (the layout is
+   `force-dynamic`, so no stale cache to flush).
 
 ## PII redaction
 

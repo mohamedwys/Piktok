@@ -233,6 +233,22 @@
     "upgradeTeaser": "ترقَّ إلى Pro لرؤية من يطّلع على إعلاناتك.",
     "upgradeCta": "عرض الإحصائيات"
   },
+  "pro": {
+    "_arNote": "DRAFT — pending native-speaker review",
+    "home": {
+      "heading": "لوحة Pro",
+      "subheadPlaceholder": "ستظهر مؤشرات البائع الخاصة بك هنا.",
+      "placeholderCardBody": "نعمل على توسيع هذه اللوحة لتشمل الإيرادات والإعلانات والطلبات ورؤى العملاء. ستُطرح واجهات جديدة هنا خلال الأسابيع المقبلة."
+    },
+    "tabs": {
+      "home": "الرئيسية",
+      "products": "المنتجات",
+      "orders": "الطلبات",
+      "customers": "العملاء",
+      "analytics": "الإحصائيات",
+      "account": "الحساب"
+    }
+  },
   "signIn": {
     "_arNote": "DRAFT — pending native-speaker review",
     "title": "تسجيل الدخول إلى Mony",

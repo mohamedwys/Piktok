@@ -232,6 +232,21 @@
     "upgradeTeaser": "Upgrade to Pro to see who's viewing your listings.",
     "upgradeCta": "View analytics"
   },
+  "pro": {
+    "home": {
+      "heading": "Pro dashboard",
+      "subheadPlaceholder": "Your seller metrics will appear here.",
+      "placeholderCardBody": "We're expanding this dashboard with revenue, listings, orders, and customer insights. New surfaces will roll out here over the coming weeks."
+    },
+    "tabs": {
+      "home": "Home",
+      "products": "Products",
+      "orders": "Orders",
+      "customers": "Customers",
+      "analytics": "Analytics",
+      "account": "Account"
+    }
+  },
   "signIn": {
     "title": "Sign in to Mony",
     "sub": "We'll email you a magic link — no password needed.",

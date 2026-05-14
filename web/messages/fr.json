@@ -232,6 +232,21 @@
     "upgradeTeaser": "Passez Pro pour voir qui consulte vos annonces.",
     "upgradeCta": "Voir les statistiques"
   },
+  "pro": {
+    "home": {
+      "heading": "Tableau de bord Pro",
+      "subheadPlaceholder": "Vos indicateurs vendeur apparaîtront ici.",
+      "placeholderCardBody": "Nous enrichissons ce tableau de bord avec le chiffre d'affaires, les annonces, les commandes et la connaissance client. De nouvelles vues seront déployées ici dans les prochaines semaines."
+    },
+    "tabs": {
+      "home": "Accueil",
+      "products": "Produits",
+      "orders": "Commandes",
+      "customers": "Clients",
+      "analytics": "Statistiques",
+      "account": "Compte"
+    }
+  },
   "signIn": {
     "title": "Connexion à Mony",
     "sub": "Nous vous enverrons un lien magique — aucun mot de passe requis.",

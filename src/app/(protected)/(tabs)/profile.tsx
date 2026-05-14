@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import { useRequireAuth } from '@/stores/useRequireAuth';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { useMyProducts } from '@/features/marketplace/hooks/useMyProducts';
 import { useMyOrders } from '@/features/marketplace/hooks/useMyOrders';
+import { useMySales } from '@/features/marketplace/hooks/useMySales';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useDeleteProduct } from '@/features/marketplace/hooks/useDeleteProduct';
 import { useIsPro } from '@/features/marketplace/hooks/useIsPro';
@@ -116,6 +117,124 @@ function OrderRow({
   );
 }
 
+function SaleRow({
+  order,
+  lang,
+  t,
+}: {
+  order: Order;
+  lang: string;
+  t: (key: string) => string;
+}): React.ReactElement {
+  const [expanded, setExpanded] = useState(false);
+  const pill = ORDER_STATUS_PILL[order.status];
+  const title = order.productTitle ? getLocalized(order.productTitle, lang) : '';
+  const hasDetails =
+    !!order.shippingAddress || !!order.buyerPhone || !!order.buyerName;
+  const phone = order.buyerPhone;
+  const addressLines = order.shippingAddress
+    ? [
+        order.shippingAddress.line1,
+        order.shippingAddress.line2,
+        [order.shippingAddress.postal_code, order.shippingAddress.city]
+          .filter(Boolean)
+          .join(' '),
+        order.shippingAddress.country,
+      ]
+        .filter((v): v is string => !!v && v.length > 0)
+        .join('\n')
+    : null;
+
+  return (
+    <Pressable
+      haptic={hasDetails ? 'light' : undefined}
+      onPress={() => {
+        if (hasDetails) setExpanded((v) => !v);
+      }}
+      pressScale={hasDetails ? 0.99 : undefined}
+    >
+      <View style={styles.orderRow}>
+        <View style={styles.orderThumbWrap}>
+          {order.productThumbnail ? (
+            <Image
+              source={{ uri: order.productThumbnail }}
+              style={styles.orderThumb}
+              transition={120}
+              cachePolicy="memory-disk"
+            />
+          ) : null}
+        </View>
+        <View style={styles.orderMiddle}>
+          <Text variant="body" weight="semibold" numberOfLines={1}>
+            {title}
+          </Text>
+          <Text variant="caption" weight="bold" style={styles.orderAmount}>
+            {formatOrderAmount(order.amount, order.currency)}
+          </Text>
+          <Text variant="caption" color="tertiary">
+            {timeAgo(order.createdAt, lang)}
+          </Text>
+        </View>
+        <View style={[styles.orderPill, { backgroundColor: pill.bg }]}>
+          <Text style={[styles.orderPillText, { color: pill.fg }]}>
+            {t(pill.key)}
+          </Text>
+        </View>
+        {hasDetails ? (
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.text.tertiary}
+            style={styles.saleChevron}
+          />
+        ) : null}
+      </View>
+      {expanded ? (
+        <View style={styles.saleExpanded}>
+          {order.buyerName ? (
+            <View style={styles.saleField}>
+              <Ionicons
+                name="person-outline"
+                size={14}
+                color={colors.text.tertiary}
+              />
+              <Text variant="caption" color="primary">
+                {order.buyerName}
+              </Text>
+            </View>
+          ) : null}
+          {phone ? (
+            <Pressable
+              haptic="light"
+              onPress={() => {
+                void Linking.openURL(`tel:${phone}`);
+              }}
+              style={styles.saleField}
+            >
+              <Ionicons name="call-outline" size={14} color={colors.brand} />
+              <Text variant="caption" style={{ color: colors.brand }}>
+                {phone}
+              </Text>
+            </Pressable>
+          ) : null}
+          {addressLines ? (
+            <View style={styles.saleAddress}>
+              <Ionicons
+                name="location-outline"
+                size={14}
+                color={colors.text.tertiary}
+              />
+              <Text variant="caption" color="primary" style={{ flex: 1 }}>
+                {addressLines}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 type StatBlockProps = {
   count: number;
   label: string;
@@ -203,6 +322,7 @@ export default function ProfileScreen(): React.ReactElement {
   const currentLang = i18n.language as SupportedLanguage;
   const myProductsQuery = useMyProducts(isAuthenticated);
   const myOrdersQuery = useMyOrders(isAuthenticated);
+  const mySalesQuery = useMySales(isAuthenticated);
   const mySellerQuery = useMySeller(isAuthenticated);
   const deleteMutation = useDeleteProduct();
 
@@ -620,6 +740,36 @@ export default function ProfileScreen(): React.ReactElement {
                 ))}
               </Surface>
             )}
+          </View>
+        ) : null}
+
+        {isAuthenticated && (mySalesQuery.data?.length ?? 0) > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text variant="caption" weight="bold" style={styles.sectionLabel}>
+                {t('sales.title')}
+              </Text>
+              <Text variant="caption" color="tertiary">
+                {formatCount(
+                  mySalesQuery.data?.length ?? 0,
+                  currentLang === 'fr' ? 'fr-FR' : 'en-US',
+                )}
+              </Text>
+            </View>
+            <Surface variant="surfaceElevated" radius="lg" border>
+              {(mySalesQuery.data ?? []).map((order, idx, arr) => (
+                <View
+                  key={order.id}
+                  style={
+                    idx < arr.length - 1
+                      ? styles.orderRowWithDivider
+                      : undefined
+                  }
+                >
+                  <SaleRow order={order} lang={currentLang} t={t} />
+                </View>
+              ))}
+            </Surface>
           </View>
         ) : null}
 
@@ -1061,5 +1211,30 @@ const styles = StyleSheet.create({
   orderPillText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+
+  // Sales (Phase 8 / Track B)
+  saleChevron: {
+    marginLeft: spacing.xs,
+  },
+  saleExpanded: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
+    gap: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    marginTop: spacing.xs,
+  },
+  saleField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  saleAddress: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    marginTop: 2,
   },
 });

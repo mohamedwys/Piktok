@@ -61,9 +61,10 @@ export { default as MarketplaceFeedSkeleton } from './components/MarketplaceFeed
 export { default as SellerProductCardSkeleton } from './components/SellerProductCardSkeleton';
 export { timeAgo } from './utils/timeAgo';
 export { useMyOrders, MY_ORDERS_KEY } from './hooks/useMyOrders';
+export { useMySales, MY_SALES_KEY } from './hooks/useMySales';
 export { useCreateCheckoutSession } from './hooks/useCreateCheckoutSession';
 export { StripeNotConfiguredError } from './services/orders';
-export type { Order, OrderStatus } from './services/orders';
+export type { Order, OrderStatus, OrderShippingAddress } from './services/orders';
 export { useComments, COMMENTS_QUERY_KEY } from './hooks/useComments';
 export { useCommentsRealtime } from './hooks/useCommentsRealtime';
 export { usePostComment, type PostCommentVars } from './hooks/usePostComment';

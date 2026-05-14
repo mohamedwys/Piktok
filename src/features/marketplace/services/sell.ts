@@ -21,6 +21,13 @@ export type CreateProductInput = {
   stockAvailable: boolean;
   shippingFree: boolean;
   pickupAvailable: boolean;
+  /**
+   * Phase 8 / Track B: hybrid purchase model. Pro sellers can pass
+   * 'buy_now' to enable Stripe Checkout; non-Pro sellers are silently
+   * downgraded to 'contact_only' by the
+   * `enforce_purchase_mode_pro_only_trg` BEFORE-INSERT trigger.
+   */
+  purchaseMode: 'buy_now' | 'contact_only';
   location?: string;
   /**
    * Optional geographic coordinates for the listing. When provided,
@@ -170,6 +177,7 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
     stock_available: input.stockAvailable,
     shipping_free: input.shippingFree,
     pickup_available: input.pickupAvailable,
+    purchase_mode: input.purchaseMode,
     location: input.location ?? null,
   };
   if (hasCoords) {
@@ -203,9 +211,18 @@ export async function createProduct(input: CreateProductInput): Promise<string> 
   return data!.id as string;
 }
 
-export type UpdateProductInput = Omit<CreateProductInput, 'mediaUri' | 'mediaType'> & {
+export type UpdateProductInput = Omit<
+  CreateProductInput,
+  'mediaUri' | 'mediaType' | 'purchaseMode'
+> & {
   newMediaUri?: string;
   newMediaType?: 'image' | 'video';
+  /**
+   * Optional on update so existing call sites that don't touch the
+   * toggle leave the column untouched. When present, the value is
+   * still subject to the server-side Pro-only enforcement trigger.
+   */
+  purchaseMode?: 'buy_now' | 'contact_only';
 };
 
 export async function updateProduct(
@@ -236,6 +253,10 @@ export async function updateProduct(
     pickup_available: input.pickupAvailable,
     location: input.location ?? null,
   };
+
+  if (input.purchaseMode !== undefined) {
+    patch.purchase_mode = input.purchaseMode;
+  }
 
   if (input.newMediaUri && input.newMediaType) {
     const url = await uploadProductMedia(input.newMediaUri, input.newMediaType);

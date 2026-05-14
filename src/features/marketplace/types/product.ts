@@ -89,4 +89,13 @@ export type Product = {
    * underlying column directly (excluded from D.1.5's UPDATE allowlist).
    */
   featuredUntil?: string | null;
+  /**
+   * Phase 8 / Track B: hybrid purchase model. `buy_now` opens Stripe
+   * Checkout (shipping + phone collected by the server). `contact_only`
+   * routes the action rail to the messaging flow. The server trigger
+   * `enforce_purchase_mode_pro_only_trg` keeps non-Pro sellers' rows at
+   * 'contact_only' on every write, so the read-side does not need to
+   * cross-check seller.isPro to honour the gate.
+   */
+  purchaseMode: 'buy_now' | 'contact_only';
 };

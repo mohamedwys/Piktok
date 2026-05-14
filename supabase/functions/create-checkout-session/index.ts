@@ -55,11 +55,18 @@ Deno.serve(async (req) => {
 
     const { data: product, error: pErr } = await supabase
       .from('products')
-      .select('id, seller_id, price, currency, title, media_url, thumbnail_url')
+      .select('id, seller_id, price, currency, title, media_url, thumbnail_url, purchase_mode')
       .eq('id', product_id)
       .maybeSingle();
     if (pErr || !product) {
       return new Response('Product not found', { status: 404, headers: corsHeaders });
+    }
+    // Phase 8 / Track B: server-side guard. The client UI gates on
+    // purchase_mode in the action rail, but a forged client could POST
+    // here for a contact_only listing. Reject before creating a Stripe
+    // session OR an orders row.
+    if (product.purchase_mode !== 'buy_now') {
+      return new Response('not_purchasable', { status: 403, headers: corsHeaders });
     }
 
     const productName = (product.title?.fr || product.title?.en || 'Product') as string;
@@ -87,6 +94,20 @@ Deno.serve(async (req) => {
         },
         quantity: 1,
       }],
+      // Phase 8 / Track B: collect shipping address + phone for buy_now
+      // listings. Country allow-list is Western EU + UK + Ireland + US +
+      // Canada -- adjust only when the platform has legally cleared a
+      // new destination for cross-border shipping.
+      shipping_address_collection: {
+        allowed_countries: [
+          'FR', 'BE', 'CH', 'LU', 'MC',
+          'GB', 'IE',
+          'DE', 'NL', 'IT', 'ES', 'PT',
+          'US', 'CA',
+        ],
+      },
+      phone_number_collection: { enabled: true },
+      customer_creation: 'always',
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {

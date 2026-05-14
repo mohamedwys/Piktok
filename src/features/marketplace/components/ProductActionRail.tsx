@@ -2,6 +2,7 @@ import { useShareProduct } from '@/features/marketplace/hooks/useShareProduct';
 import { useToggleLike } from '@/features/marketplace/hooks/useToggleLike';
 import { useIsLiked } from '@/features/marketplace/hooks/useUserEngagement';
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
+import { useStartConversation } from '@/features/marketplace/hooks/useStartConversation';
 import type { Product } from '@/features/marketplace/types/product';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { getLocalized } from '@/i18n/getLocalized';
@@ -17,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
+import { useRouter, type Href } from 'expo-router';
 import { IconButton } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import LikeButton from '@/components/feed/LikeButton';
@@ -31,12 +33,13 @@ function ProductActionRail({
   tabBarHeight = 0,
 }: ProductActionRailProps): React.ReactElement {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const isLiked = useIsLiked(product.id);
   const likeCount = product.engagement.likes;
   const toggleLike = useToggleLike(product.id);
   const shareMutation = useShareProduct();
+  const startConv = useStartConversation();
   const { requireAuth } = useRequireAuth();
-  const isPro = product.seller.isPro;
 
   // Phase H.4 — own-non-Pro checkout-gate. When the viewer is the
   // seller themselves AND the seller is not Pro, swap the existing
@@ -110,25 +113,55 @@ function ProductActionRail({
     useMoreActionsSheetStore.getState().open(product.id);
   }, [product.id]);
 
-  // Branching for the leading button:
-  //   - showCheckoutGate (own + non-Pro)  → "Activer" + sparkles → upgrade flow
-  //   - else, isPro (someone else's Pro)  → "Acheter"  + bag       → checkout
-  //   - else (someone else's non-Pro)     → "Contacter" + chat     → DM
+  // Phase 8 / Track B: contact-only branch opens a conversation
+  // directly from the rail. Mirrors ProductDetailSheet's onPressMessage
+  // pattern (close any open sheet, push to /conversation/:id). Global
+  // mutation onError (Phase 7) surfaces the toast on failure. Fire-and-
+  // forget so the callback satisfies IconButton's `() => void` prop.
+  const onPressMessageSeller = useCallback((): void => {
+    if (!requireAuth()) return;
+    void mediumHaptic();
+    void (async () => {
+      try {
+        const convId = await startConv.mutateAsync(product.id);
+        useProductSheetStore.getState().close();
+        router.push(`/(protected)/conversation/${convId}` as Href);
+      } catch {
+        // Global mutation onError surfaces the toast.
+      }
+    })();
+  }, [product.id, requireAuth, startConv, router]);
+
+  // Phase 8 / Track B branching:
+  //   - showCheckoutGate (own + non-Pro)         → "Activer" + sparkles → upgrade flow
+  //   - product.purchaseMode === 'buy_now'       → "Acheter"  + bag     → checkout
+  //   - else (contact_only listing)              → "Contacter" + chat   → DM
+  // The Pro-status fork lives server-side via the
+  // `enforce_purchase_mode_pro_only_trg` trigger that keeps non-Pro
+  // sellers' rows at 'contact_only', so the rail does NOT need to
+  // re-check seller.isPro here.
+  const isBuyNow = product.purchaseMode === 'buy_now';
   const buyLabel = showCheckoutGate
     ? t('pro.checkoutGateLabel')
-    : isPro
+    : isBuyNow
       ? t('actionRail.buy')
       : t('marketplace.contactSeller');
   const buyIconName: React.ComponentProps<typeof Ionicons>['name'] =
     showCheckoutGate
       ? 'sparkles'
-      : isPro
+      : isBuyNow
         ? 'bag-handle'
         : 'chatbubble-ellipses';
   const buyAccessibilityLabel = showCheckoutGate
     ? t('pro.checkoutGateAriaLabel')
-    : t('actionRail.buyAriaLabel');
-  const onPressLeading = showCheckoutGate ? openUpgradeFlow : onPressBuy;
+    : isBuyNow
+      ? t('actionRail.buyAriaLabel')
+      : t('marketplace.contactSellerAriaLabel');
+  const onPressLeading = showCheckoutGate
+    ? openUpgradeFlow
+    : isBuyNow
+      ? onPressBuy
+      : onPressMessageSeller;
 
   return (
     <View style={[styles.container, { bottom: tabBarHeight + 16 }]}>

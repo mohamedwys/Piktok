@@ -63,6 +63,7 @@ export type ProductRow = {
   bookmarks_count: number;
   created_at: string;
   featured_until: string | null;
+  purchase_mode: 'buy_now' | 'contact_only';
   seller: SellerRow;
 };
 
@@ -110,6 +111,7 @@ export function rowToProduct(row: ProductRow): Product {
     },
     createdAt: row.created_at,
     featuredUntil: row.featured_until ?? null,
+    purchaseMode: row.purchase_mode,
   };
 }
 
@@ -335,6 +337,12 @@ export async function searchNearbyProducts(
       bookmarks_count: row.bookmarks_count,
       created_at: row.created_at,
       featured_until: row.featured_until,
+      // Phase 8 / Track B: the `products_within_radius` RPC does not
+      // yet project purchase_mode; default to 'contact_only' here so
+      // the feed action rail keeps the safe Contact branch until the
+      // RPC is updated in a follow-up. Direct table reads (e.g.
+      // getProductById) return the true value via `select('*')`.
+      purchase_mode: 'contact_only',
       seller: row.seller,
     };
     items.push({
@@ -479,6 +487,10 @@ export async function feedForYou(
       bookmarks_count: row.bookmarks_count,
       created_at: row.created_at,
       featured_until: row.featured_until,
+      // Phase 8 / Track B: see same note in searchNearbyProducts. The
+      // `feed_for_you` RPC does not yet project purchase_mode; default
+      // to 'contact_only' here.
+      purchase_mode: 'contact_only',
       seller: row.seller,
     };
     items.push({

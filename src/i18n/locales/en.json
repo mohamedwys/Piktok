@@ -77,6 +77,7 @@
     "buyNow": "Buy now",
     "loadProductError": "Couldn't load the product.",
     "contactSeller": "Contact",
+    "contactSellerAriaLabel": "Send a message to the seller",
     "makeOffer": "Make an offer",
     "messageSeller": "Send a message",
     "addBookmark": "Add to favorites",
@@ -310,7 +311,9 @@
     "locationGeocodeFailedBody": "Location not found — your listing won't appear in radius searches.",
     "listingCapReachedTitle": "Limit reached",
     "listingCapReachedBody": "You've hit the {{cap}}-listing limit. Upgrade to Pro for unlimited listings.",
-    "upgradeToPro": "Upgrade to Pro"
+    "upgradeToPro": "Upgrade to Pro",
+    "allowDirectBuy": "Allow direct purchase",
+    "allowDirectBuyHint": "Buyers can pay through the app and ship to their address. Without this, buyers can only message you."
   },
   "orders": {
     "title": "My orders",
@@ -320,6 +323,10 @@
     "statusFailed": "Failed",
     "statusCancelled": "Cancelled",
     "statusRefunded": "Refunded"
+  },
+  "sales": {
+    "title": "Sales",
+    "empty": "No sales yet."
   },
   "checkout": {
     "starting": "Preparing checkout...",

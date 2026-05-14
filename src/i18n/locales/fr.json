@@ -77,6 +77,7 @@
     "buyNow": "Acheter maintenant",
     "loadProductError": "Impossible de charger le produit.",
     "contactSeller": "Contacter",
+    "contactSellerAriaLabel": "Envoyer un message au vendeur",
     "makeOffer": "Faire une offre",
     "messageSeller": "Envoyer un message",
     "addBookmark": "Ajouter aux favoris",
@@ -310,7 +311,9 @@
     "locationGeocodeFailedBody": "Emplacement non trouvé — votre annonce n'apparaîtra pas dans les recherches par rayon.",
     "listingCapReachedTitle": "Limite atteinte",
     "listingCapReachedBody": "Vous avez atteint la limite de {{cap}} annonces. Passez Pro pour publier sans limite.",
-    "upgradeToPro": "Passer Pro"
+    "upgradeToPro": "Passer Pro",
+    "allowDirectBuy": "Autoriser l'achat direct",
+    "allowDirectBuyHint": "Les acheteurs peuvent payer dans l'application et recevoir le produit chez eux. Sans cela, les acheteurs ne peuvent que vous contacter."
   },
   "orders": {
     "title": "Mes commandes",
@@ -320,6 +323,10 @@
     "statusFailed": "Échouée",
     "statusCancelled": "Annulée",
     "statusRefunded": "Remboursée"
+  },
+  "sales": {
+    "title": "Ventes",
+    "empty": "Aucune vente pour le moment."
   },
   "checkout": {
     "starting": "Préparation du paiement...",

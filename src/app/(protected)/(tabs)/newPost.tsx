@@ -31,6 +31,7 @@ import {
   type CreateProductInput,
   type UpdateProductInput,
 } from '@/features/marketplace';
+import { useIsPro } from '@/features/marketplace/hooks/useIsPro';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
@@ -75,6 +76,12 @@ export default function SellScreen(): React.ReactElement {
   const [shippingFree, setShippingFree] = useState(false);
   const [pickupAvailable, setPickupAvailable] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
+  // Phase 8 / Track B: hybrid purchase model. Pro sellers can opt
+  // into direct-buy on a per-listing basis; non-Pro sellers keep the
+  // default 'contact_only' and the toggle is not rendered for them.
+  const isPro = useIsPro();
+  const [purchaseMode, setPurchaseMode] =
+    useState<'buy_now' | 'contact_only'>('contact_only');
   const submittingRef = useRef(false);
 
   const hasUserLocation = useHasLocation();
@@ -135,6 +142,7 @@ export default function SellScreen(): React.ReactElement {
     setMediaUri(existing.media.url);
     setMediaType(existing.media.type);
     setMediaIsOriginal(true);
+    setPurchaseMode(existing.purchaseMode ?? 'contact_only');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing?.id]);
 
@@ -262,6 +270,7 @@ export default function SellScreen(): React.ReactElement {
         stockAvailable,
         shippingFree,
         pickupAvailable,
+        purchaseMode,
         location: location.trim() || undefined,
         newMediaUri: mediaIsOriginal ? undefined : mediaUri,
         newMediaType: mediaIsOriginal ? undefined : mediaType,
@@ -302,6 +311,7 @@ export default function SellScreen(): React.ReactElement {
       stockAvailable,
       shippingFree,
       pickupAvailable,
+      purchaseMode,
       location: trimmedLocation || undefined,
       ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : null),
     };
@@ -322,6 +332,7 @@ export default function SellScreen(): React.ReactElement {
         setStockAvailable(true);
         setShippingFree(false);
         setPickupAvailable(false);
+        setPurchaseMode('contact_only');
         router.replace('/(protected)/(tabs)');
       },
       onError: (err) => {
@@ -594,6 +605,27 @@ export default function SellScreen(): React.ReactElement {
                 thumbColor="#fff"
               />
             </View>
+
+            {isPro ? (
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={styles.switchLabel}>
+                    {t('sell.allowDirectBuy')}
+                  </Text>
+                  <Text style={styles.switchHint}>
+                    {t('sell.allowDirectBuyHint')}
+                  </Text>
+                </View>
+                <Switch
+                  value={purchaseMode === 'buy_now'}
+                  onValueChange={(v) =>
+                    setPurchaseMode(v ? 'buy_now' : 'contact_only')
+                  }
+                  trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ) : null}
 
             <Pressable
               onPress={() => {
@@ -897,6 +929,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  switchHint: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    marginTop: 2,
   },
   submitButton: {
     backgroundColor: colors.brand,

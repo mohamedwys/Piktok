@@ -22,12 +22,34 @@ Deno.serve(async (req) => {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
+      // Phase 8 / Track B: persist shipping_details + customer_details
+      // from the completed session. `shipping_details` is widened via
+      // assertion because some SDK TS versions don't expose it on
+      // Checkout.Session directly; the runtime field is present.
+      const shipping = (session as Stripe.Checkout.Session & {
+        shipping_details?: Stripe.Checkout.Session.ShippingDetails | null;
+      }).shipping_details ?? null;
+      const customer = session.customer_details ?? null;
+      const shippingAddress = shipping?.address
+        ? {
+            name:        shipping.name ?? null,
+            line1:       shipping.address.line1 ?? null,
+            line2:       shipping.address.line2 ?? null,
+            city:        shipping.address.city ?? null,
+            postal_code: shipping.address.postal_code ?? null,
+            state:       shipping.address.state ?? null,
+            country:     shipping.address.country ?? null,
+          }
+        : null;
       await supabase
         .from('orders')
         .update({
           status: 'paid',
           stripe_payment_intent_id: session.payment_intent as string,
           updated_at: new Date().toISOString(),
+          shipping_address: shippingAddress,
+          buyer_phone: customer?.phone ?? null,
+          buyer_name:  customer?.name ?? shipping?.name ?? null,
         })
         .eq('stripe_session_id', session.id);
     } else if (event.type === 'checkout.session.expired') {

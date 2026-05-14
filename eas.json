@@ -14,7 +14,8 @@
         "EXPO_PUBLIC_HCAPTCHA_SITE_KEY": "<HCAPTCHA_SITE_KEY_PLACEHOLDER>",
         "EXPO_PUBLIC_SENTRY_DSN": "PLACEHOLDER_SENTRY_DSN_MOBILE",
         "SENTRY_AUTH_TOKEN": "PLACEHOLDER_SENTRY_AUTH_TOKEN"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -28,7 +29,8 @@
         "EXPO_PUBLIC_HCAPTCHA_SITE_KEY": "<HCAPTCHA_SITE_KEY_PLACEHOLDER>",
         "EXPO_PUBLIC_SENTRY_DSN": "PLACEHOLDER_SENTRY_DSN_MOBILE",
         "SENTRY_AUTH_TOKEN": "PLACEHOLDER_SENTRY_AUTH_TOKEN"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -46,7 +48,8 @@
         "EXPO_PUBLIC_HCAPTCHA_SITE_KEY": "<HCAPTCHA_SITE_KEY_PLACEHOLDER>",
         "EXPO_PUBLIC_SENTRY_DSN": "PLACEHOLDER_SENTRY_DSN_MOBILE",
         "SENTRY_AUTH_TOKEN": "PLACEHOLDER_SENTRY_AUTH_TOKEN"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {

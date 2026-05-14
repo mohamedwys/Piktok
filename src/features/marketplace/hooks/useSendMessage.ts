@@ -6,6 +6,7 @@ import {
 } from '@/features/marketplace/services/messaging';
 import { sendPushNotification } from '@/services/pushNotifications';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { captureEvent } from '@/lib/posthog';
 import { CONVERSATIONS_KEY } from './useConversations';
 
 type SendMessageInput = {
@@ -73,6 +74,8 @@ export function useSendMessage(
           prev?.map((m) => (m.id === ctx.tempId ? serverRow : m)) ?? [serverRow],
       );
       void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+
+      captureEvent('message_sent', { is_offer: vars.kind === 'offer' });
 
       if (pushTarget?.recipientUserId) {
         const isOffer = vars.kind === 'offer';

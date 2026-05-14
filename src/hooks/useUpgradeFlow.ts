@@ -17,6 +17,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { MY_SUBSCRIPTION_KEY } from '@/features/marketplace/hooks/useMySubscription';
 import { WEB_BASE_URL, WEB_UPGRADE_PATH } from '@/lib/web/constants';
+import { captureEvent } from '@/lib/posthog';
 
 const PRODUCT_ID = 'mony_pro_monthly';
 
@@ -58,6 +59,7 @@ export function useUpgradeFlow(): () => Promise<void> {
   const inFlight = useRef(false);
 
   return useCallback(async () => {
+    captureEvent('pro_upgrade_cta_tapped');
     if (inFlight.current) return;
     inFlight.current = true;
 
@@ -151,6 +153,10 @@ async function runNativeIapPurchase(): Promise<void> {
     throw new Error('iap_validation_failed');
   }
 
+  captureEvent('subscription_started', {
+    provider: Platform.OS === 'ios' ? 'apple_iap' : 'google_play',
+  });
+
   await finishTransaction({ purchase, isConsumable: false });
 }
 
@@ -164,6 +170,7 @@ async function runWebStripeFlow(): Promise<void> {
     !error && typeof minted === 'string' && minted.length > 0
       ? minted
       : `${WEB_BASE_URL}${WEB_UPGRADE_PATH}`;
+  captureEvent('subscription_started', { provider: 'stripe' });
   await WebBrowser.openBrowserAsync(urlToOpen, {
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
   });

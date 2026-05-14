@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,6 +32,7 @@ import { useCreateCheckoutSession } from '@/features/marketplace/hooks/useCreate
 import { useMySeller } from '@/features/marketplace/hooks/useMySeller';
 import { useTrackProductView } from '@/features/marketplace/hooks/useTrackProductView';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { captureEvent } from '@/lib/posthog';
 import { StripeNotConfiguredError } from '@/features/marketplace/services/orders';
 import { sendMessage as sendMessageDirect } from '@/features/marketplace/services/messaging';
 import { attributeIcon } from '@/features/marketplace/utils/attributeIcon';
@@ -106,6 +107,11 @@ export default function ProductDetailSheet(): React.ReactElement {
   // H.13: fire one product-view event per productId per app session.
   // Owner self-views are filtered server-side by track_product_view.
   useTrackProductView(productId);
+  useEffect(() => {
+    if (productId) {
+      captureEvent('product_viewed', { product_id: productId });
+    }
+  }, [productId]);
   const fmt = useFormatDisplayPrice();
   const isBookmarked = useIsBookmarked(product?.id ?? '');
   const toggleBookmark = useToggleBookmark(product?.id ?? '');

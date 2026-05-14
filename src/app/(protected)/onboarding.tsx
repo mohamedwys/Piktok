@@ -21,6 +21,7 @@ import {
   MY_SELLER_KEY,
 } from '@/features/marketplace/hooks/useMySeller';
 import { setMyInterests } from '@/features/marketplace/services/sellers';
+import { captureEvent } from '@/lib/posthog';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { toast } from '@/shared/ui/toast';
 import { colors, radii, spacing } from '@/theme';
@@ -139,6 +140,7 @@ export default function Onboarding(): React.ReactElement {
     try {
       setSubmitting(true);
       await setMyInterests(Array.from(selected));
+      captureEvent('onboarding_completed', { interest_count: selected.size });
       await qc.invalidateQueries({ queryKey: MY_SELLER_KEY });
       toast.success(t('onboarding.saved'));
       // Edit-mode re-entry: skip the notification prompt entirely.

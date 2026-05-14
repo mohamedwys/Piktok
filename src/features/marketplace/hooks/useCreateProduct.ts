@@ -3,6 +3,7 @@ import {
   createProduct,
   type CreateProductInput,
 } from '@/features/marketplace/services/sell';
+import { captureEvent } from '@/lib/posthog';
 import { MY_PRODUCTS_KEY } from './useMyProducts';
 import { MY_PRODUCTS_COUNT_KEY } from './useMyProductsCount';
 
@@ -15,6 +16,7 @@ export function useCreateProduct() {
     mutationFn: (input) =>
       createProduct({ ...input, clientRequestId: globalThis.crypto.randomUUID() }),
     onSuccess: () => {
+      captureEvent('listing_created', { has_media: true });
       qc.invalidateQueries({ queryKey: ['marketplace', 'products', 'list'] });
       qc.invalidateQueries({ queryKey: MY_PRODUCTS_KEY });
       // Keep the listing-cap state fresh after a successful create so

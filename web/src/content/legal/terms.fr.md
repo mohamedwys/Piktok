@@ -1,5 +1,15 @@
 # Conditions d'utilisation
 
+<!--
+  TODO (Phase 8 / Track E): translate the "Objectionable Content &
+  Moderation" section added to terms.en.md between section 6
+  ("Acceptable Use") and section 7 ("Transactions"). Includes the
+  24-hour moderation SLA copy required by App Store Review Guideline
+  1.2. Web admin dashboard is EN-only in v1; FR translation should
+  ship before any FR-speaking admin is onboarded OR before the
+  marketplace is promoted in a French-speaking market.
+-->
+
 _Dernière mise à jour : [DATE]_
 
 ## 1. Acceptation

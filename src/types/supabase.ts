@@ -655,6 +655,7 @@ export type Database = {
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
           stripe_payouts_enabled: boolean
+          suspended_at: string | null
           tos_accepted_at: string | null
           user_id: string | null
           verified: boolean
@@ -684,6 +685,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
+          suspended_at?: string | null
           tos_accepted_at?: string | null
           user_id?: string | null
           verified?: boolean
@@ -713,6 +715,7 @@ export type Database = {
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
           stripe_payouts_enabled?: boolean
+          suspended_at?: string | null
           tos_accepted_at?: string | null
           user_id?: string | null
           verified?: boolean
@@ -1000,6 +1003,10 @@ export type Database = {
             }
             Returns: string
           }
+      admin_resolve_report: {
+        Args: { p_action?: string; p_report_id: string; p_resolution: string }
+        Returns: undefined
+      }
       block_user: { Args: { p_user_id: string }; Returns: undefined }
       check_rate_limit: {
         Args: { p_bucket: string; p_limit: number; p_window?: string }

@@ -47,6 +47,41 @@ You may not:
 Violations may result in immediate account termination and reporting to authorities
 where applicable.
 
+## Objectionable Content & Moderation
+
+Mony is a marketplace platform with user-generated content (UGC). We
+are committed to maintaining a safe environment.
+
+### Reporting
+
+Any user may report a product listing, comment, message, or seller
+profile they consider objectionable using the in-app "Report" action.
+
+### Moderation timeline
+
+Reported content is reviewed by our moderation team within twenty-four
+(24) hours of submission. Content found in violation of these Terms will
+be removed; the responsible user may be warned, suspended, or
+permanently banned at our sole discretion.
+
+### Repeat violations
+
+Repeated violations may result in permanent account termination without
+refund of any active subscription period.
+
+### Blocking
+
+You may block another user at any time via their profile page. Blocked
+users cannot message you and their listings will not appear in your
+feed.
+
+### Prohibited content
+
+Mony prohibits, without limitation: illegal goods; counterfeit items;
+weapons; controlled substances; sexually explicit content; hate speech;
+harassment; impersonation; scams or fraudulent listings; and any
+content that infringes intellectual property rights.
+
 ## 7. Transactions
 
 Transactions occur directly between users. Mony does not act as an escrow agent,

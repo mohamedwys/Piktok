@@ -375,6 +375,89 @@ export async function fetchProductsWithStats(
 }
 
 /**
+ * Server-derived state for the post-IAP onboarding checklist surfaced
+ * on the Pro home (Track 7). Mirrors mobile's
+ * `useProOnboardingState` predicates exactly so the same step
+ * completes-state shows on both surfaces.
+ *
+ * Predicate sources:
+ *   - Step 2 (profile completion) — `bio` AND `location_text` both
+ *     trim-non-empty on the seller row.
+ *   - Step 3 (enable buy-now on a listing) — at least one product
+ *     row owned by the seller has `purchase_mode = 'buy_now'`.
+ *   - Step 4 (boost a listing) — `last_boost_at IS NOT NULL` on the
+ *     seller row.
+ *
+ * Skip state lives in the BROWSER (localStorage flags
+ * `mony.pro.step3Skipped` / `mony.pro.step4Skipped`) so it cannot be
+ * resolved server-side. The Client Component merges these flags with
+ * the server result before deciding which rows to render as done.
+ *
+ * `allServerDone` is convenience for the rare case where every
+ * predicate is satisfied without any skip flag — the page can short-
+ * circuit and skip mounting the checklist Client Component at all.
+ * When false (the common case), the Client Component is still
+ * needed to consult localStorage.
+ *
+ * Two cheap reads, both RLS-allowed against the cookie-authed client:
+ *   1. SELECT bio, location_text, last_boost_at FROM sellers WHERE id = sellerId
+ *   2. SELECT id FROM products WHERE seller_id = sellerId AND
+ *      purchase_mode = 'buy_now' LIMIT 1   (existence check only)
+ */
+export type ProOnboardingServerState = {
+  step2Done: boolean;
+  step3Done: boolean;
+  step4Done: boolean;
+  allServerDone: boolean;
+};
+
+type SellerOnboardingRow = {
+  bio: string | null;
+  location_text: string | null;
+  last_boost_at: string | null;
+};
+
+export async function fetchOnboardingState(
+  supabase: SupabaseClient,
+  sellerId: string,
+): Promise<ProOnboardingServerState> {
+  const [sellerResult, buyNowResult] = await Promise.all([
+    supabase
+      .from('sellers')
+      .select('bio, location_text, last_boost_at')
+      .eq('id', sellerId)
+      .maybeSingle(),
+    supabase
+      .from('products')
+      .select('id')
+      .eq('seller_id', sellerId)
+      .eq('purchase_mode', 'buy_now')
+      .limit(1),
+  ]);
+
+  if (sellerResult.error) {
+    throw new Error(
+      `fetchOnboardingState seller read failed (seller ${sellerId}): ${sellerResult.error.message}`,
+    );
+  }
+  if (buyNowResult.error) {
+    throw new Error(
+      `fetchOnboardingState products read failed (seller ${sellerId}): ${buyNowResult.error.message}`,
+    );
+  }
+
+  const seller = (sellerResult.data ?? null) as SellerOnboardingRow | null;
+  const bio = seller?.bio ?? '';
+  const locationText = seller?.location_text ?? '';
+  const step2Done = bio.trim().length > 0 && locationText.trim().length > 0;
+  const step3Done = (buyNowResult.data?.length ?? 0) > 0;
+  const step4Done = seller?.last_boost_at != null;
+  const allServerDone = step2Done && step3Done && step4Done;
+
+  return { step2Done, step3Done, step4Done, allServerDone };
+}
+
+/**
  * Fetch a single product row scoped to the calling seller. The query
  * narrows by both `id` and `seller_id` so a forged `productId` belonging
  * to another seller resolves to NULL — RLS would also block it, but the

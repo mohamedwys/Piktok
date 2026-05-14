@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   JS-only fixes can now ship via `eas update --branch production`
   without an App Store review cycle. See
   [docs/observability/ota-update-workflow.md](docs/observability/ota-update-workflow.md).
+- GitHub Actions CI: every PR runs mobile + web typechecks +
+  expo-doctor. Every main push auto-deploys edge functions to the
+  production Supabase project. See
+  [docs/devops/ci-cd.md](docs/devops/ci-cd.md).
 
 ### Changed
 

@@ -11,6 +11,16 @@ or Play Console. Each unchecked item is a known rejection risk.
 - [ ] `npx expo-doctor` is acceptable (the React 19.2 / RN 0.81.6 drift
       from Track C and the metro projectRoot warning are known)
 
+## 0.5. CI / GitHub Actions
+
+- [ ] Repository secrets configured in GitHub:
+      EXPO_TOKEN, SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF
+- [ ] Branch protection on `main`: require CI status checks to pass
+- [ ] CI green on the most recent main commit (Actions tab shows
+      green checks for the merge that includes Phase 9)
+- [ ] At least one edge-deploy run has succeeded (verify by editing
+      any supabase/functions/**/index.ts with a no-op comment + merging)
+
 ## 1. Supabase Production Project
 
 ### Migrations

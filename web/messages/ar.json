@@ -328,6 +328,14 @@
       "deleteConfirm": "هل تريد حذف هذا الإعلان؟ لا يمكن التراجع عن هذا الإجراء.",
       "deleteError": "فشل الحذف: {message}"
     },
+    "profile": {
+      "heading": "تعديل ملف Pro الخاص بك",
+      "fieldBio": "نبذة شخصية",
+      "fieldLocation": "الموقع",
+      "save": "حفظ الملف",
+      "saving": "جارٍ الحفظ…",
+      "saveError": "فشل الحفظ: {message}"
+    },
     "onboarding": {
       "heading": "أكمِل إعداد حساب Pro الخاص بك",
       "progressLabel": "{done} من {total} مكتملة",

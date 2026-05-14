@@ -326,6 +326,14 @@
       "deleteConfirm": "Supprimer cette annonce ? Cette action est irréversible.",
       "deleteError": "Échec de la suppression : {message}"
     },
+    "profile": {
+      "heading": "Modifier votre profil Pro",
+      "fieldBio": "Bio",
+      "fieldLocation": "Localisation",
+      "save": "Enregistrer le profil",
+      "saving": "Enregistrement…",
+      "saveError": "Échec de l'enregistrement : {message}"
+    },
     "onboarding": {
       "heading": "Finalisez votre compte Pro",
       "progressLabel": "{done} sur {total} terminés",

@@ -326,6 +326,14 @@
       "deleteConfirm": "Delete this listing? This cannot be undone.",
       "deleteError": "Delete failed: {message}"
     },
+    "profile": {
+      "heading": "Edit your Pro profile",
+      "fieldBio": "Bio",
+      "fieldLocation": "Location",
+      "save": "Save profile",
+      "saving": "Saving…",
+      "saveError": "Save failed: {message}"
+    },
     "onboarding": {
       "heading": "Finish setting up your Pro account",
       "progressLabel": "{done} of {total} done",

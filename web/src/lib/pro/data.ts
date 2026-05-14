@@ -62,6 +62,58 @@ export type DashboardSummary = {
 };
 
 /**
+ * One row of the products list (Track 3). Mirrors the RETURN TABLE of
+ * `get_seller_products_with_stats()` from 20260810. The RPC is the only
+ * read path for this surface — it joins product_views and orders on the
+ * SECURITY DEFINER side, so the JS client gets aggregates without needing
+ * direct access to the RLS-protected `product_views` table.
+ *
+ * Title is the localized jsonb (`{ fr: string, en: string }`); the list
+ * UI picks the locale at render time.
+ */
+export type SellerProductStatsRow = {
+  product_id: string;
+  title: { fr?: string; en?: string } | null;
+  thumbnail_url: string | null;
+  price: number;
+  currency: string;
+  purchase_mode: 'buy_now' | 'contact_only';
+  featured_until: string | null;
+  created_at: string;
+  views_7d: number;
+  paid_sales_count: number;
+  gross_revenue: number;
+};
+
+/**
+ * Full product row for the editor (Track 3). Pulled directly from
+ * `public.products` so every editable column is in scope. RLS on the
+ * cookie-authed client scopes the read to the caller's own rows; the
+ * `seller_id` equality below is defense-in-depth.
+ */
+export type SellerProductFullRow = {
+  id: string;
+  seller_id: string;
+  title: { fr?: string; en?: string } | null;
+  description: { fr?: string; en?: string } | null;
+  price: number;
+  currency: string;
+  purchase_mode: 'buy_now' | 'contact_only';
+  media_type: string;
+  media_url: string;
+  thumbnail_url: string | null;
+  stock_available: boolean;
+  stock_label: { fr?: string; en?: string } | null;
+  shipping_free: boolean;
+  shipping_label: { fr?: string; en?: string } | null;
+  pickup_available: boolean;
+  location: string | null;
+  dimensions: string | null;
+  featured_until: string | null;
+  created_at: string;
+};
+
+/**
  * Tagged-union event for the recent-activity feed. The page Server
  * Component renders one row per event. New event kinds (e.g.,
  * 'follow_received', 'product_liked') would extend this union.
@@ -277,4 +329,81 @@ export async function fetchRecentActivity(
 
   events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   return events.slice(0, limit);
+}
+
+/**
+ * Fetch every product owned by the caller, each row carrying server-side
+ * view + sales aggregates from `get_seller_products_with_stats`. The RPC
+ * is SECURITY DEFINER and resolves the seller from `auth.uid()`, so no
+ * sellerId argument is needed — the cookie-authed client identifies the
+ * caller and the RPC scopes the result set.
+ *
+ * Returns an empty array for sellers with no listings (the RPC emits zero
+ * rows, not NULL). Throws on RPC failure so the Server Component's error
+ * boundary handles surfacing the error.
+ *
+ * Numeric coercion mirrors `fetchDashboardSummary`: `numeric` columns
+ * occasionally arrive as strings depending on the driver path, so we
+ * Number() at the boundary instead of pushing the conversion into every
+ * caller.
+ */
+export async function fetchProductsWithStats(
+  supabase: SupabaseClient,
+): Promise<SellerProductStatsRow[]> {
+  const { data, error } = await supabase.rpc(
+    'get_seller_products_with_stats',
+  );
+  if (error) {
+    throw new Error(
+      `fetchProductsWithStats failed: ${error.message}`,
+    );
+  }
+  const rows = (data ?? []) as SellerProductStatsRow[];
+  return rows.map((row) => ({
+    product_id: row.product_id,
+    title: row.title,
+    thumbnail_url: row.thumbnail_url,
+    price: Number(row.price),
+    currency: row.currency,
+    purchase_mode: row.purchase_mode,
+    featured_until: row.featured_until,
+    created_at: row.created_at,
+    views_7d: Number(row.views_7d),
+    paid_sales_count: Number(row.paid_sales_count),
+    gross_revenue: Number(row.gross_revenue),
+  }));
+}
+
+/**
+ * Fetch a single product row scoped to the calling seller. The query
+ * narrows by both `id` and `seller_id` so a forged `productId` belonging
+ * to another seller resolves to NULL — RLS would also block it, but the
+ * explicit seller filter keeps the failure mode crisp ("not found"
+ * instead of "RLS denied").
+ *
+ * Returns `null` when no matching row exists; the caller (Server
+ * Component) is responsible for `notFound()` on null. Throws on database
+ * error so it bubbles to the nearest error boundary.
+ */
+export async function fetchProductForEdit(
+  supabase: SupabaseClient,
+  productId: string,
+  sellerId: string,
+): Promise<SellerProductFullRow | null> {
+  const { data, error } = await supabase
+    .from('products')
+    .select(
+      'id, seller_id, title, description, price, currency, purchase_mode, media_type, media_url, thumbnail_url, stock_available, stock_label, shipping_free, shipping_label, pickup_available, location, dimensions, featured_until, created_at',
+    )
+    .eq('id', productId)
+    .eq('seller_id', sellerId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(
+      `fetchProductForEdit failed (product ${productId}): ${error.message}`,
+    );
+  }
+  if (!data) return null;
+  const row = data as unknown as SellerProductFullRow;
+  return { ...row, price: Number(row.price) };
 }

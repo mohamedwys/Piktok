@@ -32,20 +32,27 @@ export function ProTabs({
   const t = useTranslations('pro.tabs');
   const pathname = usePathname();
 
-  const tabs: { href: string; label: string }[] = [
+  const tabs: { href: string; label: string; tourId?: string }[] = [
     { href: '/pro', label: t('home') },
-    { href: '/pro/products', label: t('products') },
-    { href: '/pro/orders', label: t('orders') },
+    { href: '/pro/products', label: t('products'), tourId: 'tab-products' },
+    { href: '/pro/orders', label: t('orders'), tourId: 'tab-orders' },
   ];
   if (showCustomers) {
     tabs.push({ href: '/pro/customers', label: t('customers') });
   }
   if (showAnalytics) {
-    tabs.push({ href: '/pro/analytics', label: t('analytics') });
+    tabs.push({
+      href: '/pro/analytics',
+      label: t('analytics'),
+      tourId: 'tab-analytics',
+    });
   }
 
   return (
-    <nav className="sticky top-0 z-10 border-b border-border bg-background/70 backdrop-blur-md">
+    <nav
+      data-tour="tabs"
+      className="sticky top-0 z-10 border-b border-border bg-background/70 backdrop-blur-md"
+    >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-1 overflow-x-auto px-6 lg:px-8">
         {tabs.map((tab) => {
           const isActive =
@@ -56,6 +63,7 @@ export function ProTabs({
             <Link
               key={tab.href}
               href={tab.href}
+              data-tour={tab.tourId}
               className={`relative whitespace-nowrap px-3 py-4 text-sm font-medium transition-colors ${
                 isActive
                   ? 'text-text-primary'

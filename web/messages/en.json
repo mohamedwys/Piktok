@@ -326,6 +326,16 @@
       "deleteConfirm": "Delete this listing? This cannot be undone.",
       "deleteError": "Delete failed: {message}"
     },
+    "tour": {
+      "step1": "Navigate your Pro tools here.",
+      "step2": "Track your revenue at a glance.",
+      "step3": "Bulk-edit your listings.",
+      "step4": "Filter and export your sales.",
+      "step5": "See trends across your listings.",
+      "next": "Next",
+      "done": "Done",
+      "skip": "Skip tour"
+    },
     "profile": {
       "heading": "Edit your Pro profile",
       "fieldBio": "Bio",

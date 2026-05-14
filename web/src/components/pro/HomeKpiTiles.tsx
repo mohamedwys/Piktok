@@ -136,6 +136,7 @@ export async function HomeKpiTiles({
       {tiles.map(({ key, Icon, label, value }) => (
         <div
           key={key}
+          data-tour={key === 'revenueAllTime' ? 'kpi-revenue' : undefined}
           className="rounded-xl border border-border bg-surface-elevated p-5"
         >
           <Icon

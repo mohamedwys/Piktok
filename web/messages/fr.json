@@ -326,6 +326,16 @@
       "deleteConfirm": "Supprimer cette annonce ? Cette action est irréversible.",
       "deleteError": "Échec de la suppression : {message}"
     },
+    "tour": {
+      "step1": "Accédez à vos outils Pro depuis ici.",
+      "step2": "Suivez votre chiffre d'affaires en un coup d'œil.",
+      "step3": "Modifiez vos annonces en lot.",
+      "step4": "Filtrez et exportez vos ventes.",
+      "step5": "Visualisez les tendances de vos annonces.",
+      "next": "Suivant",
+      "done": "Terminé",
+      "skip": "Passer la visite"
+    },
     "profile": {
       "heading": "Modifier votre profil Pro",
       "fieldBio": "Bio",

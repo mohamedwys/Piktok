@@ -7,6 +7,7 @@ import { HomeKpiTiles } from '@/components/pro/HomeKpiTiles';
 import { RecentActivityFeed } from '@/components/pro/RecentActivityFeed';
 import { ProHomeViewedBeacon } from '@/components/pro/ProHomeViewedBeacon';
 import { ProOnboardingChecklist } from '@/components/pro/ProOnboardingChecklist';
+import { ProDashboardTour } from '@/components/pro/ProDashboardTour';
 import {
   fetchDashboardSummary,
   fetchOnboardingState,
@@ -83,6 +84,7 @@ export default async function ProHomePage({
       </Container>
 
       <ProHomeViewedBeacon userId={userId} />
+      <ProDashboardTour />
     </main>
   );
 }

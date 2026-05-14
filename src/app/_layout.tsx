@@ -2,8 +2,8 @@ import "@/lib/polyfills"
 import { DarkTheme, ThemeProvider } from "@react-navigation/native"
 import { Stack } from "expo-router"
 import { QueryClientProvider } from "@tanstack/react-query"
-import { useEffect, useState } from "react"
-import { Text as RNText, TextInput as RNTextInput } from "react-native"
+import { useEffect, useRef, useState } from "react"
+import { Platform, Text as RNText, TextInput as RNTextInput } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import * as SplashScreen from "expo-splash-screen"
 import { StatusBar } from "expo-status-bar"
@@ -21,12 +21,14 @@ import {
 } from "@expo-google-fonts/fraunces"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { initI18n } from "@/i18n"
-import { syncAuthFromSupabase, subscribeToAuthChanges } from "@/stores/useAuthStore"
+import { syncAuthFromSupabase, subscribeToAuthChanges, useAuthStore } from "@/stores/useAuthStore"
 import { registerSupabaseAuthAppStateListener } from "@/lib/supabase"
 import { usePushNotifications } from "@/hooks/usePushNotifications"
 import { useExchangeRatesRefresh } from "@/hooks/useExchangeRatesRefresh"
 import { typography } from "@/theme"
 import { queryClient } from "@/lib/queryClient"
+import { restoreSubscriptions } from "@/features/iap/services"
+import { MY_SUBSCRIPTION_KEY } from "@/features/marketplace/hooks/useMySubscription"
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -88,6 +90,23 @@ export default function RootLayout() {
       unsub()
     }
   }, [])
+
+  // Silent restore-purchases on app launch (Phase 8 / Track A). Catches
+  // the reinstall / new-device case where Apple or Google know about an
+  // active subscription but the local DB row is missing. Web has no IAP.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const qc = useRef(queryClient).current
+  useEffect(() => {
+    if (!isI18nReady || !isAuthenticated) return
+    if (Platform.OS === 'web') return
+    let cancelled = false
+    void restoreSubscriptions().then(() => {
+      if (!cancelled) {
+        void qc.invalidateQueries({ queryKey: MY_SUBSCRIPTION_KEY })
+      }
+    })
+    return () => { cancelled = true }
+  }, [isI18nReady, isAuthenticated, qc])
 
   usePushNotifications()
   useExchangeRatesRefresh()

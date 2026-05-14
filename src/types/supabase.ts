@@ -217,6 +217,51 @@ export type Database = {
           },
         ]
       }
+      iap_receipts: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          original_transaction_id: string | null
+          platform: string
+          product_id: string | null
+          raw_receipt: string
+          raw_response: Json | null
+          transaction_id: string | null
+          user_id: string
+          verification_status: string
+          verified_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          original_transaction_id?: string | null
+          platform: string
+          product_id?: string | null
+          raw_receipt: string
+          raw_response?: Json | null
+          transaction_id?: string | null
+          user_id: string
+          verification_status: string
+          verified_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          original_transaction_id?: string | null
+          platform?: string
+          product_id?: string | null
+          raw_receipt?: string
+          raw_response?: Json | null
+          transaction_id?: string | null
+          user_id?: string
+          verification_status?: string
+          verified_at?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -701,47 +746,56 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          apple_transaction_id: string | null
           cancel_at_period_end: boolean
           canceled_at: string | null
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
+          google_purchase_token: string | null
           id: string
+          payment_provider: string
           seller_id: string
           status: string
-          stripe_customer_id: string
-          stripe_price_id: string
-          stripe_subscription_id: string
+          stripe_customer_id: string | null
+          stripe_price_id: string | null
+          stripe_subscription_id: string | null
           trial_end: string | null
           updated_at: string | null
         }
         Insert: {
+          apple_transaction_id?: string | null
           cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          google_purchase_token?: string | null
           id?: string
+          payment_provider?: string
           seller_id: string
           status: string
-          stripe_customer_id: string
-          stripe_price_id: string
-          stripe_subscription_id: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
           trial_end?: string | null
           updated_at?: string | null
         }
         Update: {
+          apple_transaction_id?: string | null
           cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          google_purchase_token?: string | null
           id?: string
+          payment_provider?: string
           seller_id?: string
           status?: string
-          stripe_customer_id?: string
-          stripe_price_id?: string
-          stripe_subscription_id?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
           trial_end?: string | null
           updated_at?: string | null
         }

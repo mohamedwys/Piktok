@@ -462,6 +462,7 @@
     "upgradeCta": "Voir les statistiques"
   },
   "settings": {
+    "manageSubscription": "Gérer l'abonnement",
     "legal": {
       "title": "Mentions légales",
       "privacy": "Politique de confidentialité",

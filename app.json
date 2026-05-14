@@ -90,7 +90,8 @@
           "locationWhenInUsePermission": "Cette application utilise votre position pour afficher les annonces près de vous."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

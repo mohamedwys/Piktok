@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -306,6 +308,17 @@ export default function ProfileScreen(): React.ReactElement {
   const onPressLocation = (): void => {
     void lightHaptic();
     router.push('/(protected)/edit-seller-profile');
+  };
+
+  const onPressManageSubscription = (): void => {
+    void lightHaptic();
+    if (Platform.OS === 'ios') {
+      void Linking.openURL('itms-apps://apps.apple.com/account/subscriptions');
+    } else if (Platform.OS === 'android') {
+      void Linking.openURL('https://play.google.com/store/account/subscriptions');
+    } else {
+      void WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/account/subscription`);
+    }
   };
 
   const onPressSignOut = (): void => {
@@ -685,6 +698,14 @@ export default function ProfileScreen(): React.ReactElement {
                   icon="eye-outline"
                   label={t('profile.viewPublic')}
                   onPress={onPressViewPublic}
+                  showDivider
+                />
+              ) : null}
+              {isPro ? (
+                <AccountRow
+                  icon="card-outline"
+                  label={t('settings.manageSubscription')}
+                  onPress={onPressManageSubscription}
                   showDivider
                 />
               ) : null}

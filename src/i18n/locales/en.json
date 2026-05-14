@@ -462,6 +462,7 @@
     "upgradeCta": "View analytics"
   },
   "settings": {
+    "manageSubscription": "Manage subscription",
     "legal": {
       "title": "Legal",
       "privacy": "Privacy Policy",

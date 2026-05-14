@@ -448,7 +448,8 @@
     "checkoutGateAriaLabel": "Activer le paiement direct — passer Pro",
     "upgradeCta": "Passer Pro",
     "upgradeErrorTitle": "Échec de l'ouverture",
-    "upgradeErrorBody": "Veuillez réessayer dans un instant."
+    "upgradeErrorBody": "Veuillez réessayer dans un instant.",
+    "openWebDashboard": "Ouvrir mon tableau de bord Pro"
   },
   "boost": {
     "buttonIdle": "Booster cette annonce",

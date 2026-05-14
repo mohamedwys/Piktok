@@ -448,7 +448,8 @@
     "checkoutGateAriaLabel": "Activate direct checkout — upgrade to Pro",
     "upgradeCta": "Upgrade to Pro",
     "upgradeErrorTitle": "Couldn't open upgrade",
-    "upgradeErrorBody": "Please try again in a moment."
+    "upgradeErrorBody": "Please try again in a moment.",
+    "openWebDashboard": "Open my Pro dashboard"
   },
   "boost": {
     "buttonIdle": "Boost listing",

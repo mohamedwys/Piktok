@@ -439,7 +439,7 @@ export default function ProfileScreen(): React.ReactElement {
     } else if (Platform.OS === 'android') {
       void Linking.openURL('https://play.google.com/store/account/subscriptions');
     } else {
-      void WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/account/subscription`);
+      void WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/dashboard`);
     }
   };
 
@@ -856,6 +856,16 @@ export default function ProfileScreen(): React.ReactElement {
                   icon="eye-outline"
                   label={t('profile.viewPublic')}
                   onPress={onPressViewPublic}
+                  showDivider
+                />
+              ) : null}
+              {isPro ? (
+                <AccountRow
+                  icon="globe-outline"
+                  label={t('pro.openWebDashboard')}
+                  onPress={() =>
+                    WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/pro`)
+                  }
                   showDivider
                 />
               ) : null}

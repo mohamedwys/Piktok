@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useTranslation } from 'react-i18next'
 import { IconButton, Pressable, Text } from '@/components/ui'
 import { colors, spacing, zIndex as zIndexTokens } from '@/theme'
+import { getFeatureFlag } from '@/lib/posthog'
 import LocationChip from './LocationChip'
 
 /**
@@ -88,6 +89,10 @@ export function MarketplaceHeader({
   const { width } = useWindowDimensions()
   const { t } = useTranslation()
 
+  // Kill switch read once at mount. Default = true so a Posthog
+  // outage does NOT take down the feature.
+  const forYouEnabled = getFeatureFlag('show_for_you_tab', true)
+
   // Honor horizontal safe-area insets (notched landscape iPhones) AND
   // cluster the row into a centered max-width region on wide screens.
   const usableWidth = Math.max(0, width - insets.left - insets.right)
@@ -129,11 +134,13 @@ export function MarketplaceHeader({
             gap: spacing.lg,
           }}
         >
-          <TabItem
-            label={t('feed.forYou')}
-            active={activeTab === 'pour-toi'}
-            onPress={onPressForYou}
-          />
+          {forYouEnabled ? (
+            <TabItem
+              label={t('feed.forYou')}
+              active={activeTab === 'pour-toi'}
+              onPress={onPressForYou}
+            />
+          ) : null}
           <TabItem
             label={t('feed.marketplace')}
             active={activeTab === 'marketplace'}

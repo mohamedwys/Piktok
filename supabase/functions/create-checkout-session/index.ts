@@ -81,6 +81,24 @@ Deno.serve(async (req) => {
       return new Response('not_purchasable', { status: 403, headers: corsHeaders });
     }
 
+    // Track F.C.1: Connect pre-flight. Refuse to mint a Checkout Session
+    // for a seller who has not finished Stripe Connect onboarding. With
+    // destination_charges + on_behalf_of below, Stripe would reject the
+    // session creation anyway if charges_enabled is false -- this check
+    // surfaces the failure as a clean 'pro_not_connected' 403 the mobile
+    // client can render as "this seller is not accepting payments yet"
+    // rather than a generic 500.
+    const { data: sellerRow, error: sellerErr } = await supabase
+      .from('sellers')
+      .select('stripe_account_id, stripe_charges_enabled')
+      .eq('id', product.seller_id)
+      .maybeSingle();
+    if (sellerErr) throw sellerErr;
+    if (!sellerRow?.stripe_charges_enabled || !sellerRow.stripe_account_id) {
+      return new Response('pro_not_connected', { status: 403, headers: corsHeaders });
+    }
+    const sellerStripeAccountId = sellerRow.stripe_account_id as string;
+
     const productName = (product.title?.fr || product.title?.en || 'Product') as string;
 
     // Validate return_url against the closed allowlist; fall back to the
@@ -93,6 +111,18 @@ Deno.serve(async (req) => {
     const successUrl = `${baseUrl}?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}?cancelled=1`;
 
+    // Track F.C.1: destination-charge math.
+    //   amountCents          = product price in cents (charged to the buyer)
+    //   applicationFeeCents  = platform commission, 2% of amountCents
+    //
+    // 2% is hard-coded for v1 per Phase F.B; if the platform later
+    // negotiates per-seller rates, move this to a sellers.commission_bps
+    // column. Math.round both ways protects against floating-point drift
+    // (e.g. 19.99 * 100 = 1998.9999... in IEEE-754) -- Stripe rejects
+    // non-integer cent amounts.
+    const amountCents = Math.round(Number(product.price) * 100);
+    const applicationFeeCents = Math.round(amountCents * 0.02);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -102,7 +132,7 @@ Deno.serve(async (req) => {
             name: productName,
             images: product.thumbnail_url ? [product.thumbnail_url as string] : undefined,
           },
-          unit_amount: Math.round(Number(product.price) * 100),
+          unit_amount: amountCents,
         },
         quantity: 1,
       }],
@@ -120,6 +150,21 @@ Deno.serve(async (req) => {
       },
       phone_number_collection: { enabled: true },
       customer_creation: 'always',
+      // Track F.C.1: Connect destination charge.
+      //   - transfer_data.destination routes the post-fee remainder to
+      //     the seller's connected account.
+      //   - application_fee_amount carves out the platform commission.
+      //   - on_behalf_of attributes the charge to the seller for
+      //     statement-descriptor + Stripe-fee-bearing purposes (the
+      //     seller's account pays Stripe's processing fees, not the
+      //     platform).
+      payment_intent_data: {
+        application_fee_amount: applicationFeeCents,
+        transfer_data: {
+          destination: sellerStripeAccountId,
+        },
+        on_behalf_of: sellerStripeAccountId,
+      },
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
@@ -137,6 +182,10 @@ Deno.serve(async (req) => {
         seller_id: product.seller_id,
         amount: product.price,
         currency: product.currency,
+        // orders.application_fee_amount is numeric(10,2) in CURRENCY
+        // units (not cents), to match `amount`. Stripe's API speaks
+        // cents; the orders table speaks currency. Convert once here.
+        application_fee_amount: applicationFeeCents / 100,
         stripe_session_id: session.id,
         status: 'pending',
       })

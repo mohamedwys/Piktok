@@ -376,20 +376,26 @@ export async function fetchProductsWithStats(
 
 /**
  * Server-derived state for the post-IAP onboarding checklist surfaced
- * on the Pro home (Track 7). Mirrors mobile's
- * `useProOnboardingState` predicates exactly so the same step
- * completes-state shows on both surfaces.
+ * on the Pro home (Track 7, retrofitted in F.C.4). Mirrors mobile's
+ * `useProOnboardingState` predicates for the legacy steps and adds a
+ * Connect step gating Buy Now on Stripe charge capability.
  *
  * Predicate sources:
  *   - Step 2 (profile completion) — `bio` AND `location_text` both
  *     trim-non-empty on the seller row.
- *   - Step 3 (enable buy-now on a listing) — at least one product
+ *   - Step 3 (Connect Stripe) — `stripe_charges_enabled = true` on
+ *     the seller row. NOT skippable — Connect is required for Buy Now
+ *     to work end-to-end (destination charges land on the connected
+ *     account, see F.C.1).
+ *   - Step 4 (enable buy-now on a listing) — at least one product
  *     row owned by the seller has `purchase_mode = 'buy_now'`.
- *   - Step 4 (boost a listing) — `last_boost_at IS NOT NULL` on the
+ *   - Step 5 (boost a listing) — `last_boost_at IS NOT NULL` on the
  *     seller row.
  *
  * Skip state lives in the BROWSER (localStorage flags
- * `mony.pro.step3Skipped` / `mony.pro.step4Skipped`) so it cannot be
+ * `mony.pro.step3Skipped` / `mony.pro.step4Skipped` — note these keys
+ * were named before the renumber and now correspond to Step 4 / Step 5
+ * client-side, see ProOnboardingChecklist.tsx) so it cannot be
  * resolved server-side. The Client Component merges these flags with
  * the server result before deciding which rows to render as done.
  *
@@ -400,7 +406,8 @@ export async function fetchProductsWithStats(
  * needed to consult localStorage.
  *
  * Two cheap reads, both RLS-allowed against the cookie-authed client:
- *   1. SELECT bio, location_text, last_boost_at FROM sellers WHERE id = sellerId
+ *   1. SELECT bio, location_text, last_boost_at, stripe_charges_enabled
+ *      FROM sellers WHERE id = sellerId
  *   2. SELECT id FROM products WHERE seller_id = sellerId AND
  *      purchase_mode = 'buy_now' LIMIT 1   (existence check only)
  */
@@ -408,6 +415,7 @@ export type ProOnboardingServerState = {
   step2Done: boolean;
   step3Done: boolean;
   step4Done: boolean;
+  step5Done: boolean;
   allServerDone: boolean;
 };
 
@@ -415,6 +423,7 @@ type SellerOnboardingRow = {
   bio: string | null;
   location_text: string | null;
   last_boost_at: string | null;
+  stripe_charges_enabled: boolean | null;
 };
 
 export async function fetchOnboardingState(
@@ -424,7 +433,7 @@ export async function fetchOnboardingState(
   const [sellerResult, buyNowResult] = await Promise.all([
     supabase
       .from('sellers')
-      .select('bio, location_text, last_boost_at')
+      .select('bio, location_text, last_boost_at, stripe_charges_enabled')
       .eq('id', sellerId)
       .maybeSingle(),
     supabase
@@ -450,11 +459,12 @@ export async function fetchOnboardingState(
   const bio = seller?.bio ?? '';
   const locationText = seller?.location_text ?? '';
   const step2Done = bio.trim().length > 0 && locationText.trim().length > 0;
-  const step3Done = (buyNowResult.data?.length ?? 0) > 0;
-  const step4Done = seller?.last_boost_at != null;
-  const allServerDone = step2Done && step3Done && step4Done;
+  const step3Done = seller?.stripe_charges_enabled === true;
+  const step4Done = (buyNowResult.data?.length ?? 0) > 0;
+  const step5Done = seller?.last_boost_at != null;
+  const allServerDone = step2Done && step3Done && step4Done && step5Done;
 
-  return { step2Done, step3Done, step4Done, allServerDone };
+  return { step2Done, step3Done, step4Done, step5Done, allServerDone };
 }
 
 /**

@@ -13,19 +13,31 @@ import { PostHogProvider as PostHogReactProvider } from 'posthog-js/react';
  * every route — locale-prefixed and outside-the-locale-tree alike
  * (e.g. `/auth/callback`) — gets the SDK.
  *
- * Why `capture_pageview: false`:
- *   Next.js App Router navigations are client-side and don't trigger
- *   the SDK's default `$pageview` autocapture (which listens on
- *   `popstate` / full document loads only). `PostHogPageView` fires
- *   `$pageview` manually on every pathname / searchParams change so
- *   route transitions surface in PostHog.
+ * SDK config rationale:
  *
- * Why `person_profiles: 'identified_only'`:
- *   We only want PostHog Person profiles to exist for authenticated
- *   users (already covered by the existing `captureEvent(..., userId)`
- *   pattern in `posthog-client.ts` and by `posthog.identify()` once
- *   we wire that on auth-callback). Anonymous events still flow but
- *   don't create person rows — keeps the event volume reasonable.
+ *   - `capture_pageview: false` + manual fire in `PostHogPageView`.
+ *     Next.js App Router navigations are client-side and don't trigger
+ *     the SDK's default `$pageview` autocapture (which listens on
+ *     `popstate` / full document loads only). We push `$pageview`
+ *     manually on every pathname / searchParams change instead.
+ *
+ *   - `capture_pageleave: true`. The SDK's default behavior is
+ *     `'if_capture_pageview'`, which silently turns pageleave off
+ *     when `capture_pageview` is false. We need it on explicitly so
+ *     PostHog can compute bounce rate, session duration, and scroll
+ *     depth (the latter rides on the pageleave payload as
+ *     `$prev_pageview_max_scroll_percentage`).
+ *
+ *   - `capture_performance: { web_vitals: true }`. Enables LCP / INP /
+ *     CLS reporting via the `$web_vitals` event. Off by default in
+ *     posthog-js; PostHog's Web Vitals dashboard depends on it.
+ *
+ *   - `person_profiles: 'identified_only'`. We only want PostHog Person
+ *     profiles to exist for authenticated users (already covered by the
+ *     existing `captureEvent(..., userId)` pattern in
+ *     `posthog-client.ts` and by `posthog.identify()` once we wire that
+ *     on auth-callback). Anonymous events still flow but don't create
+ *     person rows — keeps the event volume reasonable.
  *
  * Falls back to a no-op render when the env vars are unset (local
  * dev without PostHog wired up). Mirrors the silent fallback in
@@ -44,6 +56,8 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       posthog.init(apiKey, {
         api_host: host,
         capture_pageview: false,
+        capture_pageleave: true,
+        capture_performance: { web_vitals: true },
         person_profiles: 'identified_only',
       });
     }

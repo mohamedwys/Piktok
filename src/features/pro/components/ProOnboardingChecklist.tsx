@@ -2,17 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Surface, Text } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
 import { captureEvent } from '@/lib/posthog';
+import { WEB_BASE_URL } from '@/lib/web/constants';
 import { useProOnboardingState } from '@/features/pro/hooks/useProOnboardingState';
 import {
   useProOnboardingSkips,
   type SkippableStep,
 } from '@/stores/useProOnboardingSkips';
 
-type StepNumber = 2 | 3 | 4;
+type StepNumber = 2 | 3 | 4 | 5;
 
 type RowProps = {
   step: StepNumber;
@@ -23,6 +25,8 @@ type RowProps = {
   skipLabel?: string;
   onPress: () => void;
   onSkip?: () => void;
+  disabled?: boolean;
+  disabledCaption?: string;
 };
 
 function ChecklistRow({
@@ -34,16 +38,20 @@ function ChecklistRow({
   skipLabel,
   onPress,
   onSkip,
+  disabled = false,
+  disabledCaption,
 }: RowProps): React.ReactElement {
+  const isInert = done || disabled;
   return (
     <Pressable
       onPress={onPress}
-      haptic={done ? undefined : 'light'}
-      pressScale={done ? 1 : 0.98}
-      style={styles.row}
+      haptic={isInert ? undefined : 'light'}
+      pressScale={isInert ? 1 : 0.98}
+      style={[styles.row, disabled && !done ? styles.rowDisabled : null]}
       accessibilityRole="button"
       accessibilityLabel={title}
-      disabled={done}
+      accessibilityState={{ disabled }}
+      disabled={isInert}
     >
       <View style={styles.rowLeft}>
         {done ? (
@@ -77,7 +85,17 @@ function ChecklistRow({
         >
           {body}
         </Text>
-        {showSkip && skipLabel && onSkip ? (
+        {disabled && !done && disabledCaption ? (
+          <Text
+            variant="caption"
+            color="tertiary"
+            style={styles.disabledCaption}
+            numberOfLines={1}
+          >
+            {disabledCaption}
+          </Text>
+        ) : null}
+        {!disabled && showSkip && skipLabel && onSkip ? (
           <Pressable
             onPress={onSkip}
             haptic="light"
@@ -92,7 +110,7 @@ function ChecklistRow({
           </Pressable>
         ) : null}
       </View>
-      {!done ? (
+      {!isInert ? (
         <Ionicons
           name="chevron-forward"
           size={18}
@@ -106,12 +124,23 @@ function ChecklistRow({
 /**
  * Post-IAP onboarding checklist rendered on the profile screen.
  *
- * Visible only when the user is Pro and at least one of Steps 2–4 is
+ * Visible only when the user is Pro and at least one of Steps 2–5 is
  * still outstanding. Each row's done-state is derived in
  * `useProOnboardingState` from existing data (seller bio +
- * locationText, products purchase_mode, seller lastBoostAt) plus
- * per-step MMKV skip flags. Steps 3 and 4 are skippable; Step 2
- * (profile completion) is not.
+ * locationText, seller stripeChargesEnabled, products purchase_mode,
+ * seller lastBoostAt) plus per-step MMKV skip flags. Steps 4 (Buy
+ * Now) and 5 (Boost) are skippable; Step 2 (profile) and Step 3
+ * (Connect Stripe) are not.
+ *
+ * Step 3 (F.C.6 retrofit) deep-links to the web /pro/payouts page
+ * via WebBrowser — Stripe Connect onboarding lives on web and the
+ * webhook updates `stripeChargesEnabled` on the seller row, which
+ * flips this row to done on the next refetch.
+ *
+ * Step 4 (Buy Now) is gated on Step 3 (Connect): if Connect isn't
+ * done yet the row renders disabled with a "Complete Connect first"
+ * caption — the server-side checkout function already refuses
+ * non-Connected sellers, so this is purely seller-side UX.
  *
  * Telemetry transitions are observed via refs over the previous
  * done-state so a step completion fires exactly once per transition,
@@ -126,6 +155,7 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
   const prevStep2 = useRef(state.step2Done);
   const prevStep3 = useRef(state.step3Done);
   const prevStep4 = useRef(state.step4Done);
+  const prevStep5 = useRef(state.step5Done);
   const prevAllDone = useRef(state.allDone);
 
   useEffect(() => {
@@ -138,21 +168,32 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
     if (!prevStep4.current && state.step4Done) {
       captureEvent('pro_checklist_step_completed', { step: 4 });
     }
+    if (!prevStep5.current && state.step5Done) {
+      captureEvent('pro_checklist_step_completed', { step: 5 });
+    }
     if (!prevAllDone.current && state.allDone) {
       captureEvent('pro_checklist_completed');
     }
     prevStep2.current = state.step2Done;
     prevStep3.current = state.step3Done;
     prevStep4.current = state.step4Done;
+    prevStep5.current = state.step5Done;
     prevAllDone.current = state.allDone;
-  }, [state.step2Done, state.step3Done, state.step4Done, state.allDone]);
+  }, [
+    state.step2Done,
+    state.step3Done,
+    state.step4Done,
+    state.step5Done,
+    state.allDone,
+  ]);
 
   if (!state.visible) return null;
 
   const doneCount =
-    (state.step2Done ? 1 : 0) +
-    (state.step3Done ? 1 : 0) +
-    (state.step4Done ? 1 : 0);
+    (state.step2Done ? 1 : 0)
+    + (state.step3Done ? 1 : 0)
+    + (state.step4Done ? 1 : 0)
+    + (state.step5Done ? 1 : 0);
 
   const goToEditProfile = (): void => {
     if (state.step2Done) return;
@@ -160,14 +201,20 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
     router.push('/(protected)/edit-seller-profile');
   };
 
-  const goToMyListings = (step: 3 | 4) => (): void => {
-    if (step === 3 && state.step3Done) return;
-    if (step === 4 && state.step4Done) return;
+  const goToConnect = (): void => {
+    if (state.step3Done) return;
+    captureEvent('pro_checklist_step_started', { step: 3 });
+    void WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/pro/payouts`);
+  };
+
+  const goToMyListings = (step: 4 | 5) => (): void => {
+    if (step === 4 && (state.step4Done || !state.step3Done)) return;
+    if (step === 5 && state.step5Done) return;
     captureEvent('pro_checklist_step_started', { step });
     router.push('/(protected)/(tabs)/profile');
   };
 
-  const handleSkip = (step: SkippableStep, telemetryStep: 3 | 4) => (): void => {
+  const handleSkip = (step: SkippableStep, telemetryStep: 4 | 5) => (): void => {
     captureEvent('pro_checklist_step_skipped', { step: telemetryStep });
     skipStep(step);
   };
@@ -185,7 +232,7 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
           {t('pro.onboarding.title')}
         </Text>
         <Text variant="caption" color="secondary" weight="semibold">
-          {t('pro.onboarding.progressLabel', { done: doneCount, total: 3 })}
+          {t('pro.onboarding.progressLabel', { done: doneCount, total: 4 })}
         </Text>
       </View>
       <View style={styles.progressTrack}>
@@ -212,10 +259,8 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
           done={state.step3Done}
           title={t('pro.onboarding.step3.title')}
           body={t('pro.onboarding.step3.body')}
-          showSkip
-          skipLabel={t('pro.onboarding.step3.skip')}
-          onPress={goToMyListings(3)}
-          onSkip={handleSkip('step3', 3)}
+          showSkip={false}
+          onPress={goToConnect}
         />
         <View style={styles.rowDivider} />
         <ChecklistRow
@@ -227,6 +272,19 @@ export function ProOnboardingChecklist(): React.ReactElement | null {
           skipLabel={t('pro.onboarding.step4.skip')}
           onPress={goToMyListings(4)}
           onSkip={handleSkip('step4', 4)}
+          disabled={!state.step3Done}
+          disabledCaption={t('pro.onboarding.step4.disabledCaption')}
+        />
+        <View style={styles.rowDivider} />
+        <ChecklistRow
+          step={5}
+          done={state.step5Done}
+          title={t('pro.onboarding.step5.title')}
+          body={t('pro.onboarding.step5.body')}
+          showSkip
+          skipLabel={t('pro.onboarding.step5.skip')}
+          onPress={goToMyListings(5)}
+          onSkip={handleSkip('step5', 5)}
         />
       </View>
     </Surface>
@@ -259,6 +317,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  rowDisabled: {
+    opacity: 0.5,
   },
   rowLeft: {
     width: 28,
@@ -300,6 +361,10 @@ const styles = StyleSheet.create({
   },
   skipText: {
     textDecorationLine: 'underline',
+  },
+  disabledCaption: {
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
   },
 });
 

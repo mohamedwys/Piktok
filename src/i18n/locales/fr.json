@@ -450,6 +450,13 @@
     "upgradeErrorTitle": "Échec de l'ouverture",
     "upgradeErrorBody": "Veuillez réessayer dans un instant.",
     "openWebDashboard": "Ouvrir mon tableau de bord Pro",
+    "sellFlow": {
+      "gate": {
+        "caption": "Configurez les paiements directs pour activer l'achat immédiat",
+        "cta": "Configurer",
+        "opening": "Ouverture..."
+      }
+    },
     "welcome": {
       "title": "Bienvenue dans Mony Pro",
       "subhead": "Trois nouveautés vous attendent.",

@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuthStore } from '@/stores/useAuthStore';
 import {
   useCreateProduct,
@@ -32,7 +33,10 @@ import {
   type UpdateProductInput,
 } from '@/features/marketplace';
 import { useIsPro } from '@/features/marketplace/hooks/useIsPro';
+import { useStripeConnectStatus } from '@/features/marketplace/hooks/useStripeConnectStatus';
 import { lightHaptic, mediumHaptic } from '@/features/marketplace/utils/haptics';
+import { captureEvent } from '@/lib/posthog';
+import { WEB_BASE_URL } from '@/lib/web/constants';
 import { CATEGORIES, findCategory } from '@/features/marketplace/data/categories';
 import { getLocalized } from '@/i18n/getLocalized';
 import { colors } from '@/theme';
@@ -79,10 +83,17 @@ export default function SellScreen(): React.ReactElement {
   // Phase 8 / Track B: hybrid purchase model. Pro sellers can opt
   // into direct-buy on a per-listing basis; non-Pro sellers keep the
   // default 'contact_only' and the toggle is not rendered for them.
+  // Track F.C.5 gates the toggle further on Stripe Connect readiness:
+  // a Pro seller without an active Connect account sees the toggle
+  // disabled with a deep-link to /pro/payouts on web.
   const isPro = useIsPro();
+  const connect = useStripeConnectStatus();
+  const showBuyNowGate = isPro && !connect.loading && !connect.isConnected;
   const [purchaseMode, setPurchaseMode] =
     useState<'buy_now' | 'contact_only'>('contact_only');
+  const [openingConnect, setOpeningConnect] = useState(false);
   const submittingRef = useRef(false);
+  const gateShownRef = useRef(false);
 
   const hasUserLocation = useHasLocation();
   const userDisplayName = useUserLocation((s) => s.displayName);
@@ -115,6 +126,30 @@ export default function SellScreen(): React.ReactElement {
       return;
     }
     openLocationSheet();
+  };
+
+  // F.C.5 gate telemetry: fire once per mount when the gate first appears.
+  // The ref prevents duplicate events on benign re-renders (form state,
+  // keyboard transitions). It resets on screen unmount, which matches the
+  // intended "once per session of this screen" semantic.
+  useEffect(() => {
+    if (showBuyNowGate && !gateShownRef.current) {
+      gateShownRef.current = true;
+      captureEvent('pro_buy_now_gate_shown', { surface: 'mobile_sell' });
+    }
+  }, [showBuyNowGate]);
+
+  const onPressSetUpConnect = async (): Promise<void> => {
+    void lightHaptic();
+    captureEvent('pro_buy_now_gate_tapped');
+    setOpeningConnect(true);
+    try {
+      await WebBrowser.openBrowserAsync(`${WEB_BASE_URL}/pro/payouts`, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      });
+    } finally {
+      setOpeningConnect(false);
+    }
   };
 
   const selectedCategory = categoryId ? findCategory(categoryId) : undefined;
@@ -607,23 +642,62 @@ export default function SellScreen(): React.ReactElement {
             </View>
 
             {isPro ? (
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={styles.switchLabel}>
-                    {t('sell.allowDirectBuy')}
-                  </Text>
-                  <Text style={styles.switchHint}>
-                    {t('sell.allowDirectBuyHint')}
-                  </Text>
+              <View>
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text
+                      style={[
+                        styles.switchLabel,
+                        showBuyNowGate && styles.switchLabelDisabled,
+                      ]}
+                    >
+                      {t('sell.allowDirectBuy')}
+                    </Text>
+                    <Text style={styles.switchHint}>
+                      {t('sell.allowDirectBuyHint')}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={purchaseMode === 'buy_now'}
+                    onValueChange={(v) =>
+                      setPurchaseMode(v ? 'buy_now' : 'contact_only')
+                    }
+                    disabled={showBuyNowGate}
+                    trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
+                    thumbColor="#fff"
+                  />
                 </View>
-                <Switch
-                  value={purchaseMode === 'buy_now'}
-                  onValueChange={(v) =>
-                    setPurchaseMode(v ? 'buy_now' : 'contact_only')
-                  }
-                  trackColor={{ false: 'rgba(255,255,255,0.15)', true: colors.brand }}
-                  thumbColor="#fff"
-                />
+                {showBuyNowGate ? (
+                  <View style={styles.gateBox}>
+                    <Text style={styles.gateCaption}>
+                      {t('pro.sellFlow.gate.caption')}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        void onPressSetUpConnect();
+                      }}
+                      disabled={openingConnect}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('pro.sellFlow.gate.caption')}
+                      style={({ pressed }) => [
+                        styles.gateCta,
+                        (pressed || openingConnect) && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.gateCtaText}>
+                        {openingConnect
+                          ? t('pro.sellFlow.gate.opening')
+                          : t('pro.sellFlow.gate.cta')}
+                      </Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={14}
+                        color={colors.brand}
+                      />
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -934,6 +1008,43 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
     marginTop: 2,
+  },
+  switchLabelDisabled: {
+    color: 'rgba(255,255,255,0.45)',
+  },
+  gateBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 90, 92, 0.10)',
+    borderColor: 'rgba(255, 90, 92, 0.25)',
+    borderWidth: 1,
+    gap: 12,
+  },
+  gateCaption: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  gateCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 90, 92, 0.16)',
+  },
+  gateCtaText: {
+    color: colors.brand,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   submitButton: {
     backgroundColor: colors.brand,

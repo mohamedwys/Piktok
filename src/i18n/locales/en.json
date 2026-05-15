@@ -450,6 +450,13 @@
     "upgradeErrorTitle": "Couldn't open upgrade",
     "upgradeErrorBody": "Please try again in a moment.",
     "openWebDashboard": "Open my Pro dashboard",
+    "sellFlow": {
+      "gate": {
+        "caption": "Set up direct payments to enable Buy Now",
+        "cta": "Set up",
+        "opening": "Opening..."
+      }
+    },
     "welcome": {
       "title": "Welcome to Mony Pro",
       "subhead": "Three things unlock right now.",

@@ -113,6 +113,84 @@ export async function requireProApi(): Promise<ProApiResult> {
   return { ok: true, userId: user.id, sellerId: seller.id };
 }
 
+/**
+ * Stricter Pro gate that ALSO requires Stripe Connect to be active —
+ * meaning `stripe_account_id` is set AND `stripe_charges_enabled = true`
+ * on the caller's seller row. Tracks F.C.2+ surfaces (open Stripe
+ * Express Dashboard, refund a destination charge, surface payout
+ * timeseries) all need an active Connect account; without one there's
+ * no Stripe-side anchor to act against.
+ *
+ * Failure mode is DELIBERATELY NOT a redirect to /upgrade — the caller
+ * IS Pro, they just haven't finished Connect. Bouncing them through the
+ * upgrade funnel would be confusing. Instead they go to /pro/payouts,
+ * which is the onboarding surface itself.
+ *
+ * Returns the resolved `stripeAccountId` so callers don't need a second
+ * round-trip; every consumer of this gate is about to call a Stripe
+ * Connect API that needs the account id anyway.
+ */
+export async function requireProConnected(
+  locale: string,
+): Promise<{ userId: string; sellerId: string; stripeAccountId: string }> {
+  const { userId, sellerId } = await requirePro(locale);
+
+  const supabase = await getSupabaseServer();
+  const { data: seller } = await supabase
+    .from('sellers')
+    .select('stripe_account_id, stripe_charges_enabled')
+    .eq('id', sellerId)
+    .maybeSingle();
+
+  const accountId = (seller?.stripe_account_id as string | null) ?? null;
+  const chargesEnabled = seller?.stripe_charges_enabled === true;
+  if (!accountId || !chargesEnabled) {
+    redirect({ href: '/pro/payouts', locale });
+  }
+
+  // After redirect throws, narrowing isn't possible — execution only
+  // reaches here on the happy path.
+  return { userId, sellerId, stripeAccountId: accountId! };
+}
+
+type ProConnectedApiResult =
+  | { ok: true; userId: string; sellerId: string; stripeAccountId: string }
+  | { ok: false; response: Response };
+
+/**
+ * Route-handler equivalent of `requireProConnected`. Discriminated-union
+ * shape mirrors `requireProApi`; the `pro_not_connected` error code is
+ * distinct from `pro_required` so a Connect-gated client can branch UI
+ * (e.g., "finish onboarding" CTA) instead of the upgrade funnel.
+ */
+export async function requireProConnectedApi(): Promise<ProConnectedApiResult> {
+  const gate = await requireProApi();
+  if (!gate.ok) return gate;
+
+  const supabase = await getSupabaseServer();
+  const { data: seller } = await supabase
+    .from('sellers')
+    .select('stripe_account_id, stripe_charges_enabled')
+    .eq('id', gate.sellerId)
+    .maybeSingle();
+
+  const accountId = (seller?.stripe_account_id as string | null) ?? null;
+  const chargesEnabled = seller?.stripe_charges_enabled === true;
+  if (!accountId || !chargesEnabled) {
+    return {
+      ok: false,
+      response: jsonError('pro_not_connected', 403),
+    };
+  }
+
+  return {
+    ok: true,
+    userId: gate.userId,
+    sellerId: gate.sellerId,
+    stripeAccountId: accountId,
+  };
+}
+
 function jsonError(error: string, status: number): Response {
   return new Response(JSON.stringify({ error }), {
     status,

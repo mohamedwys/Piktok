@@ -986,3 +986,108 @@ export async function fetchTopListings(
       gross_revenue: row.gross_revenue,
     }));
 }
+
+// -----------------------------------------------------------------------------
+// Stripe Connect onboarding (Track F.C.2) — payouts dashboard read.
+// -----------------------------------------------------------------------------
+
+/**
+ * The six Stripe Connect columns mirrored from the Express account onto
+ * `public.sellers`. The first three landed in 20260511 (with `is_pro` and
+ * the subscription columns); the latter three landed in 20260820 alongside
+ * F.C.1 to back the destination-charge marketplace flow.
+ *
+ * `status` is derived from the raw flags so consumers branch on a single
+ * tag instead of juggling three booleans:
+ *   - `accountId === null` → `'not_started'` (never clicked Connect).
+ *   - `accountId !== null && detailsSubmitted === false` → `'in_progress'`
+ *     (started Stripe's onboarding form but didn't finish it).
+ *   - `accountId !== null && chargesEnabled === true` → `'connected'`
+ *     (Stripe greenlit charges; payouts may still be pending verification
+ *     but the seller can transact).
+ *   - `accountId !== null && detailsSubmitted === true && chargesEnabled
+ *     === false` is ALSO `'in_progress'` — Stripe is reviewing KYC.
+ *     The same "Resume" CTA + a verification-pending sub-copy applies;
+ *     the page distinguishes it from the unfinished-form case via
+ *     `detailsSubmitted` itself.
+ */
+export type SellerConnectState = {
+  accountId: string | null;
+  country: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  onboardedAt: string | null;
+  status: 'not_started' | 'in_progress' | 'connected';
+};
+
+type SellerConnectRow = {
+  stripe_account_id: string | null;
+  stripe_country: string | null;
+  stripe_charges_enabled: boolean | null;
+  stripe_payouts_enabled: boolean | null;
+  stripe_details_submitted: boolean | null;
+  stripe_onboarded_at: string | null;
+};
+
+/**
+ * Fetch the seller's Stripe Connect state.
+ *
+ * One cookie-authed read against the seller's own row — RLS allows it via
+ * the existing "sellers user read own" policy (the Connect columns are
+ * authenticated-only per 20260622 and 20260820). Returns a normalized
+ * shape; the `'connected'` derivation lives here so the page Server
+ * Component branches on a single tag instead of repeating the logic
+ * across the three render paths and the polling endpoint.
+ *
+ * Throws on read error so the Server Component surfaces it through the
+ * nearest error boundary — same posture as the other fetchers in this
+ * module.
+ */
+export async function fetchSellerConnectState(
+  supabase: SupabaseClient,
+  sellerId: string,
+): Promise<SellerConnectState> {
+  const { data, error } = await supabase
+    .from('sellers')
+    .select(
+      'stripe_account_id, stripe_country, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarded_at',
+    )
+    .eq('id', sellerId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `fetchSellerConnectState failed (seller ${sellerId}): ${error.message}`,
+    );
+  }
+
+  const row = (data ?? null) as SellerConnectRow | null;
+  const accountId = row?.stripe_account_id ?? null;
+  const chargesEnabled = row?.stripe_charges_enabled === true;
+  const payoutsEnabled = row?.stripe_payouts_enabled === true;
+  const detailsSubmitted = row?.stripe_details_submitted === true;
+
+  let status: SellerConnectState['status'];
+  if (accountId === null) {
+    status = 'not_started';
+  } else if (chargesEnabled) {
+    status = 'connected';
+  } else {
+    // Two flavors of in_progress collapse here:
+    //   - detailsSubmitted=false → seller bailed mid-form, "Resume" CTA.
+    //   - detailsSubmitted=true  → KYC pending at Stripe, same CTA but
+    //     surfaced sub-copy can flag the verification-pending sub-state.
+    status = 'in_progress';
+  }
+
+  return {
+    accountId,
+    country: row?.stripe_country ?? null,
+    chargesEnabled,
+    payoutsEnabled,
+    detailsSubmitted,
+    onboardedAt: row?.stripe_onboarded_at ?? null,
+    status,
+  };
+}

@@ -477,11 +477,16 @@
         "body": "Ajoutez une courte bio et votre localisation pour rassurer les acheteurs."
       },
       "step3": {
-        "title": "Activez l'achat direct sur une annonce",
-        "body": "Ouvrez une annonce et passez-la en achat direct pour éviter la discussion.",
-        "skip": "Passer"
+        "title": "Configurez vos paiements directs",
+        "body": "Connectez Stripe pour recevoir vos paiements directement."
       },
       "step4": {
+        "title": "Activez l'achat direct sur une annonce",
+        "body": "Ouvrez une annonce et passez-la en achat direct pour éviter la discussion.",
+        "skip": "Passer",
+        "disabledCaption": "Configurez Stripe d'abord."
+      },
+      "step5": {
         "title": "Boostez votre meilleure annonce",
         "body": "Utilisez le boost de la semaine pour mettre une annonce en tête de feed.",
         "skip": "Passer"

@@ -477,11 +477,16 @@
         "body": "Add a short bio and your location so buyers know who they're dealing with."
       },
       "step3": {
-        "title": "Activate Buy Now on a listing",
-        "body": "Open a listing and switch it to direct purchase to skip the chat.",
-        "skip": "Skip"
+        "title": "Set up direct payments",
+        "body": "Connect Stripe to receive payments directly."
       },
       "step4": {
+        "title": "Activate Buy Now on a listing",
+        "body": "Open a listing and switch it to direct purchase to skip the chat.",
+        "skip": "Skip",
+        "disabledCaption": "Complete Connect first."
+      },
+      "step5": {
         "title": "Boost your best listing",
         "body": "Use this week's boost to feature a listing at the top of the feed.",
         "skip": "Skip"

@@ -691,6 +691,163 @@ export function filterOrdersByQuery(
 }
 
 // -----------------------------------------------------------------------------
+// Seller customers (Track 5) — reads for /pro/customers and the per-buyer
+// detail page.
+// -----------------------------------------------------------------------------
+
+/**
+ * One row of the Pro customers list. Mirrors the RETURN TABLE of
+ * `get_seller_customers()` from 20260810, camel-cased at the data-layer
+ * boundary. `conversationId` is NULL when the buyer has never messaged
+ * this seller (e.g., an instant-checkout flow without a prior thread).
+ *
+ * `buyerName` is the snapshot persisted on `orders.buyer_name` at the time
+ * of the most recent order (the RPC uses `max(buyer_name)` to pick a
+ * single deterministic value from the buyer's history). Pre-Phase-8
+ * orders rows carry NULL there; the JS surface renders NULL as '—'.
+ *
+ * `totalSpend` ignores the per-order currency dimension — same posture as
+ * the revenue timeseries RPC. The list view formats it against the
+ * visitor's display-currency cookie without FX conversion.
+ */
+export type SellerCustomerRow = {
+  buyerUserId: string;
+  buyerName: string | null;
+  totalSpend: number;
+  orderCount: number;
+  lastOrderAt: string;
+  conversationId: string | null;
+};
+
+type SellerCustomerRpcRow = {
+  buyer_user_id: string;
+  buyer_name: string | null;
+  total_spend: number | string;
+  order_count: number | string;
+  last_order_at: string;
+  conversation_id: string | null;
+};
+
+function mapCustomerRpcRow(row: SellerCustomerRpcRow): SellerCustomerRow {
+  return {
+    buyerUserId: row.buyer_user_id,
+    buyerName: row.buyer_name,
+    totalSpend: Number(row.total_spend),
+    orderCount: Number(row.order_count),
+    lastOrderAt: row.last_order_at,
+    conversationId: row.conversation_id,
+  };
+}
+
+/**
+ * Fetch every distinct buyer who has placed a paid order with the calling
+ * seller, sorted by last-order-at descending (the RPC orders the result
+ * set; we preserve it). Throws on RPC failure so the Server Component's
+ * error boundary handles surfacing the error.
+ *
+ * In-memory text search is applied by the page layer via
+ * `filterCustomersByQuery` — same posture as the orders list, which keeps
+ * server filters (status / date) at the SQL layer and the free-text pass
+ * client-side so a future CSV export can re-use the same fetch.
+ */
+export async function fetchSellerCustomers(
+  supabase: SupabaseClient,
+): Promise<SellerCustomerRow[]> {
+  const { data, error } = await supabase.rpc('get_seller_customers');
+  if (error) {
+    throw new Error(`fetchSellerCustomers failed: ${error.message}`);
+  }
+  const rows = (data ?? []) as SellerCustomerRpcRow[];
+  return rows.map(mapCustomerRpcRow);
+}
+
+/**
+ * Fetch the customer-detail header for a single buyer — the same
+ * aggregate row that `fetchSellerCustomers` returns, narrowed to one
+ * buyer. Returns `null` when no matching row exists (the buyer has no
+ * paid orders with this seller, or the buyerId is forged); the calling
+ * page is responsible for `notFound()` on null.
+ *
+ * Implementation note: re-filters the full customers RPC result in-memory
+ * instead of issuing a targeted SQL query. The RPC is already
+ * RLS-equivalent (SECURITY DEFINER + auth.uid() scoping) and the row
+ * count is bounded by the seller's distinct-buyer set — typically dozens,
+ * not thousands. A dedicated single-row RPC would add a migration
+ * round-trip without measurable latency savings; if the customer-detail
+ * page ever ends up on a hot path independent of the list, that's the
+ * trigger to extract a `get_seller_customer(uuid)` variant.
+ */
+export async function fetchCustomerSummary(
+  supabase: SupabaseClient,
+  sellerId: string,
+  buyerUserId: string,
+): Promise<SellerCustomerRow | null> {
+  // sellerId is unused at the SQL layer (the RPC scopes by auth.uid())
+  // but accepted for symmetry with the other Pro fetchers and so the
+  // call site documents the scoping intent.
+  void sellerId;
+  const rows = await fetchSellerCustomers(supabase);
+  return rows.find((row) => row.buyerUserId === buyerUserId) ?? null;
+}
+
+/**
+ * Fetch every order this buyer has placed with the calling seller,
+ * newest first. Returns the same `SellerOrderRow` shape as
+ * `fetchSellerOrders` so the customer-detail page can render the
+ * familiar order list affordances (thumbnail, title, amount, status)
+ * without a divergent component.
+ *
+ * No status filter — the detail view shows the complete history
+ * (pending, paid, refunded, …). The buyer ended up on the customers
+ * list because at least one of their orders is paid; the detail page
+ * is where the seller goes to inspect everything that buyer has done.
+ *
+ * RLS "orders select seller" (20260510) keeps the read scoped to the
+ * caller; the explicit `seller_id` + `buyer_id` eq filters are
+ * defense-in-depth + crisp "not found" semantics for forged ids.
+ */
+export async function fetchCustomerOrders(
+  supabase: SupabaseClient,
+  sellerId: string,
+  buyerUserId: string,
+): Promise<SellerOrderRow[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select(
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+    )
+    .eq('seller_id', sellerId)
+    .eq('buyer_id', buyerUserId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(
+      `fetchCustomerOrders failed (seller ${sellerId}, buyer ${buyerUserId}): ${error.message}`,
+    );
+  }
+
+  const rows = (data ?? []) as SellerOrderJoinedRow[];
+  return rows.map(mapJoinedOrderRow);
+}
+
+/**
+ * In-memory text filter for the customers list. Matches against the
+ * buyer name (case-insensitive substring). The buyer's user-id isn't
+ * included in the match space — sellers don't think about buyers by
+ * UUID, and matching against id would surface unintuitive hits.
+ */
+export function filterCustomersByQuery(
+  rows: SellerCustomerRow[],
+  query: string,
+): SellerCustomerRow[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return rows;
+  return rows.filter((row) =>
+    (row.buyerName ?? '').toLowerCase().includes(q),
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Analytics (Track 8) — timeseries + top-listings for /pro/analytics.
 // -----------------------------------------------------------------------------
 

@@ -1,12 +1,16 @@
 // deno-lint-ignore-file
-import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno';
+import Stripe from 'https://esm.sh/stripe@22.1.1?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { initEdgeSentry, captureEdgeException } from '../_shared/sentry.ts';
 
 initEdgeSentry();
 
+// apiVersion pinned to match web/src/lib/stripe.ts (the subscription
+// path) so the marketplace and subscription paths share a single Stripe
+// API surface. Bump the SDK and the apiVersion together; never bump one
+// without the other.
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
-  apiVersion: '2024-04-10',
+  apiVersion: '2026-04-22.dahlia',
   httpClient: Stripe.createFetchHttpClient(),
 });
 

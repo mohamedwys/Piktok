@@ -490,3 +490,202 @@ export async function fetchProductForEdit(
   const row = data as unknown as SellerProductFullRow;
   return { ...row, price: Number(row.price) };
 }
+
+// -----------------------------------------------------------------------------
+// Seller orders (Track 4) — reads for /pro/orders and /pro/orders/[id].
+// -----------------------------------------------------------------------------
+
+/**
+ * Stripe Checkout shipping projection persisted on `orders.shipping_address`
+ * by the stripe-webhook handler (see 20260713_order_shipping.sql). All fields
+ * are nullable — Stripe may omit any individual line. Pre-Phase-8 orders rows
+ * carry NULL for the whole jsonb.
+ */
+export type ShippingAddress = {
+  name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  postal_code: string | null;
+  state: string | null;
+  country: string | null;
+};
+
+/**
+ * The five values of the `orders.status` CHECK constraint (20260510).
+ * Adding a new status to the CHECK requires adding it here AND to the
+ * `pro.orders.filter.*` locale catalog used by the filter pills.
+ */
+export type SellerOrderStatus =
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'cancelled'
+  | 'refunded';
+
+/**
+ * One row of the Pro orders list. Camel-case at the data-layer boundary so
+ * Server Components don't carry the DB's snake_case all the way into JSX.
+ * Title is the localized jsonb pulled through the `products` to-one join —
+ * each consumer picks the locale at render time.
+ */
+export type SellerOrderRow = {
+  id: string;
+  productId: string;
+  productTitle: { fr?: string; en?: string } | null;
+  productThumbnail: string | null;
+  amount: number;
+  currency: string;
+  status: SellerOrderStatus;
+  createdAt: string;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  shippingAddress: ShippingAddress | null;
+};
+
+export type SellerOrderFilters = {
+  status?: SellerOrderStatus;
+  from?: string;
+  to?: string;
+};
+
+type SellerOrderJoinedRow = {
+  id: string;
+  product_id: string;
+  amount: number;
+  currency: string;
+  status: SellerOrderStatus;
+  created_at: string;
+  buyer_name: string | null;
+  buyer_phone: string | null;
+  shipping_address: ShippingAddress | null;
+  products:
+    | { title: { fr?: string; en?: string } | null; thumbnail_url: string | null }
+    | { title: { fr?: string; en?: string } | null; thumbnail_url: string | null }[]
+    | null;
+};
+
+function pickJoinedProduct(
+  joined: SellerOrderJoinedRow['products'],
+): { title: { fr?: string; en?: string } | null; thumbnail_url: string | null } | null {
+  if (joined == null) return null;
+  if (Array.isArray(joined)) return joined[0] ?? null;
+  return joined;
+}
+
+function mapJoinedOrderRow(row: SellerOrderJoinedRow): SellerOrderRow {
+  const product = pickJoinedProduct(row.products);
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productTitle: product?.title ?? null,
+    productThumbnail: product?.thumbnail_url ?? null,
+    amount: Number(row.amount),
+    currency: row.currency,
+    status: row.status,
+    createdAt: row.created_at,
+    buyerName: row.buyer_name,
+    buyerPhone: row.buyer_phone,
+    shippingAddress: row.shipping_address,
+  };
+}
+
+/**
+ * Fetch every order belonging to the caller's seller row, ordered newest
+ * first. Optional filters narrow at the DB layer:
+ *   - status: exact match against the CHECK enum.
+ *   - from:   `created_at >= from` (YYYY-MM-DD interpreted as 00:00:00 UTC).
+ *   - to:     `created_at <= to + end-of-day` so a `to=2026-05-15` filter
+ *             includes every order created on the 15th in UTC.
+ *
+ * The list-page text search (buyer name / product title) is NOT applied
+ * here — it's an in-memory pass on the returned page so the same fetcher
+ * also feeds the CSV export route. RLS "orders select seller" (20260510)
+ * keeps the read scoped to the caller; the explicit `seller_id` eq is
+ * defense-in-depth, matching the convention used elsewhere in this module.
+ */
+export async function fetchSellerOrders(
+  supabase: SupabaseClient,
+  sellerId: string,
+  filters: SellerOrderFilters,
+): Promise<SellerOrderRow[]> {
+  let query = supabase
+    .from('orders')
+    .select(
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+    )
+    .eq('seller_id', sellerId)
+    .order('created_at', { ascending: false });
+
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+  if (filters.from) {
+    query = query.gte('created_at', filters.from);
+  }
+  if (filters.to) {
+    query = query.lte('created_at', `${filters.to}T23:59:59.999Z`);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(
+      `fetchSellerOrders failed (seller ${sellerId}): ${error.message}`,
+    );
+  }
+
+  const rows = (data ?? []) as SellerOrderJoinedRow[];
+  return rows.map(mapJoinedOrderRow);
+}
+
+/**
+ * Fetch a single order scoped to the calling seller. Narrows by both `id`
+ * and `seller_id` so a forged id belonging to another seller resolves to
+ * NULL instead of a generic RLS-denied error. Returns `null` when no
+ * matching row exists; the caller (Server Component) is responsible for
+ * `notFound()` on null.
+ */
+export async function fetchSellerOrderById(
+  supabase: SupabaseClient,
+  sellerId: string,
+  orderId: string,
+): Promise<SellerOrderRow | null> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select(
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+    )
+    .eq('id', orderId)
+    .eq('seller_id', sellerId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(
+      `fetchSellerOrderById failed (order ${orderId}): ${error.message}`,
+    );
+  }
+  if (!data) return null;
+  return mapJoinedOrderRow(data as SellerOrderJoinedRow);
+}
+
+/**
+ * In-memory text filter for the orders list. The list page and the CSV
+ * export both pass the same `q` searchParam through here so the visible
+ * results and the exported file stay in sync. Matches against buyer name
+ * and product title (both locales) — case-insensitive substring.
+ */
+export function filterOrdersByQuery(
+  rows: SellerOrderRow[],
+  query: string,
+): SellerOrderRow[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return rows;
+  return rows.filter((row) => {
+    const buyer = (row.buyerName ?? '').toLowerCase();
+    if (buyer.includes(q)) return true;
+    const titleFr = (row.productTitle?.fr ?? '').toLowerCase();
+    if (titleFr.includes(q)) return true;
+    const titleEn = (row.productTitle?.en ?? '').toLowerCase();
+    if (titleEn.includes(q)) return true;
+    return false;
+  });
+}

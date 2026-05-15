@@ -332,6 +332,21 @@
         "shippingEmpty": "No shipping address on file."
       }
     },
+    "customers": {
+      "heading": "Your customers",
+      "search": {
+        "placeholder": "Search by buyer name…"
+      },
+      "column": {
+        "buyer": "Buyer",
+        "totalSpend": "Total spend",
+        "orderCount": "Orders",
+        "lastOrder": "Last order",
+        "actions": ""
+      },
+      "openLink": "Open",
+      "empty": "No customers yet. Once a buyer purchases one of your listings, they'll appear here."
+    },
     "editor": {
       "heading": "Edit listing",
       "backToList": "Back to listings",

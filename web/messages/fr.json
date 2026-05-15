@@ -332,6 +332,21 @@
         "shippingEmpty": "Aucune adresse de livraison disponible."
       }
     },
+    "customers": {
+      "heading": "Vos clients",
+      "search": {
+        "placeholder": "Rechercher un acheteur…"
+      },
+      "column": {
+        "buyer": "Acheteur",
+        "totalSpend": "Total dépensé",
+        "orderCount": "Commandes",
+        "lastOrder": "Dernière commande",
+        "actions": ""
+      },
+      "openLink": "Ouvrir",
+      "empty": "Aucun client pour le moment. Dès qu'un acheteur achètera l'une de vos annonces, il apparaîtra ici."
+    },
     "editor": {
       "heading": "Modifier l'annonce",
       "backToList": "Retour aux annonces",

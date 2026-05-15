@@ -334,6 +334,21 @@
         "shippingEmpty": "لا يوجد عنوان شحن متاح."
       }
     },
+    "customers": {
+      "heading": "عملاؤك",
+      "search": {
+        "placeholder": "ابحث باسم المشتري…"
+      },
+      "column": {
+        "buyer": "المشتري",
+        "totalSpend": "إجمالي الإنفاق",
+        "orderCount": "الطلبات",
+        "lastOrder": "آخر طلب",
+        "actions": ""
+      },
+      "openLink": "فتح",
+      "empty": "لا يوجد عملاء بعد. بمجرد أن يشتري مشترٍ أحد إعلاناتك، سيظهر هنا."
+    },
     "editor": {
       "heading": "تعديل الإعلان",
       "backToList": "العودة إلى الإعلانات",

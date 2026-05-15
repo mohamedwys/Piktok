@@ -1,8 +1,11 @@
 import './globals.css';
+import { Suspense } from 'react';
 import { Inter, Fraunces } from 'next/font/google';
 import { cookies, headers } from 'next/headers';
 import { hasLocale } from 'next-intl';
 import { routing } from '@/i18n/routing';
+import { PostHogProvider } from '@/components/analytics/PostHogProvider';
+import { PostHogPageView } from '@/components/analytics/PostHogPageView';
 
 /**
  * Top-level root layout.
@@ -87,7 +90,14 @@ export default async function RootLayout({
       dir={dir}
       className={`dark ${inter.variable} ${fraunces.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <PostHogProvider>
+          <Suspense fallback={null}>
+            <PostHogPageView />
+          </Suspense>
+          {children}
+        </PostHogProvider>
+      </body>
     </html>
   );
 }

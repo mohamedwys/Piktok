@@ -42,6 +42,22 @@ export type SellerProfile = {
    * directly (B.1.5 sellers UPDATE allowlist excludes it).
    */
   interests: string[];
+  /**
+   * Stripe Connect account id (acct_…) provisioned by F.C.1's
+   * `stripe-connect-create` edge function. NULL until the seller starts
+   * onboarding from /pro/payouts. Surfaced on mobile to drive the
+   * Buy Now gate via `useStripeConnectStatus`.
+   */
+  stripeAccountId: string | null;
+  /**
+   * Mirrors `charges_enabled` from the Stripe Account object, refreshed
+   * by F.C.1's `stripe-account-webhook`. True once Stripe has cleared
+   * the seller for receiving funds. The mobile sell-flow gates the
+   * `buy_now` purchase mode on this flag — the server-side checkout
+   * function already refuses non-Connected sellers, so this is purely
+   * seller-side UX.
+   */
+  stripeChargesEnabled: boolean;
 };
 
 type SellerRow = {
@@ -67,6 +83,8 @@ type SellerRow = {
   // interests is jsonb in DB; typed as unknown because the regenerated
   // types may lag the 20260612 migration. Validated in rowToSeller.
   interests?: unknown;
+  stripe_account_id: string | null;
+  stripe_charges_enabled: boolean;
 };
 
 function parseInterests(value: unknown): string[] {
@@ -96,6 +114,8 @@ function rowToSeller(row: SellerRow): SellerProfile {
     locationUpdatedAt: row.location_updated_at ?? null,
     lastBoostAt: row.last_boost_at ?? null,
     interests: parseInterests(row.interests),
+    stripeAccountId: row.stripe_account_id ?? null,
+    stripeChargesEnabled: row.stripe_charges_enabled ?? false,
   };
 }
 

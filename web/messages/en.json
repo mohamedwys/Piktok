@@ -411,6 +411,34 @@
       "timeoutBody": "Your payment went through, but activation is taking longer than expected. Refresh to try again — if it persists, contact support.",
       "refreshButton": "I've waited — refresh",
       "supportLink": "Contact support"
+    },
+    "analytics": {
+      "heading": "Analytics",
+      "chartsGridLabel": "Views and revenue charts",
+      "range": {
+        "navLabel": "Date range",
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days"
+      },
+      "viewsChartTitle": "Views",
+      "revenueChartTitle": "Revenue",
+      "topListingsHeading": "Top listings",
+      "topListings": {
+        "column": {
+          "product": "Product",
+          "views7d": "Views (7d)",
+          "revenue": "Revenue"
+        }
+      },
+      "empty": {
+        "heading": "No data yet for this window",
+        "body": "Once buyers visit your listings, you'll see them here."
+      },
+      "tooltip": {
+        "views": "Views",
+        "revenue": "Revenue"
+      }
     }
   },
   "signIn": {

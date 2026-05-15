@@ -411,6 +411,34 @@
       "timeoutBody": "Votre paiement est passé, mais l'activation prend plus de temps que prévu. Actualisez pour réessayer — si le problème persiste, contactez le support.",
       "refreshButton": "J'ai attendu — actualiser",
       "supportLink": "Contacter le support"
+    },
+    "analytics": {
+      "heading": "Statistiques",
+      "chartsGridLabel": "Graphiques des vues et du chiffre d'affaires",
+      "range": {
+        "navLabel": "Plage de dates",
+        "7d": "7 jours",
+        "30d": "30 jours",
+        "90d": "90 jours"
+      },
+      "viewsChartTitle": "Vues",
+      "revenueChartTitle": "Chiffre d'affaires",
+      "topListingsHeading": "Meilleures annonces",
+      "topListings": {
+        "column": {
+          "product": "Produit",
+          "views7d": "Vues (7j)",
+          "revenue": "Chiffre d'affaires"
+        }
+      },
+      "empty": {
+        "heading": "Aucune donnée pour cette période",
+        "body": "Dès que des acheteurs visiteront vos annonces, vous les verrez apparaître ici."
+      },
+      "tooltip": {
+        "views": "Vues",
+        "revenue": "Chiffre d'affaires"
+      }
     }
   },
   "signIn": {

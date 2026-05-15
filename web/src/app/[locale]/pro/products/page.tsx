@@ -1,7 +1,10 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { requirePro } from '@/lib/pro/auth';
 import { getSupabaseServer } from '@/lib/supabase/server';
-import { fetchProductsWithStats } from '@/lib/pro/data';
+import {
+  fetchProductsWithStats,
+  fetchSellerConnectState,
+} from '@/lib/pro/data';
 import { Container } from '@/components/ui/Container';
 import { Link } from '@/i18n/routing';
 import { ProductsTable } from '@/components/pro/ProductsTable';
@@ -47,7 +50,7 @@ export default async function ProProductsPage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  await requirePro(locale);
+  const { sellerId } = await requirePro(locale);
 
   const sp = await searchParams;
   const mode = normalizeMode(sp.mode);
@@ -55,10 +58,16 @@ export default async function ProProductsPage({
   const queryLc = query.toLowerCase();
 
   const supabase = await getSupabaseServer();
-  const [allRows, t] = await Promise.all([
+  // Connect state is fetched alongside the products list so the bulk
+  // toolbar can short-circuit the buy_now action when the seller isn't
+  // Connect-ready. Reading on every render avoids stale state when a
+  // Stripe-side flip (e.g., account disabled) needs to surface here.
+  const [allRows, connectState, t] = await Promise.all([
     fetchProductsWithStats(supabase),
+    fetchSellerConnectState(supabase, sellerId),
     getTranslations('pro.products'),
   ]);
+  const isConnected = connectState.status === 'connected';
 
   const filtered = allRows.filter((row) => {
     if (mode !== 'all' && row.purchase_mode !== mode) return false;
@@ -130,7 +139,11 @@ export default async function ProProductsPage({
           </nav>
         </header>
 
-        <ProductsTable products={filtered} locale={locale} />
+        <ProductsTable
+          products={filtered}
+          locale={locale}
+          isConnected={isConnected}
+        />
       </Container>
     </main>
   );

@@ -292,7 +292,11 @@
       "bulkResultPartial": "{updated} updated, {failed} failed",
       "bulkResultError": "Bulk update failed: {message}",
       "empty": "No listings match these filters yet.",
-      "openLink": "Open"
+      "openLink": "Open",
+      "gate": {
+        "connectFirst": "Connect Stripe to enable Buy Now on your listings.",
+        "connectCta": "Connect now"
+      }
     },
     "orders": {
       "heading": "Your orders",

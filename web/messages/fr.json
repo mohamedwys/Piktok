@@ -292,7 +292,11 @@
       "bulkResultPartial": "{updated} mises à jour, {failed} en échec",
       "bulkResultError": "Mise à jour groupée échouée : {message}",
       "empty": "Aucune annonce ne correspond à ces filtres.",
-      "openLink": "Ouvrir"
+      "openLink": "Ouvrir",
+      "gate": {
+        "connectFirst": "Connectez Stripe pour activer l'achat direct sur vos annonces.",
+        "connectCta": "Connecter maintenant"
+      }
     },
     "orders": {
       "heading": "Vos commandes",

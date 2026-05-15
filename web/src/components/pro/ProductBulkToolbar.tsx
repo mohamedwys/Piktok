@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
+import { captureEvent } from '@/lib/posthog-client';
 
 /**
  * Bulk-action toolbar (Track 3).
@@ -24,14 +25,20 @@ import { useRouter } from '@/i18n/routing';
 type Props = {
   selectedIds: string[];
   onClear: () => void;
+  isConnected: boolean;
 };
 
 type Result =
   | { kind: 'idle' }
   | { kind: 'success'; updated: number; failed: number }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  | { kind: 'gate' };
 
-export function ProductBulkToolbar({ selectedIds, onClear }: Props) {
+export function ProductBulkToolbar({
+  selectedIds,
+  onClear,
+  isConnected,
+}: Props) {
   const t = useTranslations('pro.products');
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +46,15 @@ export function ProductBulkToolbar({ selectedIds, onClear }: Props) {
 
   const run = async (mode: 'buy_now' | 'contact_only') => {
     if (submitting) return;
+    // Connect gate: refuse to issue the bulk-update when the seller
+    // isn't Connect-ready and the action would enable Buy Now. Disabling
+    // Buy Now (back to contact_only) is always allowed even without
+    // Connect — sellers should be able to roll back at any point.
+    if (mode === 'buy_now' && !isConnected) {
+      setResult({ kind: 'gate' });
+      captureEvent('pro_buy_now_gate_blocked', { surface: 'bulk' });
+      return;
+    }
     setSubmitting(true);
     setResult({ kind: 'idle' });
     try {
@@ -128,6 +144,20 @@ export function ProductBulkToolbar({ selectedIds, onClear }: Props) {
         <p role="alert" className="mt-3 text-sm text-feedback-danger">
           {t('bulkResultError', { message: result.message })}
         </p>
+      ) : null}
+      {result.kind === 'gate' ? (
+        <div
+          role="status"
+          className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+        >
+          <span>{t('gate.connectFirst')}</span>
+          <Link
+            href="/pro/payouts"
+            className="font-semibold text-brand hover:underline"
+          >
+            {t('gate.connectCta')}
+          </Link>
+        </div>
       ) : null}
     </div>
   );

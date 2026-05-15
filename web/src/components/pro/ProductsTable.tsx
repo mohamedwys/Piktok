@@ -25,6 +25,7 @@ import { ProductBulkToolbar } from './ProductBulkToolbar';
 type Props = {
   products: SellerProductStatsRow[];
   locale: string;
+  isConnected: boolean;
 };
 
 function titleFor(
@@ -43,7 +44,7 @@ function numberLocaleTag(locale: string): string {
   return 'en-US';
 }
 
-export function ProductsTable({ products, locale }: Props) {
+export function ProductsTable({ products, locale, isConnected }: Props) {
   const t = useTranslations('pro.products');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
@@ -106,6 +107,7 @@ export function ProductsTable({ products, locale }: Props) {
         <ProductBulkToolbar
           selectedIds={Array.from(selected)}
           onClear={clearSelection}
+          isConnected={isConnected}
         />
       ) : null}
 

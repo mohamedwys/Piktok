@@ -294,7 +294,11 @@
       "bulkResultPartial": "تم تحديث {updated}، فشل {failed}",
       "bulkResultError": "فشل التحديث الجماعي: {message}",
       "empty": "لا توجد إعلانات تطابق هذه التصفية بعد.",
-      "openLink": "فتح"
+      "openLink": "فتح",
+      "gate": {
+        "connectFirst": "اربط حساب Stripe لتفعيل الشراء الفوري على إعلاناتك.",
+        "connectCta": "اربط الآن"
+      }
     },
     "orders": {
       "heading": "طلباتك",

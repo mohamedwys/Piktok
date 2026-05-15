@@ -20,15 +20,57 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+// Track F.C.1: Stripe Connect requires two webhook destinations -- one
+// scoped to "Your account" (platform-level checkout / charge events) and
+// one scoped to "Connected accounts" (account.* events). Each destination
+// has its own signing secret. We accept either secret on this single
+// endpoint URL so both destinations can deliver here.
+//
+// STRIPE_WEBHOOK_SECRET          = the platform-events destination secret
+// STRIPE_CONNECT_WEBHOOK_SECRET  = the Connect-events destination secret
+//
+// Either may be empty if the corresponding destination isn't configured
+// yet. We filter empties so constructEventAsync isn't called with an
+// empty key (which would throw and consume our retry budget against the
+// wrong destination).
+function loadWebhookSecrets(): string[] {
+  return [
+    Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '',
+    Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET') ?? '',
+  ].filter((s) => s.length > 0);
+}
+
 Deno.serve(async (req) => {
   // Hoisted so the catch block can include them in the Sentry capture.
   let event: Stripe.Event | undefined;
   let session: Stripe.Checkout.Session | undefined;
   try {
     const sig = req.headers.get('stripe-signature');
-    const whSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
+    const secrets = loadWebhookSecrets();
+    if (secrets.length === 0) {
+      throw new Error('no_webhook_secret_configured');
+    }
     const payload = await req.text();
-    event = await stripe.webhooks.constructEventAsync(payload, sig!, whSecret, undefined, cryptoProvider);
+
+    // Try each configured secret in turn. constructEventAsync throws on
+    // signature mismatch, so we catch and continue to the next secret.
+    // The first one that verifies wins; if all fail, the last error
+    // propagates to the outer catch and the response is 400.
+    let lastErr: unknown = null;
+    for (const whSecret of secrets) {
+      try {
+        event = await stripe.webhooks.constructEventAsync(
+          payload, sig!, whSecret, undefined, cryptoProvider,
+        );
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!event) {
+      throw lastErr ?? new Error('signature_verification_failed');
+    }
 
     if (event.type === 'checkout.session.completed') {
       session = event.data.object as Stripe.Checkout.Session;

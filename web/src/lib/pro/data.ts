@@ -689,3 +689,143 @@ export function filterOrdersByQuery(
     return false;
   });
 }
+
+// -----------------------------------------------------------------------------
+// Analytics (Track 8) — timeseries + top-listings for /pro/analytics.
+// -----------------------------------------------------------------------------
+
+/**
+ * The three windows the analytics page exposes. Matches the
+ * `get_seller_*_timeseries` RPC `p_days` validation (1..90); the UI
+ * limits the user to these three preset values.
+ */
+export type AnalyticsRange = 7 | 30 | 90;
+
+/**
+ * One point of the views timeseries. `day` is an ISO-8601 date string
+ * (`YYYY-MM-DD`) — the server returns Postgres `date` and PostgREST
+ * serializes it as such. Keeping it as a string at the data-layer
+ * boundary lets Server Components pass the array to a Client Component
+ * chart without crossing a Date object across the RSC payload (which is
+ * fine for Date in v13+ but cheaper to skip).
+ */
+export type ViewsTimeseriesPoint = {
+  day: string;
+  value: number;
+};
+
+/**
+ * One point of the revenue timeseries. `value` is the day's
+ * gross_revenue sum; `paidSalesCount` is the day's paid order count —
+ * the latter is currently unused by the chart but kept on the payload
+ * so future tooltip / secondary-axis work doesn't need a new fetch.
+ */
+export type RevenueTimeseriesPoint = {
+  day: string;
+  value: number;
+  paidSalesCount: number;
+};
+
+/**
+ * Top-listings row consumed by the analytics surface's leaderboard.
+ * Field shape is intentionally narrow — only what the table renders —
+ * so adding new analytics tables doesn't bloat this type.
+ */
+export type TopListingRow = {
+  productId: string;
+  title: { fr?: string; en?: string } | null;
+  thumbnail_url: string | null;
+  views_7d: number;
+  gross_revenue: number;
+};
+
+type ViewsTimeseriesRpcRow = {
+  day: string;
+  views_count: number | string;
+};
+
+type RevenueTimeseriesRpcRow = {
+  day: string;
+  gross_revenue: number | string;
+  paid_sales_count: number | string;
+};
+
+/**
+ * Fetch the views timeseries for the calling seller across the trailing
+ * `days`-day window. The RPC emits one row per day (zero-view days as
+ * 0), so the array length equals `days` exactly — the chart renders a
+ * continuous line without client-side gap fill.
+ *
+ * `views_count` is `int` in the RPC return signature but Supabase JS
+ * occasionally surfaces integer types as strings depending on driver
+ * path. Number-coerce at the boundary, same as elsewhere in this module.
+ */
+export async function fetchViewsTimeseries(
+  supabase: SupabaseClient,
+  days: AnalyticsRange,
+): Promise<ViewsTimeseriesPoint[]> {
+  const { data, error } = await supabase.rpc('get_seller_views_timeseries', {
+    p_days: days,
+  });
+  if (error) {
+    throw new Error(`fetchViewsTimeseries failed: ${error.message}`);
+  }
+  const rows = (data ?? []) as ViewsTimeseriesRpcRow[];
+  return rows.map((row) => ({
+    day: row.day,
+    value: Number(row.views_count),
+  }));
+}
+
+/**
+ * Fetch the revenue timeseries for the calling seller across the
+ * trailing `days`-day window. Same generate_series shape as the views
+ * RPC, so the array length equals `days` exactly.
+ *
+ * The aggregate ignores the per-order currency dimension — see the
+ * RPC's currency note (20260810 §5). The chart formats the result in
+ * the visitor's display-currency cookie without FX conversion.
+ */
+export async function fetchRevenueTimeseries(
+  supabase: SupabaseClient,
+  days: AnalyticsRange,
+): Promise<RevenueTimeseriesPoint[]> {
+  const { data, error } = await supabase.rpc('get_seller_revenue_timeseries', {
+    p_days: days,
+  });
+  if (error) {
+    throw new Error(`fetchRevenueTimeseries failed: ${error.message}`);
+  }
+  const rows = (data ?? []) as RevenueTimeseriesRpcRow[];
+  return rows.map((row) => ({
+    day: row.day,
+    value: Number(row.gross_revenue),
+    paidSalesCount: Number(row.paid_sales_count),
+  }));
+}
+
+/**
+ * Fetch the top-N most-viewed listings (by `views_7d`) for the calling
+ * seller. Re-uses `fetchProductsWithStats` rather than a dedicated RPC
+ * because the products-with-stats fetch already runs once on the
+ * Products tab and is cheap; a future surge in listings volume would
+ * be the trigger to push the ordering + limit into a dedicated SQL
+ * function. Stable sort: ties keep the RPC's original order (featured
+ * first, then created_at DESC).
+ */
+export async function fetchTopListings(
+  supabase: SupabaseClient,
+  limit = 5,
+): Promise<TopListingRow[]> {
+  const rows = await fetchProductsWithStats(supabase);
+  return [...rows]
+    .sort((a, b) => b.views_7d - a.views_7d)
+    .slice(0, limit)
+    .map<TopListingRow>((row) => ({
+      productId: row.product_id,
+      title: row.title,
+      thumbnail_url: row.thumbnail_url,
+      views_7d: row.views_7d,
+      gross_revenue: row.gross_revenue,
+    }));
+}

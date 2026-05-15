@@ -466,6 +466,78 @@
         "views": "Vues",
         "revenue": "Chiffre d'affaires"
       }
+    },
+    "payouts": {
+      "heading": "Paiements",
+      "subhead": {
+        "notStarted": "Connectez un compte Stripe pour que les acheteurs vous paient directement. Mony prélève 2 % de commission par vente ; tout le reste arrive sur votre compte.",
+        "inProgress": "Vous avez commencé l'inscription Stripe sans la terminer. Reprenez là où vous en étiez — Stripe a conservé votre progression.",
+        "inProgressVerifying": "Stripe vérifie votre compte. Cela prend généralement quelques minutes ; vous serez notifié dès que les paiements seront activés.",
+        "connected": "Votre compte est connecté. Les acheteurs peuvent vous payer directement via Stripe."
+      },
+      "countryLabel": "Pays",
+      "country": {
+        "FR": "France",
+        "BE": "Belgique",
+        "CH": "Suisse",
+        "LU": "Luxembourg",
+        "MC": "Monaco",
+        "GB": "Royaume-Uni",
+        "IE": "Irlande",
+        "DE": "Allemagne",
+        "NL": "Pays-Bas",
+        "IT": "Italie",
+        "ES": "Espagne",
+        "PT": "Portugal",
+        "US": "États-Unis",
+        "CA": "Canada"
+      },
+      "connectCta": "Connecter Stripe",
+      "connectingCta": "Ouverture de Stripe…",
+      "resumeCta": "Reprendre l'inscription",
+      "dashboardCta": "Ouvrir le tableau de bord Stripe",
+      "openingDashboard": "Ouverture du tableau de bord…",
+      "disconnectCta": "Déconnecter",
+      "disconnectTooltip": "Gérer dans le tableau de bord Stripe",
+      "statusCharges": {
+        "label": "Encaissements",
+        "enabled": "Activés",
+        "disabled": "En attente"
+      },
+      "statusPayouts": {
+        "label": "Versements",
+        "enabled": "Activés",
+        "disabled": "En attente"
+      },
+      "onboardedAt": "Inscrit le {date}",
+      "howItWorks": {
+        "title": "Comment fonctionnent les paiements",
+        "commissionBody": "Mony prélève 2 % de commission sur chaque vente. Le reste arrive directement sur votre compte connecté Stripe — aucun versement intermédiaire à attendre.",
+        "payoutBody": "Stripe verse l'argent sur votre compte bancaire selon un calendrier que vous contrôlez depuis le tableau de bord Stripe. Les remboursements et litiges y sont également gérés."
+      },
+      "error": {
+        "generic": "Une erreur est survenue. Veuillez réessayer.",
+        "countryNotSupported": "Stripe Connect n'est pas encore disponible dans ce pays.",
+        "retry": "Réessayer"
+      },
+      "return": {
+        "polling": "Vérification de votre compte auprès de Stripe…",
+        "success": {
+          "heading": "Vous êtes connecté",
+          "body": "Votre compte Stripe est actif et prêt à recevoir des paiements. Vous pouvez gérer les versements et les remboursements à tout moment depuis le tableau de bord Stripe.",
+          "cta": "Retour au tableau de bord Pro"
+        },
+        "timeout": {
+          "heading": "En attente de Stripe",
+          "body": "Votre compte est en cours de vérification. Cela peut prendre quelques minutes. Actualisez pour vérifier à nouveau — votre progression est sauvegardée.",
+          "cta": "Actualiser"
+        }
+      },
+      "refresh": {
+        "heading": "Votre lien d'inscription a expiré",
+        "body": "Les liens d'inscription Stripe sont à durée limitée. Reprenez là où vous en étiez — votre progression est sauvegardée.",
+        "cta": "Reprendre l'inscription"
+      }
     }
   },
   "signIn": {

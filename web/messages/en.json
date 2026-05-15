@@ -466,6 +466,78 @@
         "views": "Views",
         "revenue": "Revenue"
       }
+    },
+    "payouts": {
+      "heading": "Payouts",
+      "subhead": {
+        "notStarted": "Connect a Stripe account so buyers can pay you directly. Mony charges a 2% platform fee per sale; everything else lands in your account.",
+        "inProgress": "You started Stripe onboarding but haven't finished yet. Pick up where you left off — Stripe keeps your progress.",
+        "inProgressVerifying": "Stripe is verifying your account. This usually takes a few minutes; you'll be notified once charges are enabled.",
+        "connected": "Your account is connected. Buyers can pay you directly through Stripe."
+      },
+      "countryLabel": "Country",
+      "country": {
+        "FR": "France",
+        "BE": "Belgium",
+        "CH": "Switzerland",
+        "LU": "Luxembourg",
+        "MC": "Monaco",
+        "GB": "United Kingdom",
+        "IE": "Ireland",
+        "DE": "Germany",
+        "NL": "Netherlands",
+        "IT": "Italy",
+        "ES": "Spain",
+        "PT": "Portugal",
+        "US": "United States",
+        "CA": "Canada"
+      },
+      "connectCta": "Connect Stripe",
+      "connectingCta": "Opening Stripe…",
+      "resumeCta": "Resume onboarding",
+      "dashboardCta": "Open Stripe Dashboard",
+      "openingDashboard": "Opening dashboard…",
+      "disconnectCta": "Disconnect",
+      "disconnectTooltip": "Manage in Stripe Dashboard",
+      "statusCharges": {
+        "label": "Charges",
+        "enabled": "Enabled",
+        "disabled": "Pending"
+      },
+      "statusPayouts": {
+        "label": "Payouts",
+        "enabled": "Enabled",
+        "disabled": "Pending"
+      },
+      "onboardedAt": "Onboarded {date}",
+      "howItWorks": {
+        "title": "How payouts work",
+        "commissionBody": "Mony takes a 2% platform fee on every sale. The rest goes directly to your Stripe-connected account — no Mony-side payouts to wait on.",
+        "payoutBody": "Stripe pays out to your bank on a rolling schedule that you control from the Stripe Dashboard. Refunds and disputes are also handled there."
+      },
+      "error": {
+        "generic": "Something went wrong. Please try again.",
+        "countryNotSupported": "Stripe Connect isn't available in this country yet.",
+        "retry": "Try again"
+      },
+      "return": {
+        "polling": "Verifying your account with Stripe…",
+        "success": {
+          "heading": "You're connected",
+          "body": "Your Stripe account is active and ready to accept payments. You can manage payouts and refunds anytime from the Stripe Dashboard.",
+          "cta": "Back to Pro dashboard"
+        },
+        "timeout": {
+          "heading": "Still waiting on Stripe",
+          "body": "Your account is being verified. This sometimes takes a few minutes. Refresh to check again — your progress is saved.",
+          "cta": "Refresh"
+        }
+      },
+      "refresh": {
+        "heading": "Your onboarding link expired",
+        "body": "Stripe onboarding links are short-lived. Continue where you left off — your progress is saved.",
+        "cta": "Continue onboarding"
+      }
     }
   },
   "signIn": {

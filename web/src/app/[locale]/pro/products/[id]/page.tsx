@@ -5,6 +5,7 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 import {
   fetchProductForEdit,
   fetchProductsWithStats,
+  fetchSellerConnectState,
 } from '@/lib/pro/data';
 import { Container } from '@/components/ui/Container';
 import { Link } from '@/i18n/routing';
@@ -44,15 +45,22 @@ export default async function ProProductEditorPage({
   const { sellerId } = await requirePro(locale);
   const supabase = await getSupabaseServer();
 
-  const [product, statsRows, t] = await Promise.all([
+  // Connect state is fetched alongside the product so the editor can
+  // disable the Buy Now radio when the seller isn't Connect-ready.
+  // Reading on every render keeps the UI in sync if Stripe disables the
+  // account between visits.
+  const [product, statsRows, connectState, t] = await Promise.all([
     fetchProductForEdit(supabase, id, sellerId),
     fetchProductsWithStats(supabase),
+    fetchSellerConnectState(supabase, sellerId),
     getTranslations('pro.editor'),
   ]);
 
   if (!product) {
     notFound();
   }
+
+  const isConnected = connectState.status === 'connected';
 
   const stats = statsRows.find((row) => row.product_id === id) ?? null;
 
@@ -91,7 +99,7 @@ export default async function ProProductEditorPage({
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <ProductEditor product={product} />
+            <ProductEditor product={product} isConnected={isConnected} />
           </div>
 
           <aside className="space-y-6">

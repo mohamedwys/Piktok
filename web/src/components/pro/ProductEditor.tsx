@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/routing';
+import { Info } from 'lucide-react';
+import { Link, useRouter } from '@/i18n/routing';
 import type { SellerProductFullRow } from '@/lib/pro/data';
+import { captureEvent } from '@/lib/posthog-client';
 
 /**
  * Single product editor form (Track 3).
@@ -25,6 +27,7 @@ import type { SellerProductFullRow } from '@/lib/pro/data';
  */
 type Props = {
   product: SellerProductFullRow;
+  isConnected: boolean;
 };
 
 type FormState = {
@@ -123,7 +126,7 @@ function buildPatch(
   return patch;
 }
 
-export function ProductEditor({ product }: Props) {
+export function ProductEditor({ product, isConnected }: Props) {
   const t = useTranslations('pro.editor');
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(product));
@@ -131,6 +134,17 @@ export function ProductEditor({ product }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Telemetry for the gated buy_now radio: fire once on mount when the
+  // seller would see the disabled state. Mirrors the bulk-surface
+  // `pro_buy_now_gate_blocked` event but uses a `_shown` suffix because
+  // the editor surfaces the gate passively (the seller can't click
+  // through it) rather than reacting to an action.
+  useEffect(() => {
+    if (!isConnected) {
+      captureEvent('pro_buy_now_gate_shown', { surface: 'editor' });
+    }
+  }, [isConnected]);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -295,12 +309,19 @@ export function ProductEditor({ product }: Props) {
       <div>
         <label className={labelClass}>{t('fieldPurchaseMode')}</label>
         <div className="flex flex-wrap gap-3">
-          <label className="inline-flex items-center gap-2">
+          <label
+            className={
+              isConnected
+                ? 'inline-flex items-center gap-2'
+                : 'inline-flex cursor-not-allowed items-center gap-2 opacity-60'
+            }
+          >
             <input
               type="radio"
               name="purchase_mode"
               value="buy_now"
               checked={form.purchaseMode === 'buy_now'}
+              disabled={!isConnected}
               onChange={() =>
                 setForm((s) => ({ ...s, purchaseMode: 'buy_now' }))
               }
@@ -308,6 +329,15 @@ export function ProductEditor({ product }: Props) {
             <span className="text-sm text-text-primary">
               {t('purchaseModeBuyNow')}
             </span>
+            {!isConnected ? (
+              <span
+                className="inline-flex items-center text-text-tertiary"
+                title={t('gate.connectFirstTooltip')}
+                aria-label={t('gate.connectFirstTooltip')}
+              >
+                <Info className="size-4" aria-hidden="true" />
+              </span>
+            ) : null}
           </label>
           <label className="inline-flex items-center gap-2">
             <input
@@ -324,6 +354,16 @@ export function ProductEditor({ product }: Props) {
             </span>
           </label>
         </div>
+        {!isConnected ? (
+          <p className="mt-2 text-xs text-text-tertiary">
+            <Link
+              href="/pro/payouts"
+              className="font-semibold text-brand hover:underline"
+            >
+              {t('gate.connectLink')}
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-6">

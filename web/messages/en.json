@@ -393,7 +393,11 @@
       "delete": "Delete listing",
       "deleting": "Deleting…",
       "deleteConfirm": "Delete this listing? This cannot be undone.",
-      "deleteError": "Delete failed: {message}"
+      "deleteError": "Delete failed: {message}",
+      "gate": {
+        "connectFirstTooltip": "Connect your Stripe account to enable Buy Now.",
+        "connectLink": "Connect Stripe"
+      }
     },
     "tour": {
       "step1": "Navigate your Pro tools here.",

@@ -395,7 +395,11 @@
       "delete": "حذف الإعلان",
       "deleting": "جارٍ الحذف…",
       "deleteConfirm": "هل تريد حذف هذا الإعلان؟ لا يمكن التراجع عن هذا الإجراء.",
-      "deleteError": "فشل الحذف: {message}"
+      "deleteError": "فشل الحذف: {message}",
+      "gate": {
+        "connectFirstTooltip": "اربط حساب Stripe الخاص بك لتفعيل الشراء الفوري.",
+        "connectLink": "اربط حساب Stripe"
+      }
     },
     "tour": {
       "step1": "تنقّل بين أدوات Pro من هنا.",

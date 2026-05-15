@@ -393,7 +393,11 @@
       "delete": "Supprimer l'annonce",
       "deleting": "Suppression…",
       "deleteConfirm": "Supprimer cette annonce ? Cette action est irréversible.",
-      "deleteError": "Échec de la suppression : {message}"
+      "deleteError": "Échec de la suppression : {message}",
+      "gate": {
+        "connectFirstTooltip": "Connectez votre compte Stripe pour activer l'achat direct.",
+        "connectLink": "Connecter Stripe"
+      }
     },
     "tour": {
       "step1": "Accédez à vos outils Pro depuis ici.",

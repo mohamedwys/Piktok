@@ -54,10 +54,22 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     // `__loaded` flag as well so HMR remounts don't trigger a warning.
     if (typeof window !== 'undefined' && !posthog.__loaded) {
       posthog.init(apiKey, {
-        api_host: host,
+        // Reverse-proxy via Next.js rewrites (see next.config.ts).
+        // Browser-side requests go to /ingest/* on our own origin and
+        // are forwarded to PostHog server-side. `ui_host` keeps the
+        // PostHog toolbar's "open in PostHog" links pointing at the
+        // real dashboard, not at our proxy origin (which would 404).
+        api_host: '/ingest',
+        ui_host: 'https://eu.posthog.com',
         capture_pageview: false,
         capture_pageleave: true,
         capture_performance: { web_vitals: true },
+        // Heatmaps autocapture — captures scroll position + click
+        // heatmap data continuously. The PostHog Web Analytics Health
+        // page's "scroll depth" check looks for events carrying scroll
+        // properties; this flag enables them. `host` is still required
+        // to fall through to the same env-gated no-op fallback.
+        enable_heatmaps: true,
         person_profiles: 'identified_only',
       });
     }

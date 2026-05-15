@@ -78,6 +78,28 @@ export async function POST(req: Request) {
   }
 
   const supabase = await getSupabaseServer();
+
+  // Connect gate for buy_now: even though `enforce_purchase_mode_pro_only_trg`
+  // checks `is_pro`, it does NOT inspect Connect state. A Pro seller without
+  // an active Stripe Connect account can still trigger the column write but
+  // checkout would 403 (`pro_not_connected`) at the edge function. Refuse
+  // the patch here so the seller is told to finish Connect before flipping
+  // listings to Buy Now. Disabling Buy Now (back to contact_only) is always
+  // allowed.
+  if (body.patch.purchase_mode === 'buy_now') {
+    const { data: seller } = await supabase
+      .from('sellers')
+      .select('stripe_charges_enabled')
+      .eq('id', gate.sellerId)
+      .maybeSingle();
+    if (seller?.stripe_charges_enabled !== true) {
+      return NextResponse.json(
+        { error: 'pro_not_connected' },
+        { status: 400 },
+      );
+    }
+  }
+
   const results = await Promise.allSettled(
     body.ids.map((id) =>
       supabase

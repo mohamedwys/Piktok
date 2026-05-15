@@ -87,6 +87,28 @@ export async function POST(
   }
 
   const supabase = await getSupabaseServer();
+
+  // Connect gate for buy_now: matches the bulk-update route. The trigger
+  // `enforce_purchase_mode_pro_only_trg` checks `is_pro` only and would
+  // let a Pro-but-not-Connected seller flip a listing to buy_now, after
+  // which checkout would 403 (`pro_not_connected`) at the edge function.
+  // Refuse the patch here so the seller is told to finish Connect first.
+  // Patches that DON'T set purchase_mode, or set it to contact_only, are
+  // always allowed.
+  if (patch.purchase_mode === 'buy_now') {
+    const { data: seller } = await supabase
+      .from('sellers')
+      .select('stripe_charges_enabled')
+      .eq('id', gate.sellerId)
+      .maybeSingle();
+    if (seller?.stripe_charges_enabled !== true) {
+      return NextResponse.json(
+        { error: 'pro_not_connected' },
+        { status: 400 },
+      );
+    }
+  }
+
   const { data, error } = await supabase
     .from('products')
     .update(patch)

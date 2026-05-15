@@ -105,9 +105,14 @@ export const config = {
      * - /favicon.ico     (browser-default fetch)
      * - any image asset  (svg / png / jpg / etc.)
      * - /api/*           (technical endpoints — no locale prefix)
+     * - /ingest/*        (PostHog reverse-proxy rewrites — see
+     *                     next.config.ts. Must skip the locale
+     *                     middleware so the rewrite is allowed to
+     *                     forward the request to eu.i.posthog.com
+     *                     instead of getting prefixed with /en, etc.)
      * - /auth/callback   (H.5 magic-link landing — stays at root)
      * - /auth/error      (rare error page, English-only)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api|auth/callback|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|ingest|auth/callback|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

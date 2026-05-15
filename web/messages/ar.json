@@ -296,6 +296,44 @@
       "empty": "لا توجد إعلانات تطابق هذه التصفية بعد.",
       "openLink": "فتح"
     },
+    "orders": {
+      "heading": "طلباتك",
+      "exportCsv": "تصدير CSV",
+      "filter": {
+        "navLabel": "تصفية حسب الحالة",
+        "all": "الكل",
+        "paid": "مدفوع",
+        "pending": "قيد الانتظار",
+        "refunded": "مُسترد",
+        "failed": "فشل",
+        "cancelled": "ملغى",
+        "from": "من",
+        "to": "إلى"
+      },
+      "search": {
+        "placeholder": "ابحث بالمشتري أو المنتج…"
+      },
+      "column": {
+        "date": "التاريخ",
+        "product": "المنتج",
+        "buyer": "المشتري",
+        "amount": "المبلغ",
+        "status": "الحالة",
+        "actions": ""
+      },
+      "empty": "لا توجد طلبات تطابق التصفية الحالية.",
+      "openLink": "فتح",
+      "detail": {
+        "heading": "تفاصيل الطلب",
+        "backLink": "العودة إلى الطلبات",
+        "productSection": "المنتج",
+        "buyerSection": "المشتري",
+        "shippingSection": "عنوان الشحن",
+        "statusSection": "الحالة",
+        "buyerPhone": "الهاتف",
+        "shippingEmpty": "لا يوجد عنوان شحن متاح."
+      }
+    },
     "editor": {
       "heading": "تعديل الإعلان",
       "backToList": "العودة إلى الإعلانات",

@@ -294,6 +294,44 @@
       "empty": "Aucune annonce ne correspond à ces filtres.",
       "openLink": "Ouvrir"
     },
+    "orders": {
+      "heading": "Vos commandes",
+      "exportCsv": "Exporter en CSV",
+      "filter": {
+        "navLabel": "Filtrer par statut",
+        "all": "Toutes",
+        "paid": "Payée",
+        "pending": "En attente",
+        "refunded": "Remboursée",
+        "failed": "Échouée",
+        "cancelled": "Annulée",
+        "from": "Du",
+        "to": "Au"
+      },
+      "search": {
+        "placeholder": "Rechercher un acheteur ou un produit…"
+      },
+      "column": {
+        "date": "Date",
+        "product": "Produit",
+        "buyer": "Acheteur",
+        "amount": "Montant",
+        "status": "Statut",
+        "actions": ""
+      },
+      "empty": "Aucune commande ne correspond aux filtres en cours.",
+      "openLink": "Ouvrir",
+      "detail": {
+        "heading": "Détail de la commande",
+        "backLink": "Retour aux commandes",
+        "productSection": "Produit",
+        "buyerSection": "Acheteur",
+        "shippingSection": "Adresse de livraison",
+        "statusSection": "Statut",
+        "buyerPhone": "Téléphone",
+        "shippingEmpty": "Aucune adresse de livraison disponible."
+      }
+    },
     "editor": {
       "heading": "Modifier l'annonce",
       "backToList": "Retour aux annonces",

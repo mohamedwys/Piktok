@@ -294,6 +294,44 @@
       "empty": "No listings match these filters yet.",
       "openLink": "Open"
     },
+    "orders": {
+      "heading": "Your orders",
+      "exportCsv": "Export CSV",
+      "filter": {
+        "navLabel": "Filter by status",
+        "all": "All",
+        "paid": "Paid",
+        "pending": "Pending",
+        "refunded": "Refunded",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "from": "From",
+        "to": "To"
+      },
+      "search": {
+        "placeholder": "Search by buyer or product…"
+      },
+      "column": {
+        "date": "Date",
+        "product": "Product",
+        "buyer": "Buyer",
+        "amount": "Amount",
+        "status": "Status",
+        "actions": ""
+      },
+      "empty": "No orders match the current filters.",
+      "openLink": "Open",
+      "detail": {
+        "heading": "Order details",
+        "backLink": "Back to orders",
+        "productSection": "Product",
+        "buyerSection": "Buyer",
+        "shippingSection": "Shipping address",
+        "statusSection": "Status",
+        "buyerPhone": "Phone",
+        "shippingEmpty": "No shipping address on file."
+      }
+    },
     "editor": {
       "heading": "Edit listing",
       "backToList": "Back to listings",

@@ -13,6 +13,7 @@ and follow it line by line.
 | App is broken / users reporting errors / Sentry blowing up | [incident-response.md](incident-response.md) | varies |
 | Rotating Stripe / Apple / Google / Supabase / Sentry / Posthog keys | [key-rotation.md](key-rotation.md) | 15-30 min per credential |
 | Restoring database from a snapshot | [backup-restore.md](backup-restore.md) | 15-60 min |
+| Refunding a marketplace order under Stripe Connect | [marketplace-refunds.md](marketplace-refunds.md) | 5-10 min |
 
 ## Severity scale (use in incident communications)
 

@@ -422,12 +422,15 @@
       "progressLabel": "{done} of {total} done",
       "step2Title": "Complete your profile",
       "step2Body": "Add a short bio and your location so buyers know who they're dealing with.",
-      "step3Title": "Enable instant checkout on a listing",
-      "step3Body": "Switch a listing to Buy Now and let buyers pay through Stripe in one tap.",
-      "step3Skip": "Skip",
-      "step4Title": "Boost a listing",
-      "step4Body": "Push one listing to the top of the feed. Boost is currently available in the mobile app.",
-      "step4Skip": "Skip"
+      "step3Title": "Connect your Stripe account",
+      "step3Body": "Set up payouts so you can receive money for your sales through Mony.",
+      "step4Title": "Enable instant checkout on a listing",
+      "step4Body": "Switch a listing to Buy Now and let buyers pay through Stripe in one tap.",
+      "step4Skip": "Skip",
+      "step4DisabledTooltip": "Connect Stripe first.",
+      "step5Title": "Boost a listing",
+      "step5Body": "Push one listing to the top of the feed. Boost is currently available in the mobile app.",
+      "step5Skip": "Skip"
     },
     "success": {
       "activatingTitle": "Activating your subscription…",

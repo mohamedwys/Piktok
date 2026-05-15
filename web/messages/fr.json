@@ -422,12 +422,15 @@
       "progressLabel": "{done} sur {total} terminés",
       "step2Title": "Complétez votre profil",
       "step2Body": "Ajoutez une courte bio et votre localisation pour que les acheteurs sachent à qui ils s'adressent.",
-      "step3Title": "Activez le paiement direct sur une annonce",
-      "step3Body": "Passez une annonce en Achat direct et laissez les acheteurs payer via Stripe en un geste.",
-      "step3Skip": "Passer",
-      "step4Title": "Mettez une annonce en avant",
-      "step4Body": "Propulsez une annonce en tête du fil. La mise en avant est disponible sur l'app mobile.",
-      "step4Skip": "Passer"
+      "step3Title": "Connectez votre compte Stripe",
+      "step3Body": "Configurez vos versements pour recevoir l'argent de vos ventes via Mony.",
+      "step4Title": "Activez le paiement direct sur une annonce",
+      "step4Body": "Passez une annonce en Achat direct et laissez les acheteurs payer via Stripe en un geste.",
+      "step4Skip": "Passer",
+      "step4DisabledTooltip": "Connectez d'abord Stripe.",
+      "step5Title": "Mettez une annonce en avant",
+      "step5Body": "Propulsez une annonce en tête du fil. La mise en avant est disponible sur l'app mobile.",
+      "step5Skip": "Passer"
     },
     "success": {
       "activatingTitle": "Activation de votre abonnement…",

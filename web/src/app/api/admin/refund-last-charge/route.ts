@@ -26,14 +26,25 @@ import { stripe } from '@/lib/stripe';
  * admin triggered the refund — useful audit trail for the
  * Stripe Dashboard side.
  *
- * No DB write here. The H.9 webhook handles
- * `charge.refunded` events (well — actually H.9 doesn't yet,
- * since H.9 only listens for `customer.subscription.*`). Refund
- * state currently doesn't propagate to `public.subscriptions`,
- * but the subscription itself isn't affected by a refund
- * (refunds are charge-level events). H.9 could be extended in
- * a future H.X to log refunds to a separate audit table if
- * support tickets warrant.
+ * Connect awareness (Track F.C.7): destination charges (the
+ * marketplace path; `transfer_data` is non-null) need
+ * `reverse_transfer: true` and `refund_application_fee: true`
+ * on the refund so the connected account is debited and the
+ * platform's 2% commission is refunded atomically with the
+ * buyer's refund. Without these flags Stripe only refunds the
+ * buyer from the platform balance and the seller keeps their
+ * 98% — a silent reconciliation gap. The route's primary use
+ * is the subscription path (charges with no `transfer_data`),
+ * where the flags would be invalid; we therefore set them only
+ * when `charge.transfer_data` is present. See
+ * docs/runbooks/marketplace-refunds.md.
+ *
+ * No DB write here. For subscription charges, refund state
+ * currently doesn't propagate to `public.subscriptions`; the
+ * subscription itself isn't affected by a refund (refunds are
+ * charge-level events). For marketplace charges, the
+ * stripe-webhook function handles `charge.refunded` and flips
+ * `orders.status` to `refunded`.
  */
 export async function POST(req: Request) {
   const auth = await requireAdminApi();
@@ -79,12 +90,21 @@ export async function POST(req: Request) {
       );
     }
 
+    // F.C.7: only set the Connect reversal flags on destination
+    // charges. `transfer_data` is the destination-charge marker; it's
+    // null for plain platform charges (subscriptions) where these
+    // flags would be invalid.
+    const isDestinationCharge = charge.transfer_data !== null;
     const refund = await stripe.refunds.create({
       charge: charge.id,
       reason: 'requested_by_customer',
       metadata: {
         refunded_by_admin: auth.userId,
       },
+      ...(isDestinationCharge && {
+        reverse_transfer: true,
+        refund_application_fee: true,
+      }),
     });
 
     console.log(

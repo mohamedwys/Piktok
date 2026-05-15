@@ -345,7 +345,19 @@
         "actions": ""
       },
       "openLink": "Open",
-      "empty": "No customers yet. Once a buyer purchases one of your listings, they'll appear here."
+      "empty": "No customers yet. Once a buyer purchases one of your listings, they'll appear here.",
+      "detail": {
+        "heading": "Customer details",
+        "backLink": "Back to customers",
+        "summaryLabel": {
+          "totalSpend": "Total spend",
+          "orderCount": "Orders",
+          "lastOrder": "Last order"
+        },
+        "ordersHeading": "Order history",
+        "conversationButton": "Conversation",
+        "conversationStub": "This buyer has messaged you. Open the Mony mobile app to view the conversation."
+      }
     },
     "editor": {
       "heading": "Edit listing",

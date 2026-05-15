@@ -345,7 +345,19 @@
         "actions": ""
       },
       "openLink": "Ouvrir",
-      "empty": "Aucun client pour le moment. Dès qu'un acheteur achètera l'une de vos annonces, il apparaîtra ici."
+      "empty": "Aucun client pour le moment. Dès qu'un acheteur achètera l'une de vos annonces, il apparaîtra ici.",
+      "detail": {
+        "heading": "Détail du client",
+        "backLink": "Retour aux clients",
+        "summaryLabel": {
+          "totalSpend": "Total dépensé",
+          "orderCount": "Commandes",
+          "lastOrder": "Dernière commande"
+        },
+        "ordersHeading": "Historique des commandes",
+        "conversationButton": "Conversation",
+        "conversationStub": "Cet acheteur vous a écrit. Ouvrez l'application Mony pour consulter la conversation."
+      }
     },
     "editor": {
       "heading": "Modifier l'annonce",

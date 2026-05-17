@@ -7,7 +7,9 @@
     "features": "Fonctionnalités",
     "pricing": "Tarifs",
     "faq": "FAQ",
-    "signIn": "Connexion"
+    "signIn": "Connexion",
+    "dashboard": "Tableau de bord",
+    "proDashboard": "Tableau de bord Pro"
   },
   "hero": {
     "headlineLead": "Vendez. Découvrez. ",

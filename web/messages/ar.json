@@ -7,7 +7,9 @@
     "features": "المميزات",
     "pricing": "الأسعار",
     "faq": "الأسئلة الشائعة",
-    "signIn": "تسجيل الدخول"
+    "signIn": "تسجيل الدخول",
+    "dashboard": "لوحة التحكم",
+    "proDashboard": "لوحة تحكم Pro"
   },
   "hero": {
     "headlineLead": "بِع. اكتشف. ",

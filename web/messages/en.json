@@ -7,7 +7,9 @@
     "features": "Features",
     "pricing": "Pricing",
     "faq": "FAQ",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "dashboard": "Dashboard",
+    "proDashboard": "Pro dashboard"
   },
   "hero": {
     "headlineLead": "Sell. Discover. ",

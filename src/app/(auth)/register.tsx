@@ -200,7 +200,7 @@ export default function Register(): React.ReactElement {
       <ConfirmHcaptcha
         ref={captchaRef}
         siteKey={process.env.EXPO_PUBLIC_HCAPTCHA_SITE_KEY ?? ''}
-        baseUrl="https://mony.app"
+        baseUrl="https://mony-psi.vercel.app"
         languageCode={i18n.language === 'fr' ? 'fr' : 'en'}
         size="invisible"
         onMessage={(event) => {

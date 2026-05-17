@@ -199,7 +199,7 @@ export default function Register(): React.ReactElement {
       </KeyboardAvoidingView>
       <ConfirmHcaptcha
         ref={captchaRef}
-        siteKey={process.env.EXPO_PUBLIC_HCAPTCHA_SITE_KEY ?? ''}
+        siteKey="66924a02-ecbc-470e-a52a-18ace858cbbe"
         baseUrl="https://mony-psi.vercel.app"
         languageCode={i18n.language === 'fr' ? 'fr' : 'en'}
         size="invisible"

@@ -335,7 +335,14 @@
         "shippingSection": "عنوان الشحن",
         "statusSection": "الحالة",
         "buyerPhone": "الهاتف",
-        "shippingEmpty": "لا يوجد عنوان شحن متاح."
+        "shippingEmpty": "لا يوجد عنوان شحن متاح.",
+        "commission": {
+          "label": "عمولة موني",
+          "rate": "٢٪"
+        },
+        "net": {
+          "label": "صافي مستحقاتك"
+        }
       }
     },
     "customers": {

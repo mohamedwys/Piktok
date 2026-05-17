@@ -551,6 +551,11 @@ export type SellerOrderRow = {
   buyerName: string | null;
   buyerPhone: string | null;
   shippingAddress: ShippingAddress | null;
+  // Mony's marketplace fee captured at checkout-session creation
+  // (F.C.1). Stored as `numeric(10,2)` in currency units — same scale as
+  // `amount`. NULL for legacy orders created before F.C.1 deployed, in
+  // which case the detail page hides the commission/net section.
+  applicationFeeAmount: number | null;
 };
 
 export type SellerOrderFilters = {
@@ -569,6 +574,7 @@ type SellerOrderJoinedRow = {
   buyer_name: string | null;
   buyer_phone: string | null;
   shipping_address: ShippingAddress | null;
+  application_fee_amount: number | string | null;
   products:
     | { title: { fr?: string; en?: string } | null; thumbnail_url: string | null }
     | { title: { fr?: string; en?: string } | null; thumbnail_url: string | null }[]
@@ -585,6 +591,10 @@ function pickJoinedProduct(
 
 function mapJoinedOrderRow(row: SellerOrderJoinedRow): SellerOrderRow {
   const product = pickJoinedProduct(row.products);
+  // application_fee_amount is `numeric(10,2)` — the same boundary
+  // Number()-coercion the other numeric columns use. NULL stays NULL so
+  // pre-F.C.1 orders render without the commission/net section.
+  const fee = row.application_fee_amount;
   return {
     id: row.id,
     productId: row.product_id,
@@ -597,6 +607,7 @@ function mapJoinedOrderRow(row: SellerOrderJoinedRow): SellerOrderRow {
     buyerName: row.buyer_name,
     buyerPhone: row.buyer_phone,
     shippingAddress: row.shipping_address,
+    applicationFeeAmount: fee == null ? null : Number(fee),
   };
 }
 
@@ -622,7 +633,7 @@ export async function fetchSellerOrders(
   let query = supabase
     .from('orders')
     .select(
-      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, application_fee_amount, products(title, thumbnail_url)',
     )
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false });
@@ -663,7 +674,7 @@ export async function fetchSellerOrderById(
   const { data, error } = await supabase
     .from('orders')
     .select(
-      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, application_fee_amount, products(title, thumbnail_url)',
     )
     .eq('id', orderId)
     .eq('seller_id', sellerId)
@@ -824,7 +835,7 @@ export async function fetchCustomerOrders(
   const { data, error } = await supabase
     .from('orders')
     .select(
-      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, products(title, thumbnail_url)',
+      'id, product_id, amount, currency, status, created_at, buyer_name, buyer_phone, shipping_address, application_fee_amount, products(title, thumbnail_url)',
     )
     .eq('seller_id', sellerId)
     .eq('buyer_id', buyerUserId)

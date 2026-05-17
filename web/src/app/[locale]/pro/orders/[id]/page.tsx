@@ -72,6 +72,15 @@ export default async function ProOrderDetailPage({
   const productTitle = titleFor(order.productTitle, locale);
   const shipping = order.shippingAddress;
 
+  // F.C.8: surface Mony's marketplace commission and the seller's net
+  // proceeds whenever the row carries an `application_fee_amount`. Pre-F.C.1
+  // orders have NULL there — we hide the breakdown entirely for those so
+  // the panel doesn't claim a zero commission for a legacy charge that
+  // simply pre-dates the column.
+  const fee = order.applicationFeeAmount;
+  const showFee = fee != null;
+  const netAmount = showFee ? order.amount - fee : null;
+
   // Stripe-collected E.164 phone — strip spaces for the tel: href, keep
   // the original for display.
   const phoneHref = order.buyerPhone
@@ -118,6 +127,25 @@ export default async function ProOrderDetailPage({
                 </div>
               </div>
             </div>
+            {showFee && fee != null && netAmount != null ? (
+              <dl className="space-y-1 border-t border-border pt-3 text-xs text-text-tertiary">
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>
+                    {t('detail.commission.label')} (
+                    {t('detail.commission.rate')})
+                  </dt>
+                  <dd className="font-medium text-text-secondary">
+                    {`-${moneyFmt.format(fee)}`}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt>{t('detail.net.label')}</dt>
+                  <dd className="font-semibold text-text-primary">
+                    {moneyFmt.format(netAmount)}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
           </section>
 
           <section className="space-y-4 rounded-xl border border-border bg-surface-elevated p-6">

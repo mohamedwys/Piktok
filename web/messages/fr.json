@@ -333,7 +333,14 @@
         "shippingSection": "Adresse de livraison",
         "statusSection": "Statut",
         "buyerPhone": "Téléphone",
-        "shippingEmpty": "Aucune adresse de livraison disponible."
+        "shippingEmpty": "Aucune adresse de livraison disponible.",
+        "commission": {
+          "label": "Commission Mony",
+          "rate": "2 %"
+        },
+        "net": {
+          "label": "Votre revenu net"
+        }
       }
     },
     "customers": {

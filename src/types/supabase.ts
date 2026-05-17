@@ -654,6 +654,9 @@ export type Database = {
           sales_count: number
           stripe_account_id: string | null
           stripe_charges_enabled: boolean
+          stripe_country: string | null
+          stripe_details_submitted: boolean
+          stripe_onboarded_at: string | null
           stripe_payouts_enabled: boolean
           suspended_at: string | null
           tos_accepted_at: string | null
@@ -684,6 +687,9 @@ export type Database = {
           sales_count?: number
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
+          stripe_country?: string | null
+          stripe_details_submitted?: boolean
+          stripe_onboarded_at?: string | null
           stripe_payouts_enabled?: boolean
           suspended_at?: string | null
           tos_accepted_at?: string | null
@@ -714,6 +720,9 @@ export type Database = {
           sales_count?: number
           stripe_account_id?: string | null
           stripe_charges_enabled?: boolean
+          stripe_country?: string | null
+          stripe_details_submitted?: boolean
+          stripe_onboarded_at?: string | null
           stripe_payouts_enabled?: boolean
           suspended_at?: string | null
           tos_accepted_at?: string | null
@@ -1200,6 +1209,62 @@ export type Database = {
           views_24h: number
           views_30d: number
           views_7d: number
+        }[]
+      }
+      get_seller_customers: {
+        Args: never
+        Returns: {
+          buyer_name: string
+          buyer_user_id: string
+          conversation_id: string
+          last_order_at: string
+          order_count: number
+          total_spend: number
+        }[]
+      }
+      get_seller_dashboard_summary: {
+        Args: never
+        Returns: {
+          active_listings: number
+          followers_count: number
+          gross_revenue_30d: number
+          gross_revenue_7d: number
+          gross_revenue_all_time: number
+          rating: number
+          total_listings: number
+          total_paid_sales_count: number
+          total_views_30d: number
+        }[]
+      }
+      get_seller_products_with_stats: {
+        Args: never
+        Returns: {
+          created_at: string
+          currency: string
+          featured_until: string
+          gross_revenue: number
+          paid_sales_count: number
+          price: number
+          product_id: string
+          purchase_mode: string
+          thumbnail_url: string
+          title: Json
+          views_7d: number
+        }[]
+      }
+      get_seller_revenue_timeseries: {
+        Args: { p_days: number }
+        Returns: {
+          day: string
+          gross_revenue: number
+          paid_sales_count: number
+        }[]
+      }
+      get_seller_views_timeseries: {
+        Args: { p_days: number }
+        Returns: {
+          day: string
+          views_count: number
         }[]
       }
       gettransactionid: { Args: never; Returns: unknown }

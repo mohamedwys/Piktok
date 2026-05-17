@@ -333,7 +333,14 @@
         "shippingSection": "Shipping address",
         "statusSection": "Status",
         "buyerPhone": "Phone",
-        "shippingEmpty": "No shipping address on file."
+        "shippingEmpty": "No shipping address on file.",
+        "commission": {
+          "label": "Mony commission",
+          "rate": "2%"
+        },
+        "net": {
+          "label": "Your net"
+        }
       }
     },
     "customers": {

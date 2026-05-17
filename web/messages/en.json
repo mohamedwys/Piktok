@@ -263,7 +263,8 @@
       "orders": "Orders",
       "customers": "Customers",
       "analytics": "Analytics",
-      "account": "Account"
+      "account": "Account",
+      "signOut": "Sign out"
     },
     "products": {
       "heading": "Your products",

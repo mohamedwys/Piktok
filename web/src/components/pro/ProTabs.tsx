@@ -1,8 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ExternalLink } from 'lucide-react';
-import { Link, usePathname } from '@/i18n/routing';
+import { ExternalLink, LogOut } from 'lucide-react';
+import { Link, usePathname, useRouter } from '@/i18n/routing';
+import { getSupabaseBrowser } from '@/lib/supabase/client';
+import { captureEvent } from '@/lib/posthog-client';
 
 /**
  * Pro dashboard top tab bar (Track 1).
@@ -31,6 +33,14 @@ export function ProTabs({
 }) {
   const t = useTranslations('pro.tabs');
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    captureEvent('pro_sign_out_clicked');
+    const supabase = getSupabaseBrowser();
+    await supabase.auth.signOut();
+    router.push('/');
+  }
 
   const tabs: { href: string; label: string; tourId?: string }[] = [
     { href: '/pro', label: t('home') },
@@ -84,6 +94,14 @@ export function ProTabs({
           {t('account')}
           <ExternalLink size={14} aria-hidden="true" />
         </Link>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="flex items-center gap-1.5 whitespace-nowrap px-3 py-4 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
+        >
+          <LogOut size={14} aria-hidden="true" />
+          <span>{t('signOut')}</span>
+        </button>
       </div>
     </nav>
   );
